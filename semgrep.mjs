@@ -35,6 +35,7 @@ const { values: opt, positionals: files, tokens } = parseArgs({
     n: { type: 'boolean', default: false }, // line numbers
     p: { type: 'boolean', default: false }, // print each meaning's probability
     color: { type: 'string', default: 'auto' }, // auto / always / never
+    hl: { type: 'boolean', default: false }, // highlight the matching sentence(s) inside long matched lines (re-scores sentences of hits)
     help: { type: 'boolean', short: 'h', default: false },
   },
 });
@@ -279,6 +280,59 @@ for (const l of allLines) {
 }
 
 const after = Number(opt.A ?? opt.C ?? 0), before = Number(opt.B ?? opt.C ?? 0);
+
+// --hl: for long matched lines, re-score their sentences and remember which
+// sentences to highlight. Jev returns line-level probabilities only, so the
+// span is recovered with one extra batched request per long hit.
+const hlText = new Map(); // `${file}:${no}` -> text with ANSI-highlighted sentence(s)
+if (opt.hl) {
+  const splitSentences = t => {
+    let parts = t.replace(/([.!?])\s+/g, '$1\u0000').split('\u0000').map(s => s.trim()).filter(Boolean);
+    if (parts.length < 2) {
+      // transcripts often lack punctuation: fall back to ~25-word windows
+      const words = t.split(/\s+/); parts = [];
+      for (let i = 0; i < words.length; i += 20) parts.push(words.slice(i, i + 28).join(' '));
+      parts = parts.filter(s => s.length > 8);
+    }
+    return parts;
+  };
+  async function scoreSentences(file, no, text, meaning) {
+    const sentences = splitSentences(text).slice(0, 60);
+    if (sentences.length < 2) return null;
+    const state = Object.fromEntries(sentences.map((s, i) => [`S${String(i).padStart(3, '0')}`, s.slice(0, 2000)]));
+    const questions = Object.fromEntries(sentences.map((_, i) => [`S${String(i).padStart(3, '0')}_0`, { type: 'noul', instructions: `Does line S${String(i).padStart(3, '0')} match the meaning: "${meaning}"?` }]));
+    for (let attempt = 0; ; attempt++) {
+      let res;
+      try {
+        res = await fetch('https://api.typesafe.ai/v1/systemone', {
+          method: 'POST',
+          headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ model: 'jev-latest', state, questions }),
+          signal: AbortSignal.timeout(60_000),
+        });
+      } catch (e) { if (attempt < 3) { await sleep(500 * 2 ** attempt); continue; } return null; }
+      if (!res.ok) { if ((res.status === 429 || res.status >= 500) && attempt < 3) { await sleep(500 * 2 ** attempt); continue; } return null; }
+      const { answers } = await res.json();
+      return { sentences, probs: sentences.map((_, i) => answers[`S${String(i).padStart(3, '0')}_0`]?.noul ?? 0) };
+    }
+  }
+  const jobs = [];
+  for (const [file, h] of hits) {
+    const src = sources.get(file);
+    for (const no of h.keys()) {
+      const text = src?.[no - 1] ?? '';
+      if (text.length < 120) continue; // short lines ARE the hit; nothing to split
+      const meaning = meanings[h.get(no).findIndex((_, m) => h.get(no)[m] >= tPos)] ?? meanings[0];
+      jobs.push(scoreSentences(file, no, text, meaning).then(r => {
+        if (!r) return;
+        let out = text;
+        r.sentences.forEach((s, i) => { if (r.probs[i] >= tPos && s.length > 8) out = out.replace(s, '\u001b[1m\u001b[48;2;52;50;59m' + s + '\u001b[0m'); });
+        if (out !== text) hlText.set(`${file}:${no}`, out);
+      }));
+    }
+  }
+  await Promise.all(jobs);
+}
 const multi = opt.r || targets.length > 1; // grep -r prefixes file names even for a single file
 let lastPrinted = null; // [file, line number]; used to print -- between context groups
 for (const file of targets) {
@@ -297,7 +351,7 @@ for (const file of targets) {
       const sep = paint(36, p ? ':' : '-');
       const prefix = (multi ? paint(35, file) + sep : '') + (opt.n ? paint(32, k) + sep : '');
       const tail = opt.p && p ? `\t[${p.map(paintProb).join(' ')}]` : '';
-      console.log(prefix + src[k - 1] + tail);
+      console.log(prefix + (hlText.get(`${file}:${k}`) ?? src[k - 1]) + tail);
     }
     last = Math.max(last, to);
     lastPrinted = [file, to];
