@@ -143,12 +143,12 @@ if (opt.help) {
 }
 
 // API key: if not in the environment, look for a .env file in order
-if (!process.env.TYPESAFE_API_KEY) {
+if (!process.env.TYPESAFE_API_KEY && !process.env.OPENROUTER_API_KEY) {
   const candidates = [process.env.SEMGREP_ENV, '.env', `${homedir()}/.config/semgrep/.env`];
   const found = candidates.find(f => f && existsSync(f));
   if (found) process.loadEnvFile(found);
 }
-const apiKey = process.env.TYPESAFE_API_KEY;
+const apiKey = process.env.TYPESAFE_API_KEY || process.env.OPENROUTER_API_KEY;
 if (!apiKey) die('TYPESAFE_API_KEY is not set. Put it in ./.env or ~/.config/semgrep/.env');
 
 // Expression: a list of AND terms joined by OR. Each literal is [meaning index, negated]. meanings holds each distinct meaning once.
@@ -232,6 +232,7 @@ for (let i = 0; i < lines.length; ) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let usedTokens = 0;
+let usedCost = 0;
 
 async function evaluate(chunk) {
   const id = i => `L${String(i).padStart(3, '0')}`;
@@ -243,10 +244,12 @@ async function evaluate(chunk) {
   for (let attempt = 0; ; attempt++) {
     let res;
     try {
-      res = await fetch('https://api.typesafe.ai/v1/systemone', {
+      const url = process.env.SEMGREP_URL || 'https://api.typesafe.ai/v1/systemone';
+      const model = process.env.SEMGREP_MODEL || 'jev-latest';
+      res = await fetch(url, {
         method: 'POST',
         headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ model: 'jev-latest', state, questions }),
+        body: JSON.stringify({ model, state, questions }),
         signal: AbortSignal.timeout(60_000),
       });
     } catch (e) {
@@ -260,6 +263,7 @@ async function evaluate(chunk) {
     if (!res.ok) throw new Error(`typesafe ${res.status}: ${await res.text()}`);
     const { answers, usage } = await res.json();
     usedTokens += usage.input_tokens;
+    usedCost += typeof usage.cost === 'number' ? usage.cost : 0;
     return chunk.map((_, i) => meanings.map((_, m) => answers[`${id(i)}_${m}`].noul));
   }
 }
@@ -323,6 +327,9 @@ for (const file of targets) {
   }
 }
 // Summary only when interactive; grep prints nothing to stderr when scripted.
-if (process.stderr.isTTY) console.error(`${matched}/${allLines.length} ${opt.z ? 'records' : 'lines'} (${lines.length} sent), ${chunks.length} requests, ${usedTokens} input tokens`);
+if (process.stderr.isTTY) {
+  const cost = usedCost > 0 ? usedCost : usedTokens * (Number(process.env.SEMGREP_PRICE_PER_M) || 0.042) / 1e6;
+  console.error(`${matched}/${allLines.length} ${opt.z ? 'records' : 'lines'} (${lines.length} sent), ${chunks.length} requests, ${usedTokens} input tokens, $${cost.toFixed(6)}`);
+}
 // process.exit() can drop buffered stdout when piped, so set exitCode instead.
 process.exitCode = hadError ? 2 : matched ? 0 : 1;
