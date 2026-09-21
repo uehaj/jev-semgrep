@@ -261,11 +261,11 @@ cat app.log | ./semgrep -e "the deploy failed or was rolled back"
 
 There is a Claude Code skill that runs semgrep for you: describe what you are looking for in plain words
 and it builds the expression, runs the search and reports `file:line` hits. It is published in the
-[`uehaj/skills`](https://github.com/uehaj/skills) marketplace as the `uehaj` plugin.
+[`uehaj/uehaj-marketplace`](https://github.com/uehaj/uehaj-marketplace) marketplace as the `uehaj` plugin.
 
 ```sh
-claude plugin marketplace add uehaj/skills
-claude plugin install uehaj@uehaj-skills
+claude plugin marketplace add uehaj/uehaj-marketplace
+claude plugin install uehaj@uehaj-marketplace
 ```
 
 No separate install of the command-line tool is needed: the skill uses `semgrep` from your PATH if present,
@@ -282,7 +282,7 @@ Claude Code installs plugins, not single skills. If you want just this one skill
 [skills CLI](https://skills.sh/) copies it into `~/.claude/skills/` and it is invoked as `/semgrep`:
 
 ```sh
-npx skills add uehaj/skills --skill semgrep -a claude-code -g
+npx skills add uehaj/uehaj-marketplace --skill semgrep -a claude-code -g
 ```
 
 The skill writes the meaning in English, picks `-e` / `-a` / `-v` for AND / OR / NOT, adds `-n`, narrows large

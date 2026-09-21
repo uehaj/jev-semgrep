@@ -255,12 +255,12 @@ cat app.log | ./semgrep -e "デプロイが失敗した、またはロールバ�
 ## Claude Code から使う
 
 semgrep を代わりに走らせてくれる Claude Code のスキルがあります。探したいものを言葉で書くと、式を組み立てて
-検索し、`file:line` 付きで該当行を報告します。[`uehaj/skills`](https://github.com/uehaj/skills) マーケットプレースの
+検索し、`file:line` 付きで該当行を報告します。[`uehaj/uehaj-marketplace`](https://github.com/uehaj/uehaj-marketplace) マーケットプレースの
 `uehaj` プラグインとして公開しています。
 
 ```sh
-claude plugin marketplace add uehaj/skills
-claude plugin install uehaj@uehaj-skills
+claude plugin marketplace add uehaj/uehaj-marketplace
+claude plugin install uehaj@uehaj-marketplace
 ```
 
 コマンドラインツールを別途インストールする必要はありません。スキルは PATH に `semgrep` があればそれを、
@@ -277,7 +277,7 @@ Claude Code のインストール単位はプラグインで、スキル単体�
 [skills CLI](https://skills.sh/) が `~/.claude/skills/` にコピーしてくれ、その場合は `/semgrep` で呼びます。
 
 ```sh
-npx skills add uehaj/skills --skill semgrep -a claude-code -g
+npx skills add uehaj/uehaj-marketplace --skill semgrep -a claude-code -g
 ```
 
 スキルは意味を英語で書き、AND / OR / NOT を `-e` / `-a` / `-v` に振り分け、`-n` を付け、大きなディレクトリは
