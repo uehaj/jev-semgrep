@@ -35,6 +35,7 @@ const { values: opt, positionals: files, tokens } = parseArgs({
     n: { type: 'boolean', default: false }, // line numbers
     z: { type: 'boolean', default: false }, // records are NUL-terminated, on input and output (grep -z)
     p: { type: 'boolean', default: false }, // print each meaning's probability
+    dedup: { type: 'boolean', default: false }, // judge one representative per template, reuse its answer
     color: { type: 'string', default: 'auto' }, // auto / always / never
     help: { type: 'boolean', short: 'h', default: false },
   },
@@ -73,6 +74,12 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
                records. Pairs with tools that already emit records: git log -z, find -print0, xargs -0
                  git log -z --format='%h %s %b' | semgrep -z -e "the change alters user-visible behaviour"
   -p           print each meaning's probability at the end of the line (for tuning thresholds)
+  --dedup      judge one line per template instead of every line. Lines that differ only in ids, hashes,
+               numbers, paths and URLs share a template; one of them is sent and its answer is reused for
+               the rest. What is sent is that line's original text, not the masked form, so a meaning that
+               reads a value still sees it. Built for machine-generated logs, where it can cut the cost by
+               a factor of 50 or more; prose has no shared skeleton and barely folds. Lines within one
+               template are assumed to be judged alike, which on a system log held for 99 of 100 groups
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are green at or above
                the positive threshold, red below the negative one, yellow in between. NO_COLOR is honored
@@ -120,6 +127,12 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
                レコードを出すツールとそのまま繋がる: git log -z、find -print0、xargs -0
                  git log -z --format='%h %s %b' | semgrep -z -e "ユーザーに見える振る舞いを変えている"
   -p           各意味の確率を行末に表示 (閾値調整用)
+  --dedup      全行ではなくテンプレートごとに 1 行だけ判定する。ID・ハッシュ・数値・パス・URL だけが
+               違う行は同じテンプレートとみなし、代表 1 行を送ってその答えを残りにも使う。送るのは
+               代表行の原文であってマスク後の文字列ではないので、値を読む意味でも正しく判定できる。
+               機械が吐くログ向けで、費用が 50 分の 1 以下になることもある。散文には共通の骨格が
+               ないのでほとんど縮まない。同じテンプレート内の判定は同じとみなすが、システムログでの
+               実測では 100 グループ中 99 グループで実際に一致した
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
                否定側の閾値未満を赤、あいだを黄で表示。NO_COLOR にも従う
@@ -218,14 +231,38 @@ for (const file of targets) {
 // Blank and whitespace-only lines are not sent; they count as probability 0 for every meaning (never match -e, always match -v).
 const lines = allLines.filter(l => l.text.trim());
 
+// --dedup: machine-generated logs repeat one skeleton with a different id or number in it. Mask the parts
+// whose value carries no meaning, group by the result, and judge one member per group. The mask is only
+// the grouping key: what gets sent is the representative's ORIGINAL text, so a meaning that reads a number
+// ("an unusually large payload") still sees it. Measured on /var/log/jamf.log, two representatives drawn
+// from each of 100 groups disagreed at the 0.5 threshold once, so the error this trades for the saving is
+// about 1% on that kind of input. Prose has no skeleton to find and barely folds at all.
+const MASK = [
+  [/https?:\/\/\S+/g, '<url>'],
+  [/(?:\/[\w.@+-]+){2,}/g, '<path>'],
+  [/\b(?=[0-9a-f]{7,}\b)[0-9a-f]*\d[0-9a-f]*\b/gi, '<hex>'], // ids and hashes, but not words spelled in a-f
+  [/\b\d[\d.,:_-]*\b/g, '<num>'],
+];
+const repOf = new Map(); // unit -> the unit actually sent on its behalf
+let sent = lines;
+if (opt.dedup) {
+  const rep = new Map();
+  for (const l of lines) {
+    const key = MASK.reduce((s, [re, to]) => s.replace(re, to), l.text);
+    if (!rep.has(key)) rep.set(key, l);
+    repOf.set(l, rep.get(key));
+  }
+  sent = [...rep.values()];
+}
+
 // Chunk by line count and by characters. The API caps state + longest question at 32k tokens.
 const chunks = [];
-for (let i = 0; i < lines.length; ) {
+for (let i = 0; i < sent.length; ) {
   const chunk = [];
   let chars = 0;
-  while (i < lines.length && chunk.length < chunkLines && chars < 20000) {
-    chars += lines[i].text.length;
-    chunk.push(lines[i++]);
+  while (i < sent.length && chunk.length < chunkLines && chars < 20000) {
+    chars += sent[i].text.length;
+    chunk.push(sent[i++]);
   }
   chunks.push(chunk);
 }
@@ -291,7 +328,7 @@ const zeros = meanings.map(() => 0);
 const hits = new Map();
 let matched = 0;
 for (const l of allLines) {
-  const p = probOf.get(l) ?? zeros;
+  const p = probOf.get(repOf.get(l) ?? l) ?? zeros;
   if (!expr.some(term => term.every(([m, not]) => (not ? p[m] < tNeg : p[m] >= tPos)))) continue;
   matched++;
   if (!hits.has(l.file)) hits.set(l.file, new Map());
@@ -328,7 +365,7 @@ for (const file of targets) {
 if (process.stderr.isTTY) {
   // The API's own usage.cost when reported (OpenRouter does); else an estimate at Jev's list price, only for TypeSafe itself.
   const cost = usedCost > 0 ? `, $${usedCost.toFixed(6)}` : SEMGREP_URL ? '' : `, ~$${(usedTokens * 0.042 / 1e6).toFixed(6)}`;
-  console.error(`${matched}/${allLines.length} ${opt.z ? 'records' : 'lines'} (${lines.length} sent), ${chunks.length} requests, ${usedTokens} input tokens${cost}`);
+  console.error(`${matched}/${allLines.length} ${opt.z ? 'records' : 'lines'} (${sent.length} sent${opt.dedup ? ` of ${lines.length}` : ''}), ${chunks.length} requests, ${usedTokens} input tokens${cost}`);
 }
 // process.exit() can drop buffered stdout when piped, so set exitCode instead.
 process.exitCode = hadError ? 2 : matched ? 0 : 1;
