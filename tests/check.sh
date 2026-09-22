@@ -31,4 +31,18 @@ if $J -C=1 -e x fixture.txt 2>/dev/null; then exit 1; fi
 [ "$(printf 'the cat sleeps\n\nthe dog barks\n' | $J -v 'about cats' 2>/dev/null | wc -l | tr -d ' ')" = "2" ]
 # an empty meaning is an error
 if $J -e '' fixture.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 ]; then exit 1; fi
+
+# -z: one NUL-terminated record is one unit of judgement, and matching records are NUL-terminated too.
+# The first record only reads as a refund request when both of its lines are judged together.
+z_in() { printf 'the package arrived\nand I want my money back for it\0the sky is blue today\0'; }
+[ "$(z_in | $J -z -n -e 'the customer is asking for a refund' 2>/dev/null | tr '\0' '\n' | head -1)" = "1:the package arrived" ]
+[ "$(z_in | $J -z -c -e 'the customer is asking for a refund' 2>/dev/null)" = "1" ]
+# the unit really is the record: two records in, two judged (-t 0 matches everything, so this is deterministic)
+[ "$(z_in | $J -z -c -t 0 -e 'anything at all' 2>/dev/null)" = "2" ]
+# the same text separated by newlines is three lines, not two records
+[ "$(printf 'the package arrived\nand I want my money back for it\nthe sky is blue today\n' | $J -c -t 0 -e 'anything at all' 2>/dev/null)" = "3" ]
+# without -z, NUL-separated input is binary and is skipped rather than judged
+[ -z "$(z_in | $J -c -e 'the customer is asking for a refund' 2>/dev/null)" ]
+# matching records end with NUL
+z_in | $J -z -e 'the customer is asking for a refund' 2>/dev/null | od -An -c | grep -q '\\0'
 echo OK
