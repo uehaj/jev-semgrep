@@ -76,7 +76,7 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
   --sentence   the unit of judgement is a sentence, printed on one line. Wrapped lines are joined first,
                except at a blank line, next to brackets or ; (JSON, code), or before a line starting with
                - * + # > " or a digit (list, heading, quote, number). Japanese and Chinese join without a
-               space. The expression is evaluated per sentence; -n gives the line where it starts, -c counts
+               space (so do Thai, Lao, Khmer, Myanmar and Tibetan). The expression is evaluated per sentence; -n gives the line where it starts, -c counts
                sentences, -A/-B/-C count sentences. With -z each record is split on its own
   -p           print each meaning's probability at the end of the line (for tuning thresholds)
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
@@ -127,7 +127,7 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
                  git log -z --format='%h %s %b' | semgrep -z -e "ユーザーに見える振る舞いを変えている"
   --sentence   判定の単位を文にし、1 文を 1 行で出す。折り返した行は先につなぐ。ただし空行、括弧や ;
                (JSON やコード)、- * + # > " や数字で始まる行 (箇条書き・見出し・引用・番号) の前では
-               切る。日本語と中国語は空白を入れずにつなぐ。式は文ごとに評価する。-n は文が始まる行、
+               切る。日本語・中国語・タイ語・ラオ語・クメール語・ミャンマー語・チベット語は空白を入れずにつなぐ。式は文ごとに評価する。-n は文が始まる行、
                -c は文の数、-A/-B/-C は前後の文の数。-z ではレコードごとに文に分ける
   -p           各意味の確率を行末に表示 (閾値調整用)
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
@@ -217,7 +217,8 @@ const targets = (files.length ? files : [opt.r ? '.' : '-']).flatMap(f => (f ===
 // a sentence: at a blank line, next to structure characters (JSON, code), or before a list item, heading, quote or
 // number. Each joined piece is then split by Intl.Segmenter (Unicode UAX #29 sentence boundaries).
 const SENTENCES = new Intl.Segmenter(undefined, { granularity: 'sentence' });
-const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ー、。]/u;
+// Scripts written without spaces between words: joining their wrapped lines must not add one
+const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}\p{Script=Tibetan}ー、。]/u;
 const hardBreak = (prev, next) => !prev || !next || /[{}\[\]<>|;]$/.test(prev) || /^[{}\[\]<>|"\-*+#>\d]/.test(next)
   || /[{}\[\];]$/.test(next); // a line ending like code is not a continuation of prose either
 // lines -> [{ text, no }], no being the line (or record) number where the sentence starts

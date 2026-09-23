@@ -8,7 +8,7 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ### Added
 - `--sentence`: the unit of judgement is a sentence, printed on one line. Wrapped lines are joined first,
   except at a blank line, next to brackets or `;`, or before a line starting with `-` `*` `+` `#` `>` `"` or
-  a digit, so JSONL, lists and code keep their line boundaries. Japanese and Chinese join without a space.
+  a digit, so JSONL, lists and code keep their line boundaries. Japanese, Chinese, Thai, Lao, Khmer, Myanmar and Tibetan join without a space.
   Sentences are cut by `Intl.Segmenter`. `-n` gives the line where the sentence starts; `-c` and
   `-A`/`-B`/`-C` count sentences. With `-z`, each record is split on its own. Prompted by #5 by @nedzen.
 

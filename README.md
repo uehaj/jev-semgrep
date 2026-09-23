@@ -307,7 +307,7 @@ $ ./semgrep -n --sentence -e "the author admits they made a mistake" -e "custome
 8:先週買った掃除機が初日から動かないので返金してほしいです。
 ```
 
-Line 1 spans three lines of the file and line 8 two; Japanese is joined without a space. The rest of each
+Line 1 spans three lines of the file and line 8 two; Japanese is joined without a space, as are Chinese, Thai, Lao, Khmer, Myanmar and Tibetan, which do not put spaces between words. The rest of each
 paragraph ("Next time I will add a test first.", "よろしくお願いします。") is judged separately and does not match.
 
 Jev finds a matching sentence inside a long line on its own, so `--sentence` is not needed for accuracy.
