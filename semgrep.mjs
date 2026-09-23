@@ -75,9 +75,10 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
                  git log -z --format='%h %s %b' | semgrep -z -e "the change alters user-visible behaviour"
   --sentence   the unit of judgement is a sentence, printed on one line. Wrapped lines are joined first,
                except at a blank line, next to brackets or ; (JSON, code), or before a line starting with
-               - * + # > " or a digit (list, heading, quote, number). Japanese and Chinese join without a
-               space (so do Thai, Lao, Khmer, Myanmar and Tibetan). The expression is evaluated per sentence; -n gives the line where it starts, -c counts
-               sentences, -A/-B/-C count sentences. With -z each record is split on its own
+               - * + # > " or a digit (list, heading, quote, number). Scripts without spaces between words
+               (Japanese, Chinese, Thai, Lao, Khmer, Myanmar, Tibetan) join without one. The expression is
+               evaluated per sentence; -n gives the line where it starts, -c and -A/-B/-C count sentences.
+               With -z each record is split on its own
   -p           print each meaning's probability at the end of the line (for tuning thresholds)
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are green at or above
