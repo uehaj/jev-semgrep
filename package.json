@@ -1,6 +1,6 @@
 {
   "name": "@uehaj/semgrep",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "grep by meaning, across languages. TypeSafe Jev scores every line against a meaning; combine meanings with AND/OR/NOT.",
   "keywords": [
     "grep",
