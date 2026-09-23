@@ -295,6 +295,32 @@ Matching records are printed NUL-terminated too, so pipe them through `tr '\0' '
 File names (`-l`) and counts (`-c`) stay on newlines, as they do in grep. With `-z`, `-n` numbers records,
 `-A` / `-B` / `-C` count neighbouring records, and `--chunk` counts records per request.
 
+### One sentence at a time (`--sentence`)
+
+`--sentence` makes the unit a sentence. Wrapped lines are joined first, so a sentence that runs over
+several lines is judged, and printed, as one. `-n` gives the line where the sentence starts.
+[`tests/prose.txt`](tests/prose.txt) wraps an English paragraph and a Japanese one:
+
+```sh
+$ ./semgrep -n --sentence -e "the author admits they made a mistake" -e "customer is asking for a refund" tests/prose.txt
+1:I should have checked the input before shipping, and that was my mistake.
+8:先週買った掃除機が初日から動かないので返金してほしいです。
+```
+
+Line 1 spans three lines of the file and line 8 two; Japanese is joined without a space. The rest of each
+paragraph ("Next time I will add a test first.", "よろしくお願いします。") is judged separately and does not match.
+
+Jev finds a matching sentence inside a long line on its own, so `--sentence` is not needed for accuracy.
+Use it when you want the sentence rather than the whole line or record, and when AND should hold within
+one sentence: the expression is evaluated per sentence.
+
+Where a newline cannot be inside a sentence, lines are not joined: at a blank line, next to brackets or
+`;` (JSON, code), and before a line starting with `-` `*` `+` `#` `>` `"` or a digit (list items,
+headings, quotes, numbers, timestamps). So JSONL keeps one line per record and each line is split on its
+own. Sentences are cut by `Intl.Segmenter` ([Unicode UAX #29](https://unicode.org/reports/tr29/)),
+which splits at `.` `!` `?` `。` `！` `？` but also after abbreviations such as `Mr.`. Logs are not prose:
+consecutive log lines that start with a letter, such as `WARN ...` after `ERROR ...`, get joined.
+
 ## Use it from Claude Code
 
 There is a Claude Code skill that runs semgrep for you: describe what you are looking for in plain words
@@ -355,6 +381,7 @@ usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
   --chunk=LINES lines per request (default 30)
   -j N         concurrent requests (default 8)
   -n           print line numbers
+  --sentence   the unit of judgement is a sentence (see "One sentence at a time" above)
   -p           print each meaning's probability at the end of the line
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are

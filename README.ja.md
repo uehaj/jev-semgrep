@@ -289,6 +289,32 @@ $ git log -z --format='%h %s %b' | ./semgrep -z -n -e "ユーザーに見える�
 ファイル名 (`-l`) と件数 (`-c`) は grep と同じく改行のままです。`-z` のとき `-n` はレコード番号、
 `-A` / `-B` / `-C` は前後のレコード数、`--chunk` は 1 リクエストのレコード数を数えます。
 
+### 1 文ずつ判定する (`--sentence`)
+
+`--sentence` を付けると、判定の単位が文になります。折り返した行を先につなぐので、複数行にまたがる文も
+1 文として判定し、1 行で出力します。`-n` は、その文が始まる行の番号です。
+[`tests/prose.txt`](tests/prose.txt) には、折り返した英語と日本語の段落が入っています。
+
+```sh
+$ ./semgrep -n --sentence -e "the author admits they made a mistake" -e "customer is asking for a refund" tests/prose.txt
+1:I should have checked the input before shipping, and that was my mistake.
+8:先週買った掃除機が初日から動かないので返金してほしいです。
+```
+
+1 行目はファイルの 3 行に、8 行目は 2 行にまたがっていた文です。日本語は空白を入れずにつなぎます。
+各段落の残りの文（「Next time I will add a test first.」「よろしくお願いします。」）は別に判定され、一致しません。
+
+Jev は長い行の中からでも当たる文を自分で見つけるので、判定の精度のために `--sentence` を使う必要はありません。
+行やレコードまるごとではなく当たった文そのものが欲しいとき、また AND を 1 つの文の中で成り立たせたいときに
+使います。式は文ごとに評価されます。
+
+改行が文の途中になりえないところでは、行をつなぎません。空行、括弧や `;` に接する改行（JSON やコード）、
+`-` `*` `+` `#` `>` `"` や数字で始まる行（箇条書き、見出し、引用、番号、日時）の前です。そのため JSONL は
+1 行 1 レコードのまま、行ごとに文に分けられます。文の区切りには `Intl.Segmenter`
+（[Unicode UAX #29](https://unicode.org/reports/tr29/)）を使います。`.` `!` `?` `。` `！` `？` で切り、
+`Mr.` のような略語の後ろでも切ります。ログは文章ではないので、`ERROR ...` の次の `WARN ...` のように
+英字で始まるログ行が続くと、つながります。
+
 ## Claude Code から使う
 
 semgrep を代わりに走らせてくれる Claude Code のスキルがあります。探したいものを言葉で書くと、式を組み立てて
@@ -349,6 +375,7 @@ usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
   --chunk=LINES 1 リクエストにまとめる行数 (既定 30)
   -j N         同時リクエスト数 (既定 8)
   -n           行番号を付ける
+  --sentence   判定の単位を文にする (前述の「1 文ずつ判定する」を参照)
   -p           各意味の確率を行末に表示 (閾値調整用)
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、

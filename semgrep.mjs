@@ -34,6 +34,7 @@ const { values: opt, positionals: files, tokens } = parseArgs({
     C: { type: 'string' }, // N lines of context on both sides
     n: { type: 'boolean', default: false }, // line numbers
     z: { type: 'boolean', default: false }, // records are NUL-terminated, on input and output (grep -z)
+    sentence: { type: 'boolean', default: false }, // the unit of judgement is a sentence
     p: { type: 'boolean', default: false }, // print each meaning's probability
     color: { type: 'string', default: 'auto' }, // auto / always / never
     help: { type: 'boolean', short: 'h', default: false },
@@ -72,6 +73,11 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
                and counts stay on newlines. -n numbers records, -A/-B/-C count records, --chunk counts
                records. Pairs with tools that already emit records: git log -z, find -print0, xargs -0
                  git log -z --format='%h %s %b' | semgrep -z -e "the change alters user-visible behaviour"
+  --sentence   the unit of judgement is a sentence, printed on one line. Wrapped lines are joined first,
+               except at a blank line, next to brackets or ; (JSON, code), or before a line starting with
+               - * + # > " or a digit (list, heading, quote, number). Japanese and Chinese join without a
+               space. The expression is evaluated per sentence; -n gives the line where it starts, -c counts
+               sentences, -A/-B/-C count sentences. With -z each record is split on its own
   -p           print each meaning's probability at the end of the line (for tuning thresholds)
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are green at or above
@@ -119,6 +125,10 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
                -n はレコード番号、-A/-B/-C は前後のレコード数、--chunk はレコード数を数える。
                レコードを出すツールとそのまま繋がる: git log -z、find -print0、xargs -0
                  git log -z --format='%h %s %b' | semgrep -z -e "ユーザーに見える振る舞いを変えている"
+  --sentence   判定の単位を文にし、1 文を 1 行で出す。折り返した行は先につなぐ。ただし空行、括弧や ;
+               (JSON やコード)、- * + # > " や数字で始まる行 (箇条書き・見出し・引用・番号) の前では
+               切る。日本語と中国語は空白を入れずにつなぐ。式は文ごとに評価する。-n は文が始まる行、
+               -c は文の数、-A/-B/-C は前後の文の数。-z ではレコードごとに文に分ける
   -p           各意味の確率を行末に表示 (閾値調整用)
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
@@ -203,15 +213,51 @@ function expand(path) {
     .flatMap(d => expand(path.endsWith('/') ? path + d.name : `${path}/${d.name}`)); // not path.join(): it would drop the leading ./
 }
 const targets = (files.length ? files : [opt.r ? '.' : '-']).flatMap(f => (f === '-' ? [f] : expand(f)));
-const sources = new Map(); // file -> all lines (for context output; includes blank lines)
+// --sentence: the unit is a sentence. Lines are joined as wrapped prose, except where a newline cannot be inside
+// a sentence: at a blank line, next to structure characters (JSON, code), or before a list item, heading, quote or
+// number. Each joined piece is then split by Intl.Segmenter (Unicode UAX #29 sentence boundaries).
+const SENTENCES = new Intl.Segmenter(undefined, { granularity: 'sentence' });
+const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ー、。]/u;
+const hardBreak = (prev, next) => !prev || !next || /[{}\[\]<>|;]$/.test(prev) || /^[{}\[\]<>|"\-*+#>\d]/.test(next)
+  || /[{}\[\];]$/.test(next); // a line ending like code is not a continuation of prose either
+// lines -> [{ text, no }], no being the line (or record) number where the sentence starts
+function toSentences(lines, noOf) {
+  const out = [];
+  let text = '', marks = []; // marks: [offset in text, line number]
+  const flush = () => {
+    for (const s of SENTENCES.segment(text)) {
+      const t = s.segment.trim();
+      if (t) out.push({ text: t, no: marks.findLast(([o]) => o <= s.index)[1] });
+    }
+    text = ''; marks = [];
+  };
+  lines.forEach((line, i) => {
+    const prev = text.trimEnd(), next = line.trim();
+    if (hardBreak(prev, next)) { flush(); if (next) { text = next; marks.push([0, noOf(i)]); } return; }
+    text = prev + (CJK.test(prev.at(-1)) && CJK.test(next[0]) ? '' : ' '); // no space when joining Japanese or Chinese
+    marks.push([text.length, noOf(i)]);
+    text += next;
+  });
+  flush();
+  return out;
+}
+
+const sources = new Map(); // file -> all units (for context output; includes blank lines)
+const startNo = new Map(); // file -> line number where each sentence starts (--sentence only)
 const allLines = []; // { file, no, text }; includes blank lines; what the expression is evaluated over
 for (const file of targets) {
   let buf;
   try { buf = readFileSync(file === '-' ? 0 : file); } catch (e) { warn(file, e); continue; }
   // With -z a NUL is the record terminator, so the binary sniff would reject exactly the input we want.
   if (!opt.z && buf.subarray(0, 8192).includes(0)) continue;
-  const src = buf.toString('utf8').split(SEP);
+  let src = buf.toString('utf8').split(SEP);
   if (src.at(-1) === '') src.pop();
+  if (opt.sentence) {
+    // With -z a record is a hard boundary; -n then gives the record number, as it does without --sentence.
+    const units = opt.z ? src.flatMap((rec, i) => toSentences(rec.split('\n'), () => i + 1)) : toSentences(src, i => i + 1);
+    src = units.map(u => u.text);
+    startNo.set(file, units.map(u => u.no));
+  }
   sources.set(file, src);
   src.forEach((text, i) => allLines.push({ file, no: i + 1, text }));
 }
@@ -315,7 +361,7 @@ for (const file of targets) {
     for (let k = from; k <= to; k++) {
       const p = h.get(k);
       const sep = paint(36, p ? ':' : '-');
-      const prefix = (multi ? paint(35, file) + sep : '') + (opt.n ? paint(32, k) + sep : '');
+      const prefix = (multi ? paint(35, file) + sep : '') + (opt.n ? paint(32, startNo.get(file)?.[k - 1] ?? k) + sep : '');
       const tail = opt.p && p ? `\t[${p.map(paintProb).join(' ')}]` : '';
       // Only data records carry the NUL terminator, as in grep -z; file names and counts stay on newlines.
       process.stdout.write(prefix + src[k - 1] + tail + SEP);
@@ -328,7 +374,7 @@ for (const file of targets) {
 if (process.stderr.isTTY) {
   // The API's own usage.cost when reported (OpenRouter does); else an estimate at Jev's list price, only for TypeSafe itself.
   const cost = usedCost > 0 ? `, $${usedCost.toFixed(6)}` : SEMGREP_URL ? '' : `, ~$${(usedTokens * 0.042 / 1e6).toFixed(6)}`;
-  console.error(`${matched}/${allLines.length} ${opt.z ? 'records' : 'lines'} (${lines.length} sent), ${chunks.length} requests, ${usedTokens} input tokens${cost}`);
+  console.error(`${matched}/${allLines.length} ${opt.sentence ? 'sentences' : opt.z ? 'records' : 'lines'} (${lines.length} sent), ${chunks.length} requests, ${usedTokens} input tokens${cost}`);
 }
 // process.exit() can drop buffered stdout when piped, so set exitCode instead.
 process.exitCode = hadError ? 2 : matched ? 0 : 1;
