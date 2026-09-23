@@ -6,6 +6,12 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
+- `SEMGREP_URL` / `SEMGREP_MODEL` override the endpoint and model id, so semgrep can go through OpenRouter,
+  a gateway or a compatible server; `SEMGREP_API_KEY` and `OPENROUTER_API_KEY` supply the key (#4, by @nedzen).
+  The key follows the endpoint: a TypeSafe key is not sent to openrouter.ai.
+- The summary line shows cost: the API's `usage.cost` when reported, otherwise an estimate at
+  `SEMGREP_PRICE_PER_M` (default 0.042 USD per million input tokens), marked `~` (#4).
+- Errors name the endpoint host instead of always saying `typesafe`.
 - `-z` / `--null-data`: the unit of judgement becomes a NUL-terminated record instead of a line, so a
   record may span several lines. Matching records are printed NUL-terminated too, as in `grep -z`; file
   names and counts stay on newlines. `-n` numbers records, `-A`/`-B`/`-C` count records, `--chunk` counts
