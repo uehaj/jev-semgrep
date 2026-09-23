@@ -11,6 +11,15 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   names and counts stay on newlines. `-n` numbers records, `-A`/`-B`/`-C` count records, `--chunk` counts
   records. Pairs directly with `git log -z`, `find -print0` and `xargs -0`, removing the two `tr` calls
   previously needed to flatten a record onto one line (#6).
+- Other endpoints: `SEMGREP_URL` and `SEMGREP_MODEL` point semgrep at any TypeSafe-compatible `/v1/systemone`
+  (OpenRouter, Vercel AI Gateway, a local server). Based on #4 by @nedzen.
+- The summary line shows cost: the endpoint's `usage.cost` when reported, else for TypeSafe an estimate marked `~`.
+
+### Changed
+- The API key is now `SEMGREP_API_KEY`; `TYPESAFE_API_KEY` still works when it is not set. The key is sent to
+  `SEMGREP_URL` as is; with `SEMGREP_URL` set and no key, no Authorization header is sent.
+- **Breaking:** `SEMGREP_ENV` is gone. `./.env` then `~/.config/semgrep/.env` are still read.
+- Network errors name the endpoint's host instead of `typesafe`.
 
 ## [0.2.2] - 2026-09-20
 

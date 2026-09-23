@@ -3,3 +3,5 @@
 workdir/
 node_modules/
 .claude/
+*~
+*.bak

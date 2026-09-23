@@ -133,12 +133,30 @@ npx @uehaj/semgrep -n -e "顧客が怒っている、または不満を持って
 次に [TypeSafe のコンソール](https://console.typesafe.ai/) で取得した API キーを渡します。どれか 1 つで構いません。
 
 ```sh
-export TYPESAFE_API_KEY=your-key                      # 環境変数
-echo 'TYPESAFE_API_KEY=your-key' > ~/.config/semgrep/.env   # ユーザー単位 (先に mkdir -p)
-echo 'TYPESAFE_API_KEY=your-key' > .env               # プロジェクト単位。カレントディレクトリから読む
+export SEMGREP_API_KEY=your-key                       # 環境変数
+echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env    # ユーザー単位 (先に mkdir -p)
+echo 'SEMGREP_API_KEY=your-key' > .env                # プロジェクト単位。カレントディレクトリから読む
 ```
 
-探す順は環境変数、`$SEMGREP_ENV`、`./.env`、`~/.config/semgrep/.env` です。
+環境変数が優先で、足りない分は `./.env`、`~/.config/semgrep/.env` のうち最初に見つかった方から補います。
+`SEMGREP_API_KEY` が無ければ `TYPESAFE_API_KEY` も使えます。
+
+### 他のエンドポイント
+
+semgrep が読む設定は `SEMGREP_API_KEY`（または `TYPESAFE_API_KEY`）、`SEMGREP_URL`、`SEMGREP_MODEL` の 3 つだけです。
+TypeSafe の `POST /v1/systemone` と同じ形で話すエンドポイントなら使えます。キーは `SEMGREP_URL` の先へそのまま
+送られるので、2 つは組にして設定してください。
+
+```sh
+# OpenRouter
+SEMGREP_URL=https://openrouter.ai/api/v1/systemone SEMGREP_API_KEY=sk-or-... semgrep -e ...
+# Vercel AI Gateway
+SEMGREP_URL=https://ai-gateway.vercel.sh/typesafe/v1/systemone SEMGREP_MODEL=typesafe-ai/jev SEMGREP_API_KEY=vck_... semgrep -e ...
+# キーの要らない互換サーバ: Authorization ヘッダを付けずに送る
+SEMGREP_URL=http://localhost:8000/v1/systemone semgrep -e ...
+```
+
+集計行には、エンドポイントが返した費用（`usage.cost`）を出します。TypeSafe 本体の場合は定価での推定を `~` 付きで出します。
 
 ソースから使うなら `git clone https://github.com/uehaj/jev-semgrep.git && cd jev-semgrep && npm install -g .`、
 またはそのまま `node semgrep.mjs ...` で動きます。
@@ -301,7 +319,7 @@ npx skills add uehaj/uehaj-marketplace --skill semgrep -a claude-code -g
 
 スキルは意味を英語で書き、AND / OR / NOT を `-e` / `-a` / `-v` に振り分け、`-n` を付け、大きなディレクトリは
 課金に見合うファイルに絞り、最初の結果が怪しければ `--level loose` や `strict` で引き直します。
-API キーの読み方はコマンドラインと同じです（`TYPESAFE_API_KEY`、`./.env`、`~/.config/semgrep/.env`）。
+API キーとエンドポイントの読み方はコマンドラインと同じです（`SEMGREP_API_KEY`、`./.env`、`~/.config/semgrep/.env`）。
 
 ## 使い方
 

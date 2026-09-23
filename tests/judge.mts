@@ -2,7 +2,7 @@
 // Those verdicts are the ground truth. We then sweep the thresholds (-t positive / -T negative) over semgrep's
 // per-line probabilities and report the best pair. The boolean expression is evaluated here on the per-meaning
 // verdicts; the judge never sees the expression. Verdicts are cached in verdicts.json keyed by meaning text; --rejudge rebuilds.
-//   SEMGREP_ENV=... node --no-warnings tests/judge.mts [--model MODEL] [--rejudge]
+//   node --no-warnings tests/judge.mts   (run from the repo root so ./.env is found) [--model MODEL] [--rejudge]
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';

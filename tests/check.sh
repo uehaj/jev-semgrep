@@ -3,9 +3,8 @@
 # Lines near the threshold (5, 28) drift by about ±0.05 between runs, so only clear positives and negatives are asserted.
 set -e
 cd "$(dirname "$0")"
-# API key comes from .env at the repo root (override with SEMGREP_ENV)
-export SEMGREP_ENV="${SEMGREP_ENV:-$PWD/../.env}"
-J="node ../semgrep.mjs"
+# API key comes from the environment or from .env at the repo root
+J="node --env-file-if-exists=../.env ../semgrep.mjs"
 out=$($J -n -e 'ネットワークやリモート接続の障害' -e 'customer is asking for a refund' fixture.txt 2>/dev/null | cut -d: -f1)
 for n in 4 6 7 13 30; do echo "$out" | grep -qx "$n"; done
 for n in 1 8 11 15 26; do ! echo "$out" | grep -qx "$n"; done

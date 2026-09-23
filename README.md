@@ -137,12 +137,31 @@ npx @uehaj/semgrep -n -e "customer is angry or frustrated" tickets.txt
 Then give it an API key from the [TypeSafe console](https://console.typesafe.ai/). Any one of these works:
 
 ```sh
-export TYPESAFE_API_KEY=your-key                      # environment variable
-echo 'TYPESAFE_API_KEY=your-key' > ~/.config/semgrep/.env   # per user (mkdir -p first)
-echo 'TYPESAFE_API_KEY=your-key' > .env               # per project, read from the current directory
+export SEMGREP_API_KEY=your-key                       # environment variable
+echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env    # per user (mkdir -p first)
+echo 'SEMGREP_API_KEY=your-key' > .env                # per project, read from the current directory
 ```
 
-Lookup order is the environment variable, then `$SEMGREP_ENV`, `./.env`, `~/.config/semgrep/.env`.
+Variables already in the environment win; otherwise the first of `./.env` and `~/.config/semgrep/.env` fills them in.
+`TYPESAFE_API_KEY` is accepted too when `SEMGREP_API_KEY` is not set.
+
+### Other endpoints
+
+semgrep reads exactly three settings: `SEMGREP_API_KEY` (or `TYPESAFE_API_KEY`), `SEMGREP_URL` and `SEMGREP_MODEL`.
+Any endpoint that speaks TypeSafe's `POST /v1/systemone` works. The key is sent to `SEMGREP_URL` as is, so set the
+two together.
+
+```sh
+# OpenRouter
+SEMGREP_URL=https://openrouter.ai/api/v1/systemone SEMGREP_API_KEY=sk-or-... semgrep -e ...
+# Vercel AI Gateway
+SEMGREP_URL=https://ai-gateway.vercel.sh/typesafe/v1/systemone SEMGREP_MODEL=typesafe-ai/jev SEMGREP_API_KEY=vck_... semgrep -e ...
+# A compatible server that needs no key: no Authorization header is sent
+SEMGREP_URL=http://localhost:8000/v1/systemone semgrep -e ...
+```
+
+The summary line shows the cost the endpoint reports (`usage.cost`), or for TypeSafe itself an estimate at list
+price marked `~`.
 
 From source: `git clone https://github.com/uehaj/jev-semgrep.git && cd jev-semgrep && npm install -g .`,
 or run it in place with `node semgrep.mjs ...`.
@@ -306,7 +325,7 @@ npx skills add uehaj/uehaj-marketplace --skill semgrep -a claude-code -g
 
 The skill writes the meaning in English, picks `-e` / `-a` / `-v` for AND / OR / NOT, adds `-n`, narrows large
 directories to files worth paying for, and re-runs with `--level loose` or `strict` when the first result looks off.
-The API key is read the same way as on the command line (`TYPESAFE_API_KEY`, `./.env`, `~/.config/semgrep/.env`).
+The API key and endpoint are read the same way as on the command line (`SEMGREP_API_KEY`, `./.env`, `~/.config/semgrep/.env`).
 
 ## Usage
 

@@ -80,14 +80,13 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
 
 Exit status: 0 matched / 1 no match / 2 error
 
-API key (TypeSafe / Jev):
-  Get a key at https://console.typesafe.ai/ and provide it one of these ways, searched in this order:
-    export TYPESAFE_API_KEY=your-key                         environment variable
-    SEMGREP_ENV=/path/to/.env semgrep ...                    any .env file
-    ./.env                                                   current directory (per project)
-    ~/.config/semgrep/.env                                   per user
-  The .env file is one line:  TYPESAFE_API_KEY=your-key
-  e.g.  mkdir -p ~/.config/semgrep && echo 'TYPESAFE_API_KEY=your-key' > ~/.config/semgrep/.env`;
+Environment (read from the environment, else from ./.env, else from ~/.config/semgrep/.env):
+  SEMGREP_API_KEY    API key. Falls back to TYPESAFE_API_KEY. Get one at https://console.typesafe.ai/
+  SEMGREP_URL        endpoint (default https://api.typesafe.ai/v1/systemone). Any TypeSafe-compatible
+                     /v1/systemone works, e.g. https://openrouter.ai/api/v1/systemone
+  SEMGREP_MODEL      model id (default jev-latest)
+  The key goes to SEMGREP_URL, whatever it is. With SEMGREP_URL set and no key, no auth header is sent.
+  e.g.  mkdir -p ~/.config/semgrep && echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env`;
 const HELP_JA = `usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
 jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE 省略時は stdin。
 
@@ -128,28 +127,29 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
 
 終了コード: 一致あり 0 / なし 1 / エラー 2 (引数・読めないファイル・API 障害)
 
-API キーの設定 (TypeSafe / Jev):
-  https://console.typesafe.ai/ でキーを取得し、次のいずれかで渡す。上から順に探す。
-    export TYPESAFE_API_KEY=your-key                         環境変数
-    SEMGREP_ENV=/path/to/.env semgrep ...                    任意の .env ファイル
-    ./.env                                                   カレントディレクトリ (プロジェクト単位)
-    ~/.config/semgrep/.env                                   ユーザー単位
-  .env の中身は 1 行:  TYPESAFE_API_KEY=your-key
-  例:  mkdir -p ~/.config/semgrep && echo 'TYPESAFE_API_KEY=your-key' > ~/.config/semgrep/.env`;
+環境変数 (環境、無ければ ./.env、無ければ ~/.config/semgrep/.env から読む):
+  SEMGREP_API_KEY    API キー。無ければ TYPESAFE_API_KEY。取得は https://console.typesafe.ai/
+  SEMGREP_URL        送信先 (既定 https://api.typesafe.ai/v1/systemone)。TypeSafe 互換の
+                     /v1/systemone なら可。例 https://openrouter.ai/api/v1/systemone
+  SEMGREP_MODEL      モデル名 (既定 jev-latest)
+  キーは SEMGREP_URL の先へそのまま送られる。SEMGREP_URL 指定時にキーが無ければ認証ヘッダを付けない。
+  例:  mkdir -p ~/.config/semgrep && echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env`;
 if (opt.help) {
   const locale = process.env.LC_ALL || process.env.LC_MESSAGES || process.env.LANG || '';
   console.log(locale.startsWith('ja') ? HELP_JA : HELP_EN);
   process.exit(0);
 }
 
-// API key: if not in the environment, look for a .env file in order
-if (!process.env.TYPESAFE_API_KEY) {
-  const candidates = [process.env.SEMGREP_ENV, '.env', `${homedir()}/.config/semgrep/.env`];
-  const found = candidates.find(f => f && existsSync(f));
-  if (found) process.loadEnvFile(found);
-}
-const apiKey = process.env.TYPESAFE_API_KEY;
-if (!apiKey) die('TYPESAFE_API_KEY is not set. Put it in ./.env or ~/.config/semgrep/.env');
+// Only these variables configure the API. The first .env found fills in what the environment lacks.
+const found = ['.env', `${homedir()}/.config/semgrep/.env`].find(existsSync);
+if (found) process.loadEnvFile(found); // never overrides variables already set
+const { SEMGREP_URL, SEMGREP_MODEL, SEMGREP_API_KEY, TYPESAFE_API_KEY } = process.env;
+const apiUrl = SEMGREP_URL || 'https://api.typesafe.ai/v1/systemone';
+const apiHost = (() => { try { return new URL(apiUrl).host; } catch { die(`SEMGREP_URL is not a URL: ${apiUrl}`); } })();
+const model = SEMGREP_MODEL || 'jev-latest';
+const credential = SEMGREP_API_KEY || TYPESAFE_API_KEY;
+// A compatible local server may need no key; the TypeSafe default always does.
+if (!credential && !SEMGREP_URL) die('SEMGREP_API_KEY is not set. Put it in ./.env or ~/.config/semgrep/.env');
 
 // Expression: a list of AND terms joined by OR. Each literal is [meaning index, negated]. meanings holds each distinct meaning once.
 const expr = [];
@@ -232,6 +232,7 @@ for (let i = 0; i < lines.length; ) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let usedTokens = 0;
+let usedCost = 0;
 
 async function evaluate(chunk) {
   const id = i => `L${String(i).padStart(3, '0')}`;
@@ -243,23 +244,24 @@ async function evaluate(chunk) {
   for (let attempt = 0; ; attempt++) {
     let res;
     try {
-      res = await fetch('https://api.typesafe.ai/v1/systemone', {
+      res = await fetch(apiUrl, {
         method: 'POST',
-        headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ model: 'jev-latest', state, questions }),
+        headers: { 'content-type': 'application/json', ...(credential && { authorization: `Bearer ${credential}` }) },
+        body: JSON.stringify({ model, state, questions }),
         signal: AbortSignal.timeout(60_000),
       });
     } catch (e) {
       if (attempt < 6) { await sleep(500 * 2 ** attempt); continue; } // retry on connection errors and timeouts too
-      throw new Error(`typesafe: ${e.cause?.message ?? e.message}`);
+      throw new Error(`${apiHost}: ${e.cause?.message ?? e.message}`);
     }
     if ((res.status === 429 || res.status === 529 || res.status >= 500) && attempt < 6) {
       await sleep(500 * 2 ** attempt);
       continue;
     }
-    if (!res.ok) throw new Error(`typesafe ${res.status}: ${await res.text()}`);
-    const { answers, usage } = await res.json();
-    usedTokens += usage.input_tokens;
+    if (!res.ok) throw new Error(`${apiHost} ${res.status}: ${await res.text()}`);
+    const { answers, usage = {} } = await res.json();
+    usedTokens += usage.input_tokens ?? 0;
+    usedCost += typeof usage.cost === 'number' ? usage.cost : 0;
     return chunk.map((_, i) => meanings.map((_, m) => answers[`${id(i)}_${m}`].noul));
   }
 }
@@ -323,6 +325,10 @@ for (const file of targets) {
   }
 }
 // Summary only when interactive; grep prints nothing to stderr when scripted.
-if (process.stderr.isTTY) console.error(`${matched}/${allLines.length} ${opt.z ? 'records' : 'lines'} (${lines.length} sent), ${chunks.length} requests, ${usedTokens} input tokens`);
+if (process.stderr.isTTY) {
+  // The API's own usage.cost when reported (OpenRouter does); else an estimate at Jev's list price, only for TypeSafe itself.
+  const cost = usedCost > 0 ? `, $${usedCost.toFixed(6)}` : SEMGREP_URL ? '' : `, ~$${(usedTokens * 0.042 / 1e6).toFixed(6)}`;
+  console.error(`${matched}/${allLines.length} ${opt.z ? 'records' : 'lines'} (${lines.length} sent), ${chunks.length} requests, ${usedTokens} input tokens${cost}`);
+}
 // process.exit() can drop buffered stdout when piped, so set exitCode instead.
 process.exitCode = hadError ? 2 : matched ? 0 : 1;
