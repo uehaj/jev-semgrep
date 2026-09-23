@@ -44,7 +44,9 @@ z_in() { printf 'the package arrived\nand I want my money back for it\0the sky i
 [ -z "$(z_in | $J -c -e 'the customer is asking for a refund' 2>/dev/null)" ]
 # matching records end with NUL
 z_in | $J -z -e 'the customer is asking for a refund' 2>/dev/null | od -An -c | grep -q '\\0'
-# --sentence joins wrapped lines into one sentence and numbers it by its first line; Japanese joins without a space
-[ "$($J -n --sentence -e 'the author admits they made a mistake' prose.txt 2>/dev/null)" = "1:I should have checked the input before shipping, and that was my mistake." ]
-[ "$($J -n --sentence -e 'customer is asking for a refund' prose.txt 2>/dev/null)" = "8:先週買った掃除機が初日から動かないので返金してほしいです。" ]
+# --sentence judges sentences but prints the original lines they touch
+[ "$($J -n --sentence -e 'the author admits they made a mistake' prose.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 2 3 " ]
+# -o prints the sentence itself, joined, numbered by its first line; Japanese joins without a space
+[ "$($J -n -o --sentence -e 'the author admits they made a mistake' prose.txt 2>/dev/null)" = "1:I should have checked the input before shipping, and that was my mistake." ]
+[ "$($J -n -o --sentence -e 'customer is asking for a refund' prose.txt 2>/dev/null)" = "8:先週買った掃除機が初日から動かないので返金してほしいです。" ]
 echo OK

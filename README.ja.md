@@ -291,22 +291,38 @@ $ git log -z --format='%h %s %b' | ./semgrep -z -n -e "ユーザーに見える�
 
 ### 1 文ずつ判定する (`--sentence`)
 
-`--sentence` を付けると、判定の単位が文になります。折り返した行を先につなぐので、複数行にまたがる文も
-1 文として判定し、1 行で出力します。`-n` は、その文が始まる行の番号です。
-[`tests/prose.txt`](tests/prose.txt) には、折り返した英語と日本語の段落が入っています。
+`--sentence` を付けると、行ではなく文ごとに判定します。出力は grep と同じく行のままです。当たった文がかかる
+行をすべて出し、端末では文の部分を grep の一致の色で強調します。文に分ける前に折り返した行をつなぐので、
+複数行にまたがる文も 1 文として判定します。[`tests/prose.txt`](tests/prose.txt) には、折り返した英語と日本語の
+段落が入っています。
 
 ```sh
-$ ./semgrep -n --sentence -e "the author admits they made a mistake" -e "customer is asking for a refund" tests/prose.txt
+$ ./semgrep -n --sentence -e "the author admits they made a mistake" tests/prose.txt
+1:I should have checked the input
+2:before shipping, and that was my
+3:mistake. Next time I will add a test
+```
+
+文は 1 行目から始まり、3 行目の `mistake.` で終わります。色が付くのはその部分だけで、
+`Next time I will add a test` は別の文として判定され、一致しません。
+
+`-o` を付けると、当たった文だけを 1 行ずつ出します。`grep -o` が一致した部分だけを出すのと同じです。
+`-n` は文が始まる行の番号になります。日本語は空白を入れずにつなぎます。単語の間に空白を置かない
+中国語・タイ語・ラオ語・クメール語・ミャンマー語・チベット語も同様です。
+
+```sh
+$ ./semgrep -n -o --sentence -e "the author admits they made a mistake" -e "customer is asking for a refund" tests/prose.txt
 1:I should have checked the input before shipping, and that was my mistake.
 8:先週買った掃除機が初日から動かないので返金してほしいです。
 ```
 
-1 行目はファイルの 3 行に、8 行目は 2 行にまたがっていた文です。日本語は空白を入れずにつなぎます。単語の間に空白を置かない中国語・タイ語・ラオ語・クメール語・ミャンマー語・チベット語も同様です。
-各段落の残りの文（「Next time I will add a test first.」「よろしくお願いします。」）は別に判定され、一致しません。
+`-o` なしでは、`-c` と `-A` / `-B` / `-C` はいつもどおり行で数えます。`-o` 付きでは文で数えます。
+`-z` と併用すると、レコードごとに文に分け、当たったレコードをまるごと出します。
 
 Jev は長い行の中からでも当たる文を自分で見つけるので、判定の精度のために `--sentence` を使う必要はありません。
-行やレコードまるごとではなく当たった文そのものが欲しいとき、また AND を 1 つの文の中で成り立たせたいときに
-使います。式は文ごとに評価されます。
+どの文が当たったかを見たいとき、`-o` で文そのものが欲しいとき、AND を 1 つの文の中で成り立たせたいときに
+使います。式は文ごとに評価されます。そのため、`-v X` だけの式では「X でない文を 1 つでも含む行」がすべて出ます。
+行全体として X でないものを探すなら、`--sentence` を付けずに使います。
 
 改行が文の途中になりえないところでは、行をつなぎません。空行、括弧や `;` に接する改行（JSON やコード）、
 `-` `*` `+` `#` `>` `"` や数字で始まる行（箇条書き、見出し、引用、番号、日時）の前です。そのため JSONL は
@@ -375,7 +391,8 @@ usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
   --chunk=LINES 1 リクエストにまとめる行数 (既定 30)
   -j N         同時リクエスト数 (既定 8)
   -n           行番号を付ける
-  --sentence   判定の単位を文にする (前述の「1 文ずつ判定する」を参照)
+  --sentence   行ではなく文ごとに判定する (前述の「1 文ずつ判定する」を参照)
+  -o           --sentence と併用し、当たった文だけを出す
   -p           各意味の確率を行末に表示 (閾値調整用)
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、

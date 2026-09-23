@@ -297,22 +297,38 @@ File names (`-l`) and counts (`-c`) stay on newlines, as they do in grep. With `
 
 ### One sentence at a time (`--sentence`)
 
-`--sentence` makes the unit a sentence. Wrapped lines are joined first, so a sentence that runs over
-several lines is judged, and printed, as one. `-n` gives the line where the sentence starts.
+`--sentence` judges each sentence instead of each line. The output is still lines, as in grep: every line a
+matching sentence touches is printed, and on a terminal the sentence itself is in grep's match color.
+Wrapped lines are joined before splitting, so a sentence that runs over several lines is judged as one.
 [`tests/prose.txt`](tests/prose.txt) wraps an English paragraph and a Japanese one:
 
 ```sh
-$ ./semgrep -n --sentence -e "the author admits they made a mistake" -e "customer is asking for a refund" tests/prose.txt
+$ ./semgrep -n --sentence -e "the author admits they made a mistake" tests/prose.txt
+1:I should have checked the input
+2:before shipping, and that was my
+3:mistake. Next time I will add a test
+```
+
+The sentence starts on line 1 and ends at `mistake.` on line 3; only that part is colored, not
+`Next time I will add a test`, which is judged separately and does not match.
+
+`-o` prints only the matching sentences, one per line, as `grep -o` prints only the matching part.
+`-n` then gives the line where the sentence starts. Japanese is joined without a space, as are Chinese,
+Thai, Lao, Khmer, Myanmar and Tibetan, which do not put spaces between words:
+
+```sh
+$ ./semgrep -n -o --sentence -e "the author admits they made a mistake" -e "customer is asking for a refund" tests/prose.txt
 1:I should have checked the input before shipping, and that was my mistake.
 8:先週買った掃除機が初日から動かないので返金してほしいです。
 ```
 
-Line 1 spans three lines of the file and line 8 two; Japanese is joined without a space, as are Chinese, Thai, Lao, Khmer, Myanmar and Tibetan, which do not put spaces between words. The rest of each
-paragraph ("Next time I will add a test first.", "よろしくお願いします。") is judged separately and does not match.
+Without `-o`, `-c` counts lines and `-A` / `-B` / `-C` count lines, as usual. With `-o` they count sentences.
+With `-z`, each record is split on its own and matching records are printed whole.
 
 Jev finds a matching sentence inside a long line on its own, so `--sentence` is not needed for accuracy.
-Use it when you want the sentence rather than the whole line or record, and when AND should hold within
-one sentence: the expression is evaluated per sentence.
+Use it to see which sentence matched, to get the sentences with `-o`, and when AND should hold within one
+sentence: the expression is evaluated per sentence. For the same reason `-v X` alone prints every line
+with at least one sentence that is not X; to find lines that are not X as a whole, leave `--sentence` off.
 
 Where a newline cannot be inside a sentence, lines are not joined: at a blank line, next to brackets or
 `;` (JSON, code), and before a line starting with `-` `*` `+` `#` `>` `"` or a digit (list items,
@@ -381,7 +397,8 @@ usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
   --chunk=LINES lines per request (default 30)
   -j N         concurrent requests (default 8)
   -n           print line numbers
-  --sentence   the unit of judgement is a sentence (see "One sentence at a time" above)
+  --sentence   judge each sentence instead of each line (see "One sentence at a time" above)
+  -o           with --sentence, print only the matching sentences
   -p           print each meaning's probability at the end of the line
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are

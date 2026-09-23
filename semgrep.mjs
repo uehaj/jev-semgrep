@@ -35,6 +35,7 @@ const { values: opt, positionals: files, tokens } = parseArgs({
     n: { type: 'boolean', default: false }, // line numbers
     z: { type: 'boolean', default: false }, // records are NUL-terminated, on input and output (grep -z)
     sentence: { type: 'boolean', default: false }, // the unit of judgement is a sentence
+    o: { type: 'boolean', default: false }, // with --sentence, print only the matching sentences (grep -o)
     p: { type: 'boolean', default: false }, // print each meaning's probability
     color: { type: 'string', default: 'auto' }, // auto / always / never
     help: { type: 'boolean', short: 'h', default: false },
@@ -73,12 +74,14 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
                and counts stay on newlines. -n numbers records, -A/-B/-C count records, --chunk counts
                records. Pairs with tools that already emit records: git log -z, find -print0, xargs -0
                  git log -z --format='%h %s %b' | semgrep -z -e "the change alters user-visible behaviour"
-  --sentence   the unit of judgement is a sentence, printed on one line. Wrapped lines are joined first,
+  --sentence   judge each sentence instead of each line. Output is still the lines a matching sentence
+               touches, with the sentence in the match color. Wrapped lines are joined before splitting,
                except at a blank line, next to brackets or ; (JSON, code), or before a line starting with
                - * + # > " or a digit (list, heading, quote, number). Scripts without spaces between words
                (Japanese, Chinese, Thai, Lao, Khmer, Myanmar, Tibetan) join without one. The expression is
-               evaluated per sentence; -n gives the line where it starts, -c and -A/-B/-C count sentences.
-               With -z each record is split on its own
+               evaluated per sentence. With -z each record is split on its own and matching records print
+  -o           with --sentence, print only the matching sentences, one per line; -n gives the line where the
+               sentence starts, -c and -A/-B/-C count sentences
   -p           print each meaning's probability at the end of the line (for tuning thresholds)
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are green at or above
@@ -126,10 +129,13 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
                -n はレコード番号、-A/-B/-C は前後のレコード数、--chunk はレコード数を数える。
                レコードを出すツールとそのまま繋がる: git log -z、find -print0、xargs -0
                  git log -z --format='%h %s %b' | semgrep -z -e "ユーザーに見える振る舞いを変えている"
-  --sentence   判定の単位を文にし、1 文を 1 行で出す。折り返した行は先につなぐ。ただし空行、括弧や ;
-               (JSON やコード)、- * + # > " や数字で始まる行 (箇条書き・見出し・引用・番号) の前では
-               切る。日本語・中国語・タイ語・ラオ語・クメール語・ミャンマー語・チベット語は空白を入れずにつなぐ。式は文ごとに評価する。-n は文が始まる行、
-               -c は文の数、-A/-B/-C は前後の文の数。-z ではレコードごとに文に分ける
+  --sentence   行ではなく文ごとに判定する。出力は当たった文がかかる元の行のままで、文の部分を色で
+               強調する。文に分ける前に折り返した行をつなぐ。ただし空行、括弧や ; (JSON やコード)、
+               - * + # > " や数字で始まる行 (箇条書き・見出し・引用・番号) の前ではつながない。単語の間に
+               空白を置かない文字 (日本語・中国語・タイ語・ラオ語・クメール語・ミャンマー語・チベット語)
+               は空白なしでつなぐ。式は文ごとに評価する。-z ではレコードごとに文に分け、当たったレコードを出す
+  -o           --sentence と併用し、当たった文だけを 1 行ずつ出す。-n は文が始まる行、-c と
+               -A/-B/-C は文の数で数える
   -p           各意味の確率を行末に表示 (閾値調整用)
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
@@ -222,30 +228,40 @@ const SENTENCES = new Intl.Segmenter(undefined, { granularity: 'sentence' });
 const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}\p{Script=Tibetan}ー、。]/u;
 const hardBreak = (prev, next) => !prev || !next || /[{}\[\]<>|;]$/.test(prev) || /^[{}\[\]<>|"\-*+#>\d]/.test(next)
   || /[{}\[\];]$/.test(next); // a line ending like code is not a continuation of prose either
-// lines -> [{ text, no }], no being the line (or record) number where the sentence starts
-function toSentences(lines, noOf) {
+// lines -> [{ text, spans }]. A span [unit, from, to] is where the sentence lies in the original units: the unit
+// is the 1-based line (or record) number from unitOf, from/to are character offsets inside it (baseOf shifts a
+// line's offset inside its record with -z). Output maps matching sentences back to these units.
+function toSentences(lines, unitOf, baseOf) {
   const out = [];
-  let text = '', marks = []; // marks: [offset in text, line number]
+  let text = '', marks = []; // marks: { o: offset in text, unit, base: offset in the unit, len }
   const flush = () => {
-    for (const s of SENTENCES.segment(text)) {
-      const t = s.segment.trim();
-      if (t) out.push({ text: t, no: marks.findLast(([o]) => o <= s.index)[1] });
+    for (const seg of SENTENCES.segment(text)) {
+      const t = seg.segment.trim();
+      if (!t) continue;
+      const start = seg.index + seg.segment.length - seg.segment.trimStart().length, end = start + t.length;
+      const spans = [];
+      for (const m of marks) {
+        const a = Math.max(start, m.o), b = Math.min(end, m.o + m.len);
+        if (a < b) spans.push([m.unit, m.base + a - m.o, m.base + b - m.o]);
+      }
+      out.push({ text: t, spans });
     }
     text = ''; marks = [];
   };
   lines.forEach((line, i) => {
     const prev = text.trimEnd(), next = line.trim();
-    if (hardBreak(prev, next)) { flush(); if (next) { text = next; marks.push([0, noOf(i)]); } return; }
-    text = prev + (CJK.test(prev.at(-1)) && CJK.test(next[0]) ? '' : ' '); // no space when joining Japanese or Chinese
-    marks.push([text.length, noOf(i)]);
+    const mark = { unit: unitOf(i), base: baseOf(i) + line.length - line.trimStart().length, len: next.length };
+    if (hardBreak(prev, next)) { flush(); if (next) { text = next; marks.push({ ...mark, o: 0 }); } return; }
+    text = prev + (CJK.test(prev.at(-1)) && CJK.test(next[0]) ? '' : ' '); // no space for scripts without word spaces
+    marks.push({ ...mark, o: text.length });
     text += next;
   });
   flush();
   return out;
 }
 
-const sources = new Map(); // file -> all units (for context output; includes blank lines)
-const startNo = new Map(); // file -> line number where each sentence starts (--sentence only)
+const sources = new Map(); // file -> the units printed (lines or records; sentences with -o); includes blank lines
+const spansOf = new Map(); // file -> spans of each sentence (--sentence only)
 const allLines = []; // { file, no, text }; includes blank lines; what the expression is evaluated over
 for (const file of targets) {
   let buf;
@@ -254,13 +270,20 @@ for (const file of targets) {
   if (!opt.z && buf.subarray(0, 8192).includes(0)) continue;
   let src = buf.toString('utf8').split(SEP);
   if (src.at(-1) === '') src.pop();
-  if (opt.sentence) {
-    // With -z a record is a hard boundary; -n then gives the record number, as it does without --sentence.
-    const units = opt.z ? src.flatMap((rec, i) => toSentences(rec.split('\n'), () => i + 1)) : toSentences(src, i => i + 1);
-    src = units.map(u => u.text);
-    startNo.set(file, units.map(u => u.no));
-  }
   sources.set(file, src);
+  if (opt.sentence) {
+    // With -z a record is a hard boundary, and lines inside it are joined like any wrapped prose.
+    const sentences = opt.z
+      ? src.flatMap((rec, r) => {
+        const starts = [0];
+        for (const l of rec.split('\n')) starts.push(starts.at(-1) + l.length + 1);
+        return toSentences(rec.split('\n'), () => r + 1, i => starts[i]);
+      })
+      : toSentences(src, i => i + 1, () => 0);
+    spansOf.set(file, sentences.map(u => u.spans));
+    if (opt.o) sources.set(file, sentences.map(u => u.text));
+    src = sentences.map(u => u.text);
+  }
   src.forEach((text, i) => allLines.push({ file, no: i + 1, text }));
 }
 // Blank and whitespace-only lines are not sent; they count as probability 0 for every meaning (never match -e, always match -v).
@@ -345,6 +368,31 @@ for (const l of allLines) {
   if (!hits.has(l.file)) hits.set(l.file, new Map());
   hits.get(l.file).set(l.no, p);
 }
+// --sentence without -o prints the original lines (or records) a matching sentence touches, like grep prints
+// lines. A unit keeps the probabilities of its first matching sentence; ranges mark the matching text in it.
+const ranges = new Map(); // file -> (unit -> [[from, to]])
+if (opt.sentence && !opt.o) for (const [file, h] of hits) {
+  const spans = spansOf.get(file), units = new Map(), marked = new Map();
+  for (const [k, p] of [...h].sort((a, b) => a[0] - b[0])) for (const [u, a, b] of spans[k - 1]) {
+    if (!units.has(u)) units.set(u, p);
+    marked.set(u, [...(marked.get(u) ?? []), [a, b]]);
+  }
+  hits.set(file, units);
+  ranges.set(file, marked);
+}
+// Wrap the matching ranges in grep's match color (bold red), merging overlaps.
+const highlight = (text, rs) => {
+  if (!color || !rs) return text;
+  let out = '', at = 0;
+  for (const [a, b] of rs.sort((x, y) => x[0] - y[0])) {
+    if (b <= at) continue;
+    const from = Math.max(a, at);
+    out += text.slice(at, from) + paint('01;31', text.slice(from, b));
+    at = b;
+  }
+  return out + text.slice(at);
+};
+const startNo = (file, k) => (opt.o ? spansOf.get(file)[k - 1][0][0] : k); // -o: the unit where the sentence starts
 
 const after = Number(opt.A ?? opt.C ?? 0), before = Number(opt.B ?? opt.C ?? 0);
 const multi = opt.r || targets.length > 1; // grep -r prefixes file names even for a single file
@@ -363,10 +411,10 @@ for (const file of targets) {
     for (let k = from; k <= to; k++) {
       const p = h.get(k);
       const sep = paint(36, p ? ':' : '-');
-      const prefix = (multi ? paint(35, file) + sep : '') + (opt.n ? paint(32, startNo.get(file)?.[k - 1] ?? k) + sep : '');
+      const prefix = (multi ? paint(35, file) + sep : '') + (opt.n ? paint(32, startNo(file, k)) + sep : '');
       const tail = opt.p && p ? `\t[${p.map(paintProb).join(' ')}]` : '';
       // Only data records carry the NUL terminator, as in grep -z; file names and counts stay on newlines.
-      process.stdout.write(prefix + src[k - 1] + tail + SEP);
+      process.stdout.write(prefix + highlight(src[k - 1], ranges.get(file)?.get(k)) + tail + SEP);
     }
     last = Math.max(last, to);
     lastPrinted = [file, to];
