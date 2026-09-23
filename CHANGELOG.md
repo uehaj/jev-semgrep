@@ -5,6 +5,10 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-24
+
+_(first npm release since 0.2.0: also carries 0.2.2, which was tagged but never published)_
+
 ### Added
 - `-z` / `--null-data`: the unit of judgement becomes a NUL-terminated record instead of a line, so a
   record may span several lines. Matching records are printed NUL-terminated too, as in `grep -z`; file
@@ -22,6 +26,8 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 - Network errors name the endpoint's host instead of `typesafe`.
 
 ## [0.2.2] - 2026-09-20
+
+_(tagged only; not published to npm. Its changes reached npm in 0.3.0)_
 
 _(includes what was briefly tagged v0.2.1; that tag was never published and has been removed)_
 
@@ -90,7 +96,8 @@ First release as `@uehaj/semgrep`.
 - Errors are one line plus exit code 2, no stack traces.
 - LLM-as-judge test (`tests/judge.mts`) with threshold sweep; self-check (`tests/check.sh`).
 
-[Unreleased]: https://github.com/uehaj/jev-semgrep/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/uehaj/jev-semgrep/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/uehaj/jev-semgrep/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/uehaj/jev-semgrep/compare/v0.2.0...v0.2.2
 [0.2.0]: https://github.com/uehaj/jev-semgrep/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/uehaj/jev-semgrep/compare/40b0d5d...v0.1.1
