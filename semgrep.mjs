@@ -89,13 +89,16 @@ API key (TypeSafe / Jev):
   The .env file is one line:  TYPESAFE_API_KEY=your-key
   e.g.  mkdir -p ~/.config/semgrep && echo 'TYPESAFE_API_KEY=your-key' > ~/.config/semgrep/.env
 
-Other endpoints (all optional; defaults talk to TypeSafe directly):
-  SEMGREP_URL=URL          endpoint to POST to (default https://api.typesafe.ai/v1/systemone)
-  SEMGREP_MODEL=ID         model id sent in the request (default jev-latest)
-  SEMGREP_API_KEY=KEY      key for that endpoint; overrides the two below
-  OPENROUTER_API_KEY=KEY   used when SEMGREP_URL is on openrouter.ai, or when no TypeSafe key is set
+Other providers: the key's prefix picks the route, so setting the key is enough.
+  vck_...                          Vercel AI Gateway (model typesafe-ai/jev)    AI_GATEWAY_API_KEY or SEMGREP_API_KEY
+  sk-or-...                        OpenRouter (model jev-1.13)                  OPENROUTER_API_KEY or SEMGREP_API_KEY
+  <32-hex account id>:cfut_...     Cloudflare Workers AI (model typesafe/jev)   SEMGREP_API_KEY (cfat_ tokens too)
+  anything else                    TypeSafe directly (model jev-latest)         TYPESAFE_API_KEY or SEMGREP_API_KEY
+  Keys are taken in the order SEMGREP_API_KEY, TYPESAFE_API_KEY, AI_GATEWAY_API_KEY, OPENROUTER_API_KEY.
+  SEMGREP_URL=URL / SEMGREP_MODEL=ID override the endpoint and model. When SEMGREP_URL is on a known
+  provider's host, only that provider's key is sent there.
   SEMGREP_PRICE_PER_M=USD  price per million input tokens for the cost estimate (default 0.042).
-                           When the API reports usage.cost, that is shown instead`;
+                           When the API reports usage.cost (OpenRouter does), that is shown instead`;
 const HELP_JA = `usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
 jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE 省略時は stdin。
 
@@ -145,13 +148,16 @@ API キーの設定 (TypeSafe / Jev):
   .env の中身は 1 行:  TYPESAFE_API_KEY=your-key
   例:  mkdir -p ~/.config/semgrep && echo 'TYPESAFE_API_KEY=your-key' > ~/.config/semgrep/.env
 
-別のエンドポイントを使う (いずれも任意。既定は TypeSafe に直接つなぐ):
-  SEMGREP_URL=URL          送信先 (既定 https://api.typesafe.ai/v1/systemone)
-  SEMGREP_MODEL=ID         リクエストに入れるモデル名 (既定 jev-latest)
-  SEMGREP_API_KEY=KEY      そのエンドポイント用のキー。下の 2 つより優先
-  OPENROUTER_API_KEY=KEY   SEMGREP_URL が openrouter.ai のとき、または TypeSafe のキーが無いときに使う
+他のプロバイダ: キーの接頭辞で経路が決まるので、キーを置くだけでよい。
+  vck_...                          Vercel AI Gateway (モデル typesafe-ai/jev)    AI_GATEWAY_API_KEY か SEMGREP_API_KEY
+  sk-or-...                        OpenRouter (モデル jev-1.13)                  OPENROUTER_API_KEY か SEMGREP_API_KEY
+  <32 桁 16 進のアカウント ID>:cfut_...  Cloudflare Workers AI (モデル typesafe/jev)  SEMGREP_API_KEY (cfat_ も可)
+  それ以外                         TypeSafe に直接 (モデル jev-latest)           TYPESAFE_API_KEY か SEMGREP_API_KEY
+  キーは SEMGREP_API_KEY、TYPESAFE_API_KEY、AI_GATEWAY_API_KEY、OPENROUTER_API_KEY の順に探す。
+  SEMGREP_URL=URL / SEMGREP_MODEL=ID で送信先とモデル名を上書きできる。SEMGREP_URL が既知のプロバイダの
+  ホストを指すときは、そのプロバイダのキーだけを送る。
   SEMGREP_PRICE_PER_M=USD  費用の推定に使う 100 万入力トークンあたりの単価 (既定 0.042)。
-                           API が usage.cost を返せばそちらを表示する`;
+                           API が usage.cost を返せば (OpenRouter は返す) そちらを表示する`;
 if (opt.help) {
   const locale = process.env.LC_ALL || process.env.LC_MESSAGES || process.env.LANG || '';
   console.log(locale.startsWith('ja') ? HELP_JA : HELP_EN);
@@ -160,21 +166,37 @@ if (opt.help) {
 
 // API key: if not in the environment, look for a .env file in order (loadEnvFile never overrides set variables)
 const env = process.env;
-if (!env.SEMGREP_API_KEY && !env.TYPESAFE_API_KEY && !env.OPENROUTER_API_KEY) {
+const KEY_VARS = ['SEMGREP_API_KEY', 'TYPESAFE_API_KEY', 'AI_GATEWAY_API_KEY', 'OPENROUTER_API_KEY'];
+if (!KEY_VARS.some(v => env[v])) {
   const candidates = [env.SEMGREP_ENV, '.env', `${homedir()}/.config/semgrep/.env`];
   const found = candidates.find(f => f && existsSync(f));
   if (found) process.loadEnvFile(found);
 }
-// Endpoint and model are overridable (OpenRouter, a gateway, a compatible local server).
-const apiUrl = env.SEMGREP_URL || 'https://api.typesafe.ai/v1/systemone';
-const model = env.SEMGREP_MODEL || 'jev-latest';
-const apiHost = (() => { try { return new URL(apiUrl).host; } catch { die(`SEMGREP_URL is not a URL: ${apiUrl}`); } })();
-// Pick the key that belongs to the endpoint, so a TypeSafe key is not sent to OpenRouter and vice versa.
-const apiKey = env.SEMGREP_API_KEY
-  || (apiHost.endsWith('openrouter.ai') ? env.OPENROUTER_API_KEY : env.TYPESAFE_API_KEY || env.OPENROUTER_API_KEY);
-if (!apiKey) die(apiHost.endsWith('openrouter.ai')
-  ? 'OPENROUTER_API_KEY is not set (or set SEMGREP_API_KEY). Put it in ./.env or ~/.config/semgrep/.env'
-  : 'TYPESAFE_API_KEY is not set (or set SEMGREP_API_KEY). Put it in ./.env or ~/.config/semgrep/.env');
+// The key's prefix picks the route. Vercel and OpenRouter speak TypeSafe's /v1/systemone;
+// Cloudflare Workers AI takes { model, input } at /accounts/{id}/ai/run, so its key is "<account id>:<cfut_|cfat_ token>".
+// ponytail: an unprefixed legacy Cloudflare token cannot be told from a TypeSafe key, so it is not supported
+const CLOUDFLARE_KEY = /^([0-9a-f]{32}):(cf[ua]t_[A-Za-z0-9_-]+)$/;
+const PROVIDERS = [
+  { name: 'vercel', host: 'ai-gateway.vercel.sh', match: k => k.startsWith('vck_'), path: () => '/typesafe/v1/systemone', model: 'typesafe-ai/jev' },
+  { name: 'openrouter', host: 'openrouter.ai', match: k => k.startsWith('sk-or-'), path: () => '/api/v1/systemone', model: 'jev-1.13' },
+  { name: 'cloudflare', host: 'api.cloudflare.com', match: k => CLOUDFLARE_KEY.test(k), path: k => `/client/v4/accounts/${CLOUDFLARE_KEY.exec(k)[1]}/ai/run`, model: 'typesafe/jev' },
+  { name: 'typesafe', host: 'api.typesafe.ai', match: () => true, path: () => '/v1/systemone', model: 'jev-latest' },
+];
+const providerOf = k => PROVIDERS.find(p => p.match(k));
+const hostOf = u => { try { return new URL(u).host; } catch { die(`SEMGREP_URL is not a URL: ${u}`); } };
+// With SEMGREP_URL on a known provider's host, only that provider's key may go there (no TypeSafe key to OpenRouter).
+const keys = KEY_VARS.map(v => env[v]).filter(Boolean);
+const urlHost = env.SEMGREP_URL && hostOf(env.SEMGREP_URL);
+const hostOwner = urlHost && PROVIDERS.find(p => urlHost === p.host);
+const apiKey = hostOwner ? keys.find(k => providerOf(k) === hostOwner) : keys[0];
+if (!apiKey) die(hostOwner
+  ? `no ${hostOwner.name} key for ${urlHost} (set SEMGREP_API_KEY). Put it in ./.env or ~/.config/semgrep/.env`
+  : 'TYPESAFE_API_KEY is not set (or SEMGREP_API_KEY / AI_GATEWAY_API_KEY / OPENROUTER_API_KEY). Put it in ./.env or ~/.config/semgrep/.env');
+const provider = providerOf(apiKey);
+const apiUrl = env.SEMGREP_URL || `https://${provider.host}${provider.path(apiKey)}`;
+const model = env.SEMGREP_MODEL || provider.model;
+const apiHost = hostOf(apiUrl);
+const bearer = provider.name === 'cloudflare' ? CLOUDFLARE_KEY.exec(apiKey)[2] : apiKey;
 
 // Expression: a list of AND terms joined by OR. Each literal is [meaning index, negated]. meanings holds each distinct meaning once.
 const expr = [];
@@ -271,8 +293,8 @@ async function evaluate(chunk) {
     try {
       res = await fetch(apiUrl, {
         method: 'POST',
-        headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ model, state, questions }),
+        headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json' },
+        body: JSON.stringify(provider.name === 'cloudflare' ? { model, input: { state, questions } } : { model, state, questions }),
         signal: AbortSignal.timeout(60_000),
       });
     } catch (e) {
@@ -284,8 +306,9 @@ async function evaluate(chunk) {
       continue;
     }
     if (!res.ok) throw new Error(`${apiHost} ${res.status}: ${await res.text()}`);
-    const { answers, usage } = await res.json();
-    usedTokens += usage.input_tokens;
+    const body = await res.json();
+    const { answers, usage = {} } = body.result ?? body; // Cloudflare wraps the answer in { result, success }
+    usedTokens += usage.input_tokens ?? 0;
     usedCost += typeof usage.cost === 'number' ? usage.cost : 0;
     return chunk.map((_, i) => meanings.map((_, m) => answers[`${id(i)}_${m}`].noul));
   }

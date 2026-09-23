@@ -144,30 +144,29 @@ echo 'TYPESAFE_API_KEY=your-key' > .env               # per project, read from t
 
 Lookup order is the environment variable, then `$SEMGREP_ENV`, `./.env`, `~/.config/semgrep/.env`.
 
-### Other endpoints
+### Other providers
 
-By default semgrep talks to TypeSafe directly. To go through OpenRouter, a gateway, or a compatible server,
-override the endpoint, the model id and the key:
+Jev is also served by Vercel AI Gateway, OpenRouter and Cloudflare Workers AI. semgrep picks the route from
+the key's prefix, so setting the key is enough:
+
+| Key | Route | Model | Variable |
+|---|---|---|---|
+| `vck_…` | Vercel AI Gateway | `typesafe-ai/jev` | `AI_GATEWAY_API_KEY` or `SEMGREP_API_KEY` |
+| `sk-or-…` | OpenRouter | `jev-1.13` | `OPENROUTER_API_KEY` or `SEMGREP_API_KEY` |
+| `<32-hex account id>:cfut_…` (or `cfat_`) | Cloudflare Workers AI | `typesafe/jev` | `SEMGREP_API_KEY` |
+| anything else | TypeSafe directly | `jev-latest` | `TYPESAFE_API_KEY` or `SEMGREP_API_KEY` |
 
 ```sh
-export SEMGREP_URL=https://openrouter.ai/api/v1/...   # endpoint to POST to
-export SEMGREP_MODEL=...                              # model id sent in the request
-export OPENROUTER_API_KEY=...                         # or SEMGREP_API_KEY for any endpoint
+export OPENROUTER_API_KEY=sk-or-...
+export SEMGREP_API_KEY="<account-id>:<cfut_token>"   # Cloudflare: account id and token joined by :
 ```
 
-| Variable | Default | Meaning |
-|---|---|---|
-| `SEMGREP_URL` | `https://api.typesafe.ai/v1/systemone` | endpoint |
-| `SEMGREP_MODEL` | `jev-latest` | model id |
-| `SEMGREP_API_KEY` | | key for the endpoint; overrides the two below |
-| `OPENROUTER_API_KEY` | | used when `SEMGREP_URL` is on openrouter.ai, or when no TypeSafe key is set |
-| `SEMGREP_PRICE_PER_M` | `0.042` | USD per million input tokens for the cost estimate |
-
-The key follows the endpoint: when `SEMGREP_URL` points at openrouter.ai, a TypeSafe key is never sent there.
-The summary line shows the cost the API reports (`usage.cost`, as OpenRouter does), or an estimate marked `~`.
-
-From source: `git clone https://github.com/uehaj/jev-semgrep.git && cd jev-semgrep && npm install -g .`,
-or run it in place with `node semgrep.mjs ...`.
+Keys are looked up in the order `SEMGREP_API_KEY`, `TYPESAFE_API_KEY`, `AI_GATEWAY_API_KEY`, `OPENROUTER_API_KEY`.
+A Cloudflare token is only used when given explicitly this way, because `CLOUDFLARE_API_TOKEN` is often set for
+other tools. `SEMGREP_URL` and `SEMGREP_MODEL` override the endpoint and model; when `SEMGREP_URL` is on a known
+provider's host, only that provider's key is sent there. The summary line shows the cost the API reports
+(`usage.cost`, as OpenRouter does), or an estimate at `SEMGREP_PRICE_PER_M` (default 0.042 USD per million input
+tokens) marked `~`.
 
 > The name collides with the static-analysis tool [Semgrep](https://semgrep.dev/). Rename one of them if you use both.
 
