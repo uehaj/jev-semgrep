@@ -58,7 +58,7 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
                with -t 0.6 -T 0.3 a line at 0.3..0.6 matches neither X nor not-X
   -r           recurse into directories (current directory when FILE is omitted). Skips .git,
                node_modules, .ssh/.aws/.gnupg, binary files and likely secrets (.env*, *.pem, *.key,
-               id_rsa...). Every searched line is sent to the TypeSafe API
+               id_rsa...). Every searched line is sent to the API (TypeSafe unless SEMGREP_URL says otherwise)
   -l           print only the names of files with a match, not the lines
   -A NUM       print NUM lines of trailing context after each match (context lines use - as separator)
   -B NUM       print NUM lines of leading context before each match
@@ -87,7 +87,15 @@ API key (TypeSafe / Jev):
     ./.env                                                   current directory (per project)
     ~/.config/semgrep/.env                                   per user
   The .env file is one line:  TYPESAFE_API_KEY=your-key
-  e.g.  mkdir -p ~/.config/semgrep && echo 'TYPESAFE_API_KEY=your-key' > ~/.config/semgrep/.env`;
+  e.g.  mkdir -p ~/.config/semgrep && echo 'TYPESAFE_API_KEY=your-key' > ~/.config/semgrep/.env
+
+Other endpoints (all optional; defaults talk to TypeSafe directly):
+  SEMGREP_URL=URL          endpoint to POST to (default https://api.typesafe.ai/v1/systemone)
+  SEMGREP_MODEL=ID         model id sent in the request (default jev-latest)
+  SEMGREP_API_KEY=KEY      key for that endpoint; overrides the two below
+  OPENROUTER_API_KEY=KEY   used when SEMGREP_URL is on openrouter.ai, or when no TypeSafe key is set
+  SEMGREP_PRICE_PER_M=USD  price per million input tokens for the cost estimate (default 0.042).
+                           When the API reports usage.cost, that is shown instead`;
 const HELP_JA = `usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
 jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE 省略時は stdin。
 
@@ -106,7 +114,7 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
                -t 0.6 -T 0.3 なら 0.3〜0.6 の曖昧な行はどちらにも当たらない
   -r           ディレクトリを再帰的に探す (FILE 省略時はカレント)。.git、node_modules、
                .ssh/.aws/.gnupg、バイナリ、秘密情報らしいファイル (.env*, *.pem, *.key, id_rsa...) は
-               飛ばす。検索した行はすべて TypeSafe の API に送られる
+               飛ばす。検索した行はすべて API (SEMGREP_URL が無ければ TypeSafe) に送られる
   -l           一致した行ではなくファイル名だけを表示
   -A NUM       一致行の後ろ NUM 行も表示 (grep と同じ。文脈行の区切りは - )
   -B NUM       一致行の前 NUM 行も表示
@@ -135,21 +143,38 @@ API キーの設定 (TypeSafe / Jev):
     ./.env                                                   カレントディレクトリ (プロジェクト単位)
     ~/.config/semgrep/.env                                   ユーザー単位
   .env の中身は 1 行:  TYPESAFE_API_KEY=your-key
-  例:  mkdir -p ~/.config/semgrep && echo 'TYPESAFE_API_KEY=your-key' > ~/.config/semgrep/.env`;
+  例:  mkdir -p ~/.config/semgrep && echo 'TYPESAFE_API_KEY=your-key' > ~/.config/semgrep/.env
+
+別のエンドポイントを使う (いずれも任意。既定は TypeSafe に直接つなぐ):
+  SEMGREP_URL=URL          送信先 (既定 https://api.typesafe.ai/v1/systemone)
+  SEMGREP_MODEL=ID         リクエストに入れるモデル名 (既定 jev-latest)
+  SEMGREP_API_KEY=KEY      そのエンドポイント用のキー。下の 2 つより優先
+  OPENROUTER_API_KEY=KEY   SEMGREP_URL が openrouter.ai のとき、または TypeSafe のキーが無いときに使う
+  SEMGREP_PRICE_PER_M=USD  費用の推定に使う 100 万入力トークンあたりの単価 (既定 0.042)。
+                           API が usage.cost を返せばそちらを表示する`;
 if (opt.help) {
   const locale = process.env.LC_ALL || process.env.LC_MESSAGES || process.env.LANG || '';
   console.log(locale.startsWith('ja') ? HELP_JA : HELP_EN);
   process.exit(0);
 }
 
-// API key: if not in the environment, look for a .env file in order
-if (!process.env.TYPESAFE_API_KEY && !process.env.OPENROUTER_API_KEY) {
-  const candidates = [process.env.SEMGREP_ENV, '.env', `${homedir()}/.config/semgrep/.env`];
+// API key: if not in the environment, look for a .env file in order (loadEnvFile never overrides set variables)
+const env = process.env;
+if (!env.SEMGREP_API_KEY && !env.TYPESAFE_API_KEY && !env.OPENROUTER_API_KEY) {
+  const candidates = [env.SEMGREP_ENV, '.env', `${homedir()}/.config/semgrep/.env`];
   const found = candidates.find(f => f && existsSync(f));
   if (found) process.loadEnvFile(found);
 }
-const apiKey = process.env.TYPESAFE_API_KEY || process.env.OPENROUTER_API_KEY;
-if (!apiKey) die('TYPESAFE_API_KEY is not set. Put it in ./.env or ~/.config/semgrep/.env');
+// Endpoint and model are overridable (OpenRouter, a gateway, a compatible local server).
+const apiUrl = env.SEMGREP_URL || 'https://api.typesafe.ai/v1/systemone';
+const model = env.SEMGREP_MODEL || 'jev-latest';
+const apiHost = (() => { try { return new URL(apiUrl).host; } catch { die(`SEMGREP_URL is not a URL: ${apiUrl}`); } })();
+// Pick the key that belongs to the endpoint, so a TypeSafe key is not sent to OpenRouter and vice versa.
+const apiKey = env.SEMGREP_API_KEY
+  || (apiHost.endsWith('openrouter.ai') ? env.OPENROUTER_API_KEY : env.TYPESAFE_API_KEY || env.OPENROUTER_API_KEY);
+if (!apiKey) die(apiHost.endsWith('openrouter.ai')
+  ? 'OPENROUTER_API_KEY is not set (or set SEMGREP_API_KEY). Put it in ./.env or ~/.config/semgrep/.env'
+  : 'TYPESAFE_API_KEY is not set (or set SEMGREP_API_KEY). Put it in ./.env or ~/.config/semgrep/.env');
 
 // Expression: a list of AND terms joined by OR. Each literal is [meaning index, negated]. meanings holds each distinct meaning once.
 const expr = [];
@@ -244,9 +269,7 @@ async function evaluate(chunk) {
   for (let attempt = 0; ; attempt++) {
     let res;
     try {
-      const url = process.env.SEMGREP_URL || 'https://api.typesafe.ai/v1/systemone';
-      const model = process.env.SEMGREP_MODEL || 'jev-latest';
-      res = await fetch(url, {
+      res = await fetch(apiUrl, {
         method: 'POST',
         headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
         body: JSON.stringify({ model, state, questions }),
@@ -254,13 +277,13 @@ async function evaluate(chunk) {
       });
     } catch (e) {
       if (attempt < 6) { await sleep(500 * 2 ** attempt); continue; } // retry on connection errors and timeouts too
-      throw new Error(`typesafe: ${e.cause?.message ?? e.message}`);
+      throw new Error(`${apiHost}: ${e.cause?.message ?? e.message}`);
     }
     if ((res.status === 429 || res.status === 529 || res.status >= 500) && attempt < 6) {
       await sleep(500 * 2 ** attempt);
       continue;
     }
-    if (!res.ok) throw new Error(`typesafe ${res.status}: ${await res.text()}`);
+    if (!res.ok) throw new Error(`${apiHost} ${res.status}: ${await res.text()}`);
     const { answers, usage } = await res.json();
     usedTokens += usage.input_tokens;
     usedCost += typeof usage.cost === 'number' ? usage.cost : 0;
@@ -328,8 +351,10 @@ for (const file of targets) {
 }
 // Summary only when interactive; grep prints nothing to stderr when scripted.
 if (process.stderr.isTTY) {
-  const cost = usedCost > 0 ? usedCost : usedTokens * (Number(process.env.SEMGREP_PRICE_PER_M) || 0.042) / 1e6;
-  console.error(`${matched}/${allLines.length} ${opt.z ? 'records' : 'lines'} (${lines.length} sent), ${chunks.length} requests, ${usedTokens} input tokens, $${cost.toFixed(6)}`);
+  // The API's own usage.cost when it reports one (OpenRouter does), else tokens at SEMGREP_PRICE_PER_M (Jev list price).
+  const cost = usedCost > 0 ? `$${usedCost.toFixed(6)}`
+    : `~$${(usedTokens * (Number(env.SEMGREP_PRICE_PER_M) || 0.042) / 1e6).toFixed(6)}`;
+  console.error(`${matched}/${allLines.length} ${opt.z ? 'records' : 'lines'} (${lines.length} sent), ${chunks.length} requests, ${usedTokens} input tokens, ${cost}`);
 }
 // process.exit() can drop buffered stdout when piped, so set exitCode instead.
 process.exitCode = hadError ? 2 : matched ? 0 : 1;

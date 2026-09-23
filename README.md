@@ -144,6 +144,28 @@ echo 'TYPESAFE_API_KEY=your-key' > .env               # per project, read from t
 
 Lookup order is the environment variable, then `$SEMGREP_ENV`, `./.env`, `~/.config/semgrep/.env`.
 
+### Other endpoints
+
+By default semgrep talks to TypeSafe directly. To go through OpenRouter, a gateway, or a compatible server,
+override the endpoint, the model id and the key:
+
+```sh
+export SEMGREP_URL=https://openrouter.ai/api/v1/...   # endpoint to POST to
+export SEMGREP_MODEL=...                              # model id sent in the request
+export OPENROUTER_API_KEY=...                         # or SEMGREP_API_KEY for any endpoint
+```
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SEMGREP_URL` | `https://api.typesafe.ai/v1/systemone` | endpoint |
+| `SEMGREP_MODEL` | `jev-latest` | model id |
+| `SEMGREP_API_KEY` | | key for the endpoint; overrides the two below |
+| `OPENROUTER_API_KEY` | | used when `SEMGREP_URL` is on openrouter.ai, or when no TypeSafe key is set |
+| `SEMGREP_PRICE_PER_M` | `0.042` | USD per million input tokens for the cost estimate |
+
+The key follows the endpoint: when `SEMGREP_URL` points at openrouter.ai, a TypeSafe key is never sent there.
+The summary line shows the cost the API reports (`usage.cost`, as OpenRouter does), or an estimate marked `~`.
+
 From source: `git clone https://github.com/uehaj/jev-semgrep.git && cd jev-semgrep && npm install -g .`,
 or run it in place with `node semgrep.mjs ...`.
 
