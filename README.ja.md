@@ -140,28 +140,6 @@ echo 'TYPESAFE_API_KEY=your-key' > .env               # プロジェクト単位
 
 探す順は環境変数、`$SEMGREP_ENV`、`./.env`、`~/.config/semgrep/.env` です。
 
-### 別のエンドポイントを使う
-
-既定では TypeSafe に直接つなぎます。OpenRouter やゲートウェイ、互換サーバを経由するときは、
-エンドポイントとモデル名とキーを差し替えます。
-
-```sh
-export SEMGREP_URL=https://openrouter.ai/api/v1/...   # 送信先
-export SEMGREP_MODEL=...                              # リクエストに入れるモデル名
-export OPENROUTER_API_KEY=...                         # どのエンドポイントにも使うなら SEMGREP_API_KEY
-```
-
-| 変数 | 既定 | 意味 |
-|---|---|---|
-| `SEMGREP_URL` | `https://api.typesafe.ai/v1/systemone` | 送信先 |
-| `SEMGREP_MODEL` | `jev-latest` | モデル名 |
-| `SEMGREP_API_KEY` | | そのエンドポイント用のキー。下の 2 つより優先 |
-| `OPENROUTER_API_KEY` | | `SEMGREP_URL` が openrouter.ai のとき、または TypeSafe のキーが無いときに使う |
-| `SEMGREP_PRICE_PER_M` | `0.042` | 費用の推定に使う 100 万入力トークンあたりの単価（ドル） |
-
-キーは送信先に合わせて選びます。`SEMGREP_URL` が openrouter.ai を指しているとき、TypeSafe のキーは送りません。
-集計行には API が返す費用（OpenRouter のように `usage.cost` があれば）を、無ければ `~` 付きの推定値を表示します。
-
 ソースから使うなら `git clone https://github.com/uehaj/jev-semgrep.git && cd jev-semgrep && npm install -g .`、
 またはそのまま `node semgrep.mjs ...` で動きます。
 
