@@ -5,6 +5,13 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 
 ## [Unreleased]
 
+### Added
+- `-z` / `--null-data`: the unit of judgement becomes a NUL-terminated record instead of a line, so a
+  record may span several lines. Matching records are printed NUL-terminated too, as in `grep -z`; file
+  names and counts stay on newlines. `-n` numbers records, `-A`/`-B`/`-C` count records, `--chunk` counts
+  records. Pairs directly with `git log -z`, `find -print0` and `xargs -0`, removing the two `tr` calls
+  previously needed to flatten a record onto one line (#6).
+
 ## [0.2.2] - 2026-09-20
 
 _(includes what was briefly tagged v0.2.1; that tag was never published and has been removed)_

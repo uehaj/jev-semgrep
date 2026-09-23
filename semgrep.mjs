@@ -12,7 +12,7 @@ const die = msg => { console.error(`semgrep: ${msg}\nTry 'semgrep --help' for mo
 process.on('uncaughtException', e => die(e.message));
 
 // A bare --color means --color=auto (as in grep). parseArgs cannot express an optional value, so fill it in first.
-const argv = process.argv.slice(2).map(a => (a === '--color' ? '--color=auto' : a));
+const argv = process.argv.slice(2).map(a => (a === '--color' ? '--color=auto' : a === '--null-data' ? '-z' : a));
 const { values: opt, positionals: files, tokens } = parseArgs({
   args: argv,
   allowPositionals: true,
@@ -33,6 +33,7 @@ const { values: opt, positionals: files, tokens } = parseArgs({
     B: { type: 'string' }, // N lines of leading context
     C: { type: 'string' }, // N lines of context on both sides
     n: { type: 'boolean', default: false }, // line numbers
+    z: { type: 'boolean', default: false }, // records are NUL-terminated, on input and output (grep -z)
     p: { type: 'boolean', default: false }, // print each meaning's probability
     color: { type: 'string', default: 'auto' }, // auto / always / never
     help: { type: 'boolean', short: 'h', default: false },
@@ -66,6 +67,11 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
   --chunk=LINES lines per request (default 30)
   -j N         concurrent requests (default 8)
   -n           print line numbers
+  -z, --null-data  the unit of judgement is a NUL-terminated record, not a line, so a record may span
+               several lines. Matching records are printed NUL-terminated too (as in grep -z); file names
+               and counts stay on newlines. -n numbers records, -A/-B/-C count records, --chunk counts
+               records. Pairs with tools that already emit records: git log -z, find -print0, xargs -0
+                 git log -z --format='%h %s %b' | semgrep -z -e "the change alters user-visible behaviour"
   -p           print each meaning's probability at the end of the line (for tuning thresholds)
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are green at or above
@@ -109,6 +115,11 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
   --chunk=LINES 1 リクエストにまとめる行数 (既定 30)
   -j N         同時リクエスト数 (既定 8)
   -n           行番号を付ける
+  -z, --null-data  判定の単位を行ではなく NUL 終端のレコードにする。1 レコードが複数行でもよい。
+               一致したレコードも NUL 終端で出力する (grep -z と同じ)。ファイル名と件数は改行のまま。
+               -n はレコード番号、-A/-B/-C は前後のレコード数、--chunk はレコード数を数える。
+               レコードを出すツールとそのまま繋がる: git log -z、find -print0、xargs -0
+                 git log -z --format='%h %s %b' | semgrep -z -e "ユーザーに見える振る舞いを変えている"
   -p           各意味の確率を行末に表示 (閾値調整用)
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
@@ -169,6 +180,12 @@ if (chunkLines < 1) die('--chunk must be at least 1');
 if (tPos < 0 || tPos > 1 || tNeg < 0 || tNeg > 1) die('-t / -T must be between 0 and 1');
 if (Number(opt.j) < 1) die('-j must be at least 1');
 
+// The unit of judgement. Without -z it is a line; with -z it is a NUL-terminated record, which may
+// span several lines. Everything downstream works on an array of units, so only the terminator changes.
+const SEP = opt.z ? '\0' : '\n';
+// How much of one unit is sent. A line rarely reaches 2000 characters; a commit message with its body does.
+const MAX_UNIT_CHARS = opt.z ? 8000 : 2000;
+
 // With -r, expand directories. Line contents go to an external API, so recursion skips .git / node_modules
 // and files that usually hold secrets (.env*, keys, .ssh/.aws/.gnupg). A file named explicitly is still sent.
 const SKIP_DIRS = ['.git', 'node_modules', '.ssh', '.aws', '.gnupg'];
@@ -191,8 +208,9 @@ const allLines = []; // { file, no, text }; includes blank lines; what the expre
 for (const file of targets) {
   let buf;
   try { buf = readFileSync(file === '-' ? 0 : file); } catch (e) { warn(file, e); continue; }
-  if (buf.subarray(0, 8192).includes(0)) continue;
-  const src = buf.toString('utf8').split('\n');
+  // With -z a NUL is the record terminator, so the binary sniff would reject exactly the input we want.
+  if (!opt.z && buf.subarray(0, 8192).includes(0)) continue;
+  const src = buf.toString('utf8').split(SEP);
   if (src.at(-1) === '') src.pop();
   sources.set(file, src);
   src.forEach((text, i) => allLines.push({ file, no: i + 1, text }));
@@ -217,7 +235,7 @@ let usedTokens = 0;
 
 async function evaluate(chunk) {
   const id = i => `L${String(i).padStart(3, '0')}`;
-  const state = Object.fromEntries(chunk.map((l, i) => [id(i), l.text.slice(0, 2000)]));
+  const state = Object.fromEntries(chunk.map((l, i) => [id(i), l.text.slice(0, MAX_UNIT_CHARS)]));
   const questions = {};
   chunk.forEach((_, i) => meanings.forEach((text, m) => {
     questions[`${id(i)}_${m}`] = { type: 'noul', instructions: `Does line ${id(i)} match the meaning: "${text}"?` };
@@ -297,13 +315,14 @@ for (const file of targets) {
       const sep = paint(36, p ? ':' : '-');
       const prefix = (multi ? paint(35, file) + sep : '') + (opt.n ? paint(32, k) + sep : '');
       const tail = opt.p && p ? `\t[${p.map(paintProb).join(' ')}]` : '';
-      console.log(prefix + src[k - 1] + tail);
+      // Only data records carry the NUL terminator, as in grep -z; file names and counts stay on newlines.
+      process.stdout.write(prefix + src[k - 1] + tail + SEP);
     }
     last = Math.max(last, to);
     lastPrinted = [file, to];
   }
 }
 // Summary only when interactive; grep prints nothing to stderr when scripted.
-if (process.stderr.isTTY) console.error(`${matched}/${allLines.length} lines (${lines.length} sent), ${chunks.length} requests, ${usedTokens} input tokens`);
+if (process.stderr.isTTY) console.error(`${matched}/${allLines.length} ${opt.z ? 'records' : 'lines'} (${lines.length} sent), ${chunks.length} requests, ${usedTokens} input tokens`);
 // process.exit() can drop buffered stdout when piped, so set exitCode instead.
 process.exitCode = hadError ? 2 : matched ? 0 : 1;

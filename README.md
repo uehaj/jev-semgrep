@@ -257,6 +257,25 @@ matching lines per file instead.
 cat app.log | ./semgrep -e "the deploy failed or was rolled back"
 ```
 
+### Records that span several lines (`-z`)
+
+The unit of judgement is a line. That is right for logs and source, and wrong when one record spans
+several lines. `-z` makes the unit a NUL-terminated record instead, exactly as in `grep -z`, so it pairs
+with the tools that already emit records: `git log -z`, `find -print0`, `xargs -0`.
+
+A proposition like "this commit changes user-visible behaviour" is true of a whole commit, not of any one
+line in it:
+
+```sh
+$ git log -z --format='%h %s %b' | ./semgrep -z -n -e "the change alters user-visible behaviour" -v "documentation only"
+7:21120e9 Revert "feat: ship the /semgrep Claude Code skill" ...
+8:51ae333 feat: ship the /semgrep Claude Code skill
+```
+
+Matching records are printed NUL-terminated too, so pipe them through `tr '\0' '\n'` to read them.
+File names (`-l`) and counts (`-c`) stay on newlines, as they do in grep. With `-z`, `-n` numbers records,
+`-A` / `-B` / `-C` count neighbouring records, and `--chunk` counts records per request.
+
 ## Use it from Claude Code
 
 There is a Claude Code skill that runs semgrep for you: describe what you are looking for in plain words
