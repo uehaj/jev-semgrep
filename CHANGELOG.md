@@ -18,6 +18,11 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   with closing punctuation (`。、」』）！？`) or following a line that ends in `、` always joins.
 - `-o`: with `--sentence`, print only the matching sentences, one per line, numbered by their first line.
 
+### Fixed
+- Docs: `--chunk` changes results, not just speed. Lines in one request are each other's context, so
+  ambiguous lines can flip with a small chunk (`--chunk 1` flipped 18 of 200 log lines). The README said
+  batching did not change the probabilities (#9).
+
 ## [0.3.0] - 2026-09-24
 
 _(first npm release since 0.2.0: also carries 0.2.2, which was tagged but never published)_

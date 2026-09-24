@@ -82,6 +82,8 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
   -C NUM       print NUM lines of context before and after (-A NUM -B NUM)
   -c           print only a count of matching lines per file (like grep -c)
   --chunk=LINES lines per request (default 30)
+               Lines in one request are each other's context, so a small chunk changes verdicts
+               on ambiguous lines, not just speed
   -j N         concurrent requests (default 8)
   -n           print line numbers
   -z, --null-data  the unit of judgement is a NUL-terminated record, not a line, so a record may span
@@ -145,6 +147,8 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
   -C NUM       前後 NUM 行を表示 (-A NUM -B NUM)
   -c           一致した行数だけをファイルごとに表示 (grep -c 相当)
   --chunk=LINES 1 リクエストにまとめる行数 (既定 30)
+               同じリクエストの行は互いの文脈になるので、小さくすると速さだけでなく曖昧な行の
+               判定も変わる
   -j N         同時リクエスト数 (既定 8)
   -n           行番号を付ける
   -z, --null-data  判定の単位を行ではなく NUL 終端のレコードにする。1 レコードが複数行でもよい。

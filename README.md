@@ -420,6 +420,8 @@ usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
   -C NUM       print NUM lines of context before and after (-A NUM -B NUM)
   -c           print only a count of matching lines per file (like grep -c)
   --chunk=LINES lines per request (default 30)
+               Lines in one request are each other's context, so a small chunk changes verdicts
+               on ambiguous lines, not just speed
   -j N         concurrent requests (default 8)
   -n           print line numbers
   --sentence[=HOW] judge each sentence instead of each line; HOW is jev (default) or rules (see "One sentence at a time" above)
@@ -457,7 +459,12 @@ A leading `!` on a meaning negates just that meaning (quote it, `!` is history e
 3. Up to 8 requests run concurrently. Output is printed in file order.
 4. Per line, each meaning's probability is thresholded to a boolean and the AND / OR / NOT expression is evaluated.
 
-Batching does not change the probabilities compared with one line per request
+Lines sent together are each other's context: Jev judges a line against what the rest of the chunk shows
+is normal in the file. Clear matches and non-matches hold, but ambiguous lines can move. Where the chunk
+boundaries fall barely matters (moving them by 15 lines at `--chunk 30` flipped 1 line in 200 of a log), but
+judging a line with little of its file around it does: `--chunk 1` flipped 18 of the same 200, and those
+solitary verdicts were the less reliable ones (#9). So `--chunk` changes results, not just speed, and a
+very short input is judged with little context whatever `--chunk` says. One line at a time is also slow
 (30 lines in one request take about 0.2 s, one line at a time about 7 s).
 Very large chunks start losing lines near the threshold, hence the default of 30.
 Probabilities drift by about ±0.05 between runs. Use `-p` when tuning thresholds.
