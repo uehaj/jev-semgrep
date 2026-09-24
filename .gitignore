@@ -5,3 +5,4 @@ node_modules/
 .claude/
 *~
 *.bak
+.DS_Store
