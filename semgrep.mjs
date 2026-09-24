@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // semgrep: grep by meaning, scored line by line with Jev (TypeSafe System One).
 //   semgrep -e "network failure" -a "already retried" -e "customer wants a refund" FILE...
-//   -e terms are OR'd; -a / -v attach AND / AND NOT to the preceding -e term: (A and B and not C) or D.
+//   semgrep -Q "why the job failed" FILE...   # -Q X is -e "the line answers: X": answering lines, not asking ones
+//   -e / -Q terms are OR'd; -a / -v attach AND / AND NOT to the preceding term: (A and B and not C) or D.
 //   A leading ! negates just that meaning: -e A -e '!B' is A or not B.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -22,6 +23,7 @@ const OPTIONS = {
   e: { type: 'string', multiple: true },
   a: { type: 'string', multiple: true },
   v: { type: 'string', multiple: true },
+  question: { type: 'string', multiple: true, short: 'Q' },
   level: { type: 'string', default: 'normal' }, // strictness preset: loose / normal / strict
   r: { type: 'boolean', default: false }, // recurse into directories
   l: { type: 'boolean', default: false }, // print only matching file names
@@ -29,6 +31,7 @@ const OPTIONS = {
   T: { type: 'string' }, // negative threshold: "not X" when p < T (default from preset)
   chunk: { type: 'string', default: '30' }, // lines per request
   c: { type: 'boolean', default: false }, // count of matching lines per file (grep -c)
+  quiet: { type: 'boolean', short: 'q', default: false }, // print nothing, exit status only (grep -q)
   j: { type: 'string', default: '8' }, // concurrent requests
   A: { type: 'string' }, // N lines of trailing context
   B: { type: 'string' }, // N lines of leading context
@@ -46,8 +49,8 @@ const OPTIONS = {
 const defaults = SEMGREP_OPTS.split(/\s+/).filter(Boolean).map(fill);
 try {
   const { tokens: t } = parseArgs({ args: defaults, options: OPTIONS, allowPositionals: true, allowNegative: true, tokens: true });
-  const bad = t.find(k => k.kind !== 'option' || ['e', 'a', 'v'].includes(k.name));
-  if (bad) die(`SEMGREP_OPTS: ${bad.kind === 'option' ? `-${bad.name} is not allowed (meanings go on the command line)` : `'${bad.value ?? '--'}' is not an option`}`);
+  const bad = t.find(k => k.kind !== 'option' || ['e', 'a', 'v', 'question'].includes(k.name));
+  if (bad) die(`SEMGREP_OPTS: ${bad.kind === 'option' ? `${bad.name.length > 1 ? '--' : '-'}${bad.name} is not allowed (meanings go on the command line)` : `'${bad.value ?? '--'}' is not an option`}`);
 } catch (e) { die(`SEMGREP_OPTS: ${e.message}`); }
 const { values: opt, positionals: files, tokens } = parseArgs({
   args: [...defaults, ...process.argv.slice(2).map(fill)],
@@ -57,14 +60,17 @@ const { values: opt, positionals: files, tokens } = parseArgs({
   tokens: true,
 });
 // --help: Japanese when the locale starts with ja, English otherwise
-const HELP_EN = `usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
+const HELP_EN = `usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
 grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is omitted.
 
   -e MEANING   lines matching this meaning (several -e are OR'd)
-  -a MEANING   AND onto the preceding -e term.      -e A -a B -e C  =  (A and B) or C
-  -v MEANING   AND NOT onto the preceding -e term.  -e A -v B       =  A and not B
+  -Q, --question QUESTION  lines that answer QUESTION, not lines asking it; the same as
+               -e "the line answers: QUESTION". "why the job failed" matches "the disk was full",
+               "whether the server is down" matches a denial too. Combines with -e / -a / -v / ! like -e
+  -a MEANING   AND onto the preceding -e/-Q term.      -e A -a B -e C  =  (A and B) or C
+  -v MEANING   AND NOT onto the preceding -e/-Q term.  -e A -v B       =  A and not B
                At the front it is a bare negation.  -v B            =  not B  (like grep -v)
-  !MEANING     a leading ! negates just that meaning, in -e / -a / -v alike
+  !MEANING     a leading ! negates just that meaning, in -e / -Q / -a / -v alike
                -e A -e '!B'  =  A or not B.   -a '!C' is the same as -v C
   --level=LEVEL strictness preset, sets both thresholds (default normal)
                  loose  : -t 0.3 -T 0.7  catch more, accept some noise
@@ -81,6 +87,7 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
   -B NUM       print NUM lines of leading context before each match
   -C NUM       print NUM lines of context before and after (-A NUM -B NUM)
   -c           print only a count of matching lines per file (like grep -c)
+  -q, --quiet  print nothing, stop at the first match; exit 0 on a match, even after an error (like grep -q)
   --chunk=LINES lines per request (default 30)
                Lines in one request are each other's context, so a small chunk changes verdicts
                on ambiguous lines, not just speed
@@ -122,14 +129,17 @@ Environment (read from the environment, else from ./.env, else from ~/.config/se
                      meanings, files or --. e.g. SEMGREP_OPTS='--level strict -n'. Scripts: SEMGREP_OPTS= semgrep
   The key goes to SEMGREP_URL, whatever it is. With SEMGREP_URL set and no key, no auth header is sent.
   e.g.  mkdir -p ~/.config/semgrep && echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env`;
-const HELP_JA = `usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
+const HELP_JA = `usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
 jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE 省略時は stdin。
 
   -e MEANING   この意味に合う行 (複数指定は OR)
-  -a MEANING   直前の -e 項に AND で連結。-e A -a B -e C は (A and B) or C
-  -v MEANING   直前の -e 項に AND NOT で連結。-e A -v B は A and not B
+  -Q, --question QUESTION  QUESTION に答えている行 (尋ねている行ではない)。-e "the line answers: QUESTION"
+               と同じ。「ジョブはなぜ失敗したか」は「ディスクが満杯だった」に一致し、「サーバが落ちているか」は
+               否定の答えにも一致する。-e / -a / -v / ! とは -e と同じように組み合わせられる
+  -a MEANING   直前の -e/-Q 項に AND で連結。-e A -a B -e C は (A and B) or C
+  -v MEANING   直前の -e/-Q 項に AND NOT で連結。-e A -v B は A and not B
                先頭に置けば単独の否定。-v B は not B (grep -v 相当)
-  !MEANING     -e / -a / -v のどこでも、先頭に ! を付けるとその意味だけ否定
+  !MEANING     -e / -Q / -a / -v のどこでも、先頭に ! を付けるとその意味だけ否定
                -e A -e '!B' は A or not B。-a '!C' は -v C と同じ
   --level=LEVEL 厳しさ。肯定と否定の閾値をまとめて決める (既定 normal)
                  loose  : -t 0.3 -T 0.7  多少あやしくても拾う
@@ -146,6 +156,7 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
   -B NUM       一致行の前 NUM 行も表示
   -C NUM       前後 NUM 行を表示 (-A NUM -B NUM)
   -c           一致した行数だけをファイルごとに表示 (grep -c 相当)
+  -q, --quiet  何も表示せず、最初の一致で止まる。一致があればエラーがあっても終了コード 0 (grep -q 相当)
   --chunk=LINES 1 リクエストにまとめる行数 (既定 30)
                同じリクエストの行は互いの文脈になるので、小さくすると速さだけでなく曖昧な行の
                判定も変わる
@@ -205,18 +216,19 @@ if (!credential && !SEMGREP_URL) die('SEMGREP_API_KEY is not set. Put it in ./.e
 const expr = [];
 const meanings = [];
 for (const tk of tokens) {
-  if (tk.kind !== 'option' || !['e', 'a', 'v'].includes(tk.name)) continue;
+  if (tk.kind !== 'option' || !['e', 'a', 'v', 'question'].includes(tk.name)) continue;
   if (tk.name === 'a' && expr.length === 0) die('-a needs a preceding -e');
   const not = tk.value.startsWith('!'); // per-meaning negation: "!MEANING"
-  const text = not ? tk.value.slice(1) : tk.value;
-  if (!text.trim()) die(`-${tk.name}: MEANING must not be empty`);
+  const bare = not ? tk.value.slice(1) : tk.value;
+  if (!bare.trim()) die(`${tk.name.length > 1 ? '--' : '-'}${tk.name}: MEANING must not be empty`);
+  const text = tk.name === 'question' ? `the line answers: ${bare}` : bare;
   let m = meanings.indexOf(text);
   if (m < 0) m = meanings.push(text) - 1;
   const lit = [m, not !== (tk.name === 'v')];
-  if (tk.name === 'e' || expr.length === 0) expr.push([lit]);
+  if (tk.name === 'e' || tk.name === 'question' || expr.length === 0) expr.push([lit]);
   else expr.at(-1).push(lit);
 }
-if (!meanings.length) die('no -e MEANING given');
+if (!meanings.length) die('no -e MEANING or -Q QUESTION given');
 const levels = { loose: [0.3, 0.7], normal: [0.5, 0.5], strict: [0.7, 0.3] };
 const level = levels[opt.level];
 if (!level) die(`--level must be one of ${Object.keys(levels).join(', ')}`);
@@ -412,8 +424,16 @@ async function evaluate(chunk) {
   return chunk.map((_, i) => meanings.map((_, m) => answers[`${id(i)}_${m}`].noul));
 }
 
+const zeros = meanings.map(() => 0);
+const isHit = p => expr.some(term => term.every(([m, not]) => (not ? p[m] < tNeg : p[m] >= tPos)));
+// -q stops at the first match, like grep -q. Unsent (blank) lines score 0, so a bare -v X matches before any request.
+// ponytail: process.exit may drop a warning still buffered for a stderr pipe; the exit status is what -q promises
+if (opt.quiet && allLines.length > lines.length && isHit(zeros)) process.exit(0);
 // Results are consumed in chunk order.
-const results = chunks.map(chunk => pooled(() => evaluate(chunk)));
+const results = chunks.map(chunk => pooled(() => evaluate(chunk).then(probs => {
+  if (opt.quiet && probs.some(isHit)) process.exit(0);
+  return probs;
+})));
 
 const color = opt.color === 'always' || (opt.color === 'auto' && process.stdout.isTTY && !process.env.NO_COLOR);
 if (!['auto', 'always', 'never'].includes(opt.color)) die('--color must be auto, always or never');
@@ -426,12 +446,11 @@ for (const [ci, result] of results.entries()) {
   const probs = await result;
   chunks[ci].forEach((l, i) => probOf.set(l, probs[i]));
 }
-const zeros = meanings.map(() => 0);
 const hits = new Map();
 let matched = 0;
 for (const l of allLines) {
   const p = probOf.get(l) ?? zeros;
-  if (!expr.some(term => term.every(([m, not]) => (not ? p[m] < tNeg : p[m] >= tPos)))) continue;
+  if (!isHit(p)) continue;
   matched++;
   if (!hits.has(l.file)) hits.set(l.file, new Map());
   hits.get(l.file).set(l.no, p);
@@ -465,7 +484,7 @@ const startNo = (file, k) => (opt.o ? spansOf.get(file)[k - 1][0][0] : k); // -o
 const after = Number(opt.A ?? opt.C ?? 0), before = Number(opt.B ?? opt.C ?? 0);
 const multi = opt.r || targets.length > 1; // grep -r prefixes file names even for a single file
 let lastPrinted = null; // [file, line number]; used to print -- between context groups
-for (const file of targets) {
+for (const file of opt.quiet ? [] : targets) {
   if (!sources.has(file)) continue;
   const h = hits.get(file);
   if (opt.c) { console.log((multi ? paint(35, file) + paint(36, ':') : '') + (h?.size ?? 0)); continue; }
@@ -489,10 +508,11 @@ for (const file of targets) {
   }
 }
 // Summary only when interactive; grep prints nothing to stderr when scripted.
-if (process.stderr.isTTY) {
+if (process.stderr.isTTY && !opt.quiet) {
   // The API's own usage.cost when reported (OpenRouter does); else an estimate at Jev's list price, only for TypeSafe itself.
   const cost = usedCost > 0 ? `, $${usedCost.toFixed(6)}` : SEMGREP_URL ? '' : `, ~$${(usedTokens * 0.042 / 1e6).toFixed(6)}`;
   console.error(`${matched}/${allLines.length} ${opt.sentence ? 'sentences' : opt.z ? 'records' : 'lines'} (${lines.length} sent), ${requestCount} requests, ${usedTokens} input tokens${cost}`);
 }
 // process.exit() can drop buffered stdout when piped, so set exitCode instead.
-process.exitCode = hadError ? 2 : matched ? 0 : 1;
+// -q: a match wins over an error, as in grep -q
+process.exitCode = matched && (opt.quiet || !hadError) ? 0 : hadError ? 2 : 1;
