@@ -6,6 +6,8 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
+- `git semgrep`: a `git-semgrep` command, so git runs it as a subcommand. Like `git grep`, it searches the tracked
+  files, and FILE arguments are pathspecs. The `-r` skip list (`.env*`, keys, ...) still applies.
 - `--sys1-model=ID`, `--sys1-url=URL`, `--sys1-api-key=KEY`: the API settings on the command line, overriding
   `SEMGREP_MODEL`, `SEMGREP_URL` and `SEMGREP_API_KEY`. Also allowed in `SEMGREP_OPTS`.
 - `-Q`, `--question QUESTION`: matches lines that answer the question, not lines asking it. Shorthand for

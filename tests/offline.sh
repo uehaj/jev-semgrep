@@ -142,6 +142,30 @@ reset; $E SEMGREP_URL=$base/v1 SEMGREP_MODEL=m1 node ../semgrep.mjs -e cat "$F" 
 reset; $E SEMGREP_URL=$base/v1 SEMGREP_MODEL=m1 node ../semgrep.mjs --sys1-model=m2 -e cat "$F" >/dev/null; eq "$(stat model)" "m2" "--sys1-model over SEMGREP_MODEL"
 reset; $E SEMGREP_URL=$base/v1 SEMGREP_OPTS=--sys1-model=m3 node ../semgrep.mjs -e cat "$F" >/dev/null; eq "$(stat model)" "m3" "--sys1-model in SEMGREP_OPTS"
 
+# git semgrep: tracked files only, pathspecs relative to the current directory, never stdin
+R="$tmp/repo" GS="$E SEMGREP_URL=$base/v1 node $PWD/../git-semgrep.mjs" SG="$PWD/../semgrep.mjs"
+mkdir -p "$R/sub" "$tmp/plain"
+printf 'cat\n' >"$R/a.txt"; printf 'cat\n' >"$R/sub/b.txt"; printf 'cat\n' >"$R/ignored.txt"; printf 'cat\n' >"$R/.env.sample"
+echo ignored.txt >"$R/.gitignore"
+(cd "$R" && git init -q && git add a.txt sub/b.txt .gitignore .env.sample)
+eq "$(cd "$R" && $GS -l -e cat | tr '\n' ' ')" "a.txt sub/b.txt " "git semgrep: tracked files, not ignored ones or the skip list"
+eq "$(cd "$R/sub" && $GS -l -e cat)" "b.txt" "git semgrep: under the current directory"
+eq "$(cd "$R" && $GS -n -e cat a.txt)" "a.txt:1:cat" "git semgrep: pathspec, file name even for one file"
+code 1 "git semgrep: never stdin" -- sh -c "cd '$R' && echo cat | $GS -e cat -- nothing"
+printf 'cat\n' >"$R/-"; (cd "$R" && git add -- -)
+eq "$(cd "$R" && echo dog | $GS -l -e cat -- -)" "./-" "git semgrep: a tracked file named -, not stdin"
+blob=$(cd "$R" && echo cat | git hash-object -w --stdin); printf 'cat\n' >"$R/c.txt"
+(cd "$R" && printf '100644 %s %s\tc.txt\n' "$blob" 1 "$blob" 2 "$blob" 3 | git update-index --index-info)
+eq "$(cd "$R" && $GS -c -e cat -- c.txt)" "c.txt:1" "git semgrep: a conflicted file once, not once per stage"
+code 2 "git semgrep: outside a repository" -- sh -c "cd '$tmp/plain' && $GS -e cat"
+# more than execFileSync's default 1 MiB of paths; empty files send nothing
+mkdir "$R/many"
+(cd "$R" && node -e 'for (let i = 0; i < 20000; i++) require("fs").writeFileSync(`many/${"x".repeat(60)}${i}`, "")' && git add many)
+code 1 "git semgrep: over 1 MiB of paths" -- sh -c "cd '$R' && $GS -e cat -- many"
+# SEMGREP_GIT in ./.env does not turn plain semgrep into git semgrep
+printf 'SEMGREP_GIT=1\n' >"$tmp/plain/.env"
+eq "$(cd "$tmp/plain" && echo cat | $E SEMGREP_URL=$base/v1 node "$SG" -e cat)" "cat" "SEMGREP_GIT in .env"
+
 # --help: exit 0, Japanese by locale, lists the options
 code 0 "--help" -- $E LANG=C node ../semgrep.mjs --help
 eq "$($E LANG=C node ../semgrep.mjs -h | head -1 | cut -c1-14)" "usage: semgrep" "-h"

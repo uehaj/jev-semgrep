@@ -344,6 +344,22 @@ you mean to scan. A file named explicitly on the command line is always searched
 matching file once, in the order matches are found, and works with or without `-r`. `-c` prints the number of
 matching lines per file instead.
 
+### As a git subcommand (`git semgrep`)
+
+`npm install -g` also installs `git-semgrep`, so git runs it as `git semgrep`. Like `git grep`, it searches only
+the files git tracks (ignored files and build output are never sent), and FILE arguments are pathspecs relative
+to the current directory.
+
+```sh
+$ cd tests && git semgrep -l -e "customer is asking for a refund" fixture.txt tickets
+fixture.txt
+tickets/a.txt
+tickets/sub/b.txt
+```
+
+Without FILE it searches every tracked file under the current directory. The `-r` skip list (`.env*`, keys, ...)
+applies even to tracked files. For help use `git semgrep -h`: git takes `--help` itself and looks for a man page.
+
 ### Everything that is *not* something
 
 ```sh

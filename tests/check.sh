@@ -13,6 +13,13 @@ SEMGREP_OPTS='-n' $J --no-n -e x </dev/null 2>/dev/null || [ $? = 1 ]           
 for bad in '-e refund' 'file.txt' '--' '--nope'; do
   SEMGREP_OPTS="$bad" $J -e x </dev/null 2>&1 | grep -q '^semgrep: SEMGREP_OPTS: '
 done
+
+# git semgrep: pathspecs relative to the current directory, tracked files only
+G="node --env-file-if-exists=../.env ../git-semgrep.mjs"
+$G -e x -- no-such-path 2>/dev/null || [ $? = 1 ]   # offline: nothing tracked there, nothing sent
+[ "$($G -l -e 'customer is asking for a refund' fixture.txt tickets 2>/dev/null | sort | tr '\n' ' ')" = "fixture.txt tickets/a.txt tickets/sub/b.txt " ]
+$G -n -e 'customer is asking for a refund' fixture.txt 2>/dev/null | grep -q '^fixture.txt:7:'   # a file name even for one file
+
 out=$($J -n -e 'ネットワークやリモート接続の障害' -e 'customer is asking for a refund' fixture.txt 2>/dev/null | cut -d: -f1)
 for n in 4 6 7 13 30; do echo "$out" | grep -qx "$n"; done
 for n in 1 8 11 15 26; do if echo "$out" | grep -qx "$n"; then exit 1; fi; done
