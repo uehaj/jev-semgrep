@@ -276,19 +276,30 @@ const MASK = [ // [kind, pattern, placeholder, what Jev is told the kind is]
   ['hex', /\b(?=[0-9a-f]{7,}\b)(?=[0-9a-f]*[a-f])[0-9a-f]*\d[0-9a-f]*\b/gi, '<hex>', 'a hex id or hash'], // needs a digit and a letter: not words spelled in a-f, not long decimals (sizes, counts)
   ['num', /\b\d[\d.,:_-]*\b/g, '<num>', 'a number'],
 ];
+// Run up to -j requests at once.
+let running = 0;
+const waiters = [];
+const acquire = () => (running++ < Number(opt.j) ? Promise.resolve() : new Promise(r => waiters.push(r)));
+const release = () => (running--, waiters.shift()?.());
+const pooled = async f => { await acquire(); try { return await f(); } finally { release(); } };
+
 const repOf = new Map(); // unit -> the unit actually sent on its behalf
 let sent = lines;
 if (opt.dedup && lines.length) {
   // One request per meaning, the meaning as the only state: this is the form measured in #19. Keeping a kind that
   // could be folded only costs savings; folding one that matters gives wrong answers, so the threshold leans to keeping.
-  const keep = await Promise.all(meanings.map(text => post({ meaning: text }, Object.fromEntries(MASK.map(([kind, , , what]) => [kind, {
+  const keep = await Promise.all(meanings.map(text => pooled(() => post({ meaning: text }, Object.fromEntries(MASK.map(([kind, , , what]) => [kind, {
     type: 'noul',
     instructions: `Log lines are grouped when they differ only in ${what}. Could the value of ${what} in a log line change whether that line matches the meaning "${text}"?`,
-  }]))).then(a => MASK.filter(([kind]) => a[kind].noul >= 0.7).map(([kind]) => kind))));
+  }])))).then(a => MASK.filter(([kind]) => a[kind].noul >= 0.7).map(([kind]) => kind))));
+  const kept = MASK.filter(([kind]) => keep.flat().includes(kind));
   const fold = MASK.filter(([kind]) => !keep.flat().includes(kind));
   const rep = new Map();
   for (const l of lines) {
-    const key = fold.reduce((s, [, re, to]) => s.replace(re, to), l.text);
+    // Take the kept values out first, so a folded kind cannot mask them (a time's digits as <num>), and key on them.
+    const vals = [];
+    const rest = kept.reduce((s, [, re]) => s.replace(re, v => (vals.push(v), '\0')), l.text);
+    const key = [fold.reduce((s, [, re, to]) => s.replace(re, to), rest), ...vals].join('\0');
     if (!rep.has(key)) rep.set(key, l);
     repOf.set(l, rep.get(key));
   }
@@ -318,15 +329,8 @@ async function evaluate(chunk) {
   return chunk.map((_, i) => meanings.map((_, m) => answers[`${id(i)}_${m}`].noul));
 }
 
-// Run up to -j requests at once; results are consumed in chunk order.
-let running = 0;
-const waiters = [];
-const acquire = () => (running++ < Number(opt.j) ? Promise.resolve() : new Promise(r => waiters.push(r)));
-const release = () => (running--, waiters.shift()?.());
-const results = chunks.map(async chunk => {
-  await acquire();
-  try { return await evaluate(chunk); } finally { release(); }
-});
+// Results are consumed in chunk order.
+const results = chunks.map(chunk => pooled(() => evaluate(chunk)));
 
 const color = opt.color === 'always' || (opt.color === 'auto' && process.stdout.isTTY && !process.env.NO_COLOR);
 if (!['auto', 'always', 'never'].includes(opt.color)) die('--color must be auto, always or never');
