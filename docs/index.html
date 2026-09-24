@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>semgrep — grep by meaning</title>
+<meta name="description" content="A grep that finds lines by what they mean, in any language. Powered by TypeSafe Jev. Zero dependencies, one file.">
+<style>
+:root{
+  --bg:#f7f7fb;--fg:#1e1e2e;--mute:#5c5f77;--card:#fff;--line:#dcdde6;--accent:#1f9d55;
+  --t-bg:#1e1e2e;--t-fg:#cdd6f4;--t-mute:#6c7086;--green:#8ce99a;--red:#ff6b6b;--cyan:#66d9e8;--yellow:#ffd43b;--match:#f38ba8;
+  --mono:SFMono-Regular,Menlo,Consolas,"Noto Sans Mono CJK JP",monospace;
+}
+@media (prefers-color-scheme:dark){:root{--bg:#11111b;--fg:#cdd6f4;--mute:#a6adc8;--card:#181825;--line:#313244;--accent:#8ce99a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+a{color:inherit}
+.wrap{max-width:1040px;margin:0 auto;padding:0 16px}
+header{padding:72px 0 32px;text-align:center}
+h1{font-size:clamp(2.4rem,7vw,4.2rem);line-height:1.05;margin:0 0 12px;letter-spacing:-.03em}
+h1 .w{display:inline-block;background:linear-gradient(90deg,var(--accent),#66d9e8,#f38ba8,var(--accent));background-size:300%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:hue 8s linear infinite}
+@keyframes hue{to{background-position:300%}}
+.lead{font-size:1.15rem;color:var(--mute);max-width:640px;margin:0 auto 28px}
+.cta{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.cta a{padding:10px 18px;border-radius:999px;border:1px solid var(--line);text-decoration:none;font-weight:600;background:var(--card)}
+.cta a.p{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.install{font-family:var(--mono);font-size:.9rem;background:var(--t-bg);color:var(--t-fg);display:inline-block;padding:10px 16px;border-radius:8px;margin-top:22px;max-width:100%;overflow-x:auto;white-space:nowrap}
+
+/* player */
+.player{background:var(--t-bg);color:var(--t-fg);border-radius:14px;overflow:hidden;box-shadow:0 20px 60px -20px #0008;margin:24px 0 8px}
+.bar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:#181825}
+.dot{width:12px;height:12px;border-radius:50%;background:#45475a}.dot:nth-child(1){background:#ff6b6b}.dot:nth-child(2){background:#ffd43b}.dot:nth-child(3){background:#8ce99a}
+.bar .ttl{margin-left:8px;font:600 .85rem system-ui;color:var(--t-mute)}
+.stage{padding:20px 22px 12px;min-height:430px;font:14px/1.7 var(--mono)}
+.scene-h{font:700 1.35rem system-ui;margin:0 0 2px;color:#fff}
+.scene-c{font:.95rem/1.5 system-ui;color:#a6adc8;margin:0 0 16px;min-height:2.9em}
+.cmd{color:var(--t-fg);white-space:pre-wrap;word-break:break-all;margin-bottom:10px}
+.cmd .ps{color:var(--t-mute)}
+.cur{display:inline-block;width:.6em;height:1.1em;background:var(--t-fg);vertical-align:-2px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.rows{position:relative}
+.row{display:grid;grid-template-columns:2.6em 1fr auto;gap:10px;align-items:center;padding:1px 6px;border-radius:4px;transition:opacity .5s,background .4s,max-height .6s,padding .6s;max-height:8em;overflow:hidden;opacity:0}
+.row.in{opacity:.55}
+.row.scan{background:#313244;opacity:1}
+.row.hit{opacity:1;background:#8ce99a14}
+.row.miss{opacity:.18}
+.row.gone{max-height:0;padding:0 6px;opacity:0}
+.ln{color:var(--green);text-align:right}.ln::after{content:":";color:var(--cyan)}
+.tx{white-space:pre-wrap;overflow-wrap:anywhere}
+.tx m{color:var(--match);font-weight:700;font-style:normal}
+.pr{display:flex;align-items:center;gap:8px;min-width:0}
+.meter{width:120px;height:8px;border-radius:4px;background:#313244;overflow:hidden}
+.meter i{display:block;height:100%;width:0;background:var(--red);transition:width .7s cubic-bezier(.2,.8,.2,1)}
+.meter i.ok{background:var(--green)}
+.pv{min-width:3.4em;text-align:right}.pv.ok{color:var(--green)}.pv.ng{color:var(--red)}
+.note{margin-top:12px;font:.9rem/1.5 system-ui;color:var(--yellow);opacity:0;transition:opacity .6s}
+.note.on{opacity:1}
+.ctrl{display:flex;align-items:center;gap:10px;padding:10px 14px 14px;flex-wrap:wrap}
+.ctrl button{background:#313244;color:var(--t-fg);border:0;border-radius:6px;padding:6px 12px;font:600 .85rem system-ui;cursor:pointer}
+.ctrl button:hover{background:#45475a}
+.chap{display:flex;gap:6px;flex:1;min-width:200px}
+.chap button{flex:1;padding:0;height:26px;position:relative;overflow:hidden;background:#313244;font-size:.72rem;color:#a6adc8;white-space:nowrap;text-overflow:ellipsis}
+.chap button .f{position:absolute;inset:0 auto 0 0;width:0;background:#8ce99a33}
+.chap button.done .f{width:100%}
+.chap button span{position:relative}
+.chap button.cur-c{color:#fff}
+
+/* sections */
+section{padding:48px 0}
+h2{font-size:1.7rem;margin:0 0 18px;letter-spacing:-.01em}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;opacity:0;transform:translateY(16px);transition:opacity .6s,transform .6s}
+.card.vis{opacity:1;transform:none}
+.card h3{margin:0 0 6px;font-size:1.05rem}
+.card p{margin:0;color:var(--mute);font-size:.95rem}
+pre{background:var(--t-bg);color:var(--t-fg);border-radius:10px;padding:14px 16px;overflow-x:auto;font:13.5px/1.6 var(--mono);margin:0 0 14px}
+pre .c{color:var(--t-mute)}
+footer{padding:32px 0 56px;color:var(--mute);font-size:.9rem;text-align:center;border-top:1px solid var(--line)}
+@media (max-width:640px){
+  .stage{padding:16px 12px 8px;font-size:12px;min-height:520px}
+  .row{grid-template-columns:2.2em 1fr;row-gap:0}
+  .pr{grid-column:2}
+  .meter{width:80px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.card{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<header class="wrap">
+  <h1>grep by <span class="w">meaning</span></h1>
+  <p class="lead">semgrep finds lines by <b>what they mean</b>, not by regular expressions — in any language, with AND / OR / NOT. Every line is judged by <a href="https://typesafe.ai/">TypeSafe Jev</a>, which answers “does this line match?” with a calibrated probability.</p>
+  <div class="cta">
+    <a class="p" href="#demo">▶ Watch the demo</a>
+    <a href="https://github.com/uehaj/jev-semgrep">GitHub</a>
+    <a href="https://www.npmjs.com/package/@uehaj/semgrep">npm</a>
+    <a href="https://zenn.dev/uehaj/articles/jev-semgrep-grep-by-meaning">Design notes (日本語)</a>
+  </div>
+  <div class="install">npx @uehaj/semgrep -n -e "customer is angry or frustrated" tickets.txt</div>
+</header>
+
+<main class="wrap">
+  <div class="player" id="demo" aria-label="semgrep demo">
+    <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="ttl" id="ttl">semgrep</span></div>
+    <div class="stage" aria-live="polite">
+      <h2 class="scene-h" id="sh"></h2>
+      <p class="scene-c" id="sc"></p>
+      <div class="cmd" id="cmd"></div>
+      <div class="rows" id="rows"></div>
+      <div class="note" id="note"></div>
+      <noscript><p>The demo needs JavaScript. See the <a href="https://github.com/uehaj/jev-semgrep#examples">examples in the README</a>.</p></noscript>
+    </div>
+    <div class="ctrl">
+      <button id="pp" aria-label="Pause">❚❚</button>
+      <div class="chap" id="chap"></div>
+    </div>
+  </div>
+  <p style="text-align:center;color:var(--mute);font-size:.85rem">Every output above is a real run, copied from the <a href="https://github.com/uehaj/jev-semgrep#readme">README</a>.</p>
+
+  <section>
+    <h2>Why it is different</h2>
+    <div class="grid">
+      <div class="card"><h3>🌐 Language-agnostic</h3><p>A Japanese meaning finds French, Russian, Chinese and Korean lines. No translation step, same speed, same cost.</p></div>
+      <div class="card"><h3>⚖️ Propositions, not topics</h3><p>Jev reads the line and the question together, so negation and “asked for” vs “already done” change the answer. Embeddings can only measure closeness.</p></div>
+      <div class="card"><h3>🧮 Real booleans</h3><p>Each meaning yields an independent probability, so AND / OR / NOT are plain boolean operations. One threshold (0.5) works across queries.</p></div>
+      <div class="card"><h3>📦 Zero dependencies</h3><p>One file, Node.js 20.12+ and <code>fetch</code>. 30 lines per request, 8 requests in parallel. No index to build.</p></div>
+      <div class="card"><h3>✂️ Lines, sentences, records</h3><p><code>--sentence</code> judges each sentence across wrapped lines; <code>-z</code> judges NUL-terminated records like <code>git log -z</code>.</p></div>
+      <div class="card"><h3>🤖 Claude Code skill</h3><p>Describe what you want in plain words; the skill builds the expression, runs it and reports <code>file:line</code> hits.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Get started</h2>
+<pre><span class="c"># install (or just use npx)</span>
+npm install -g @uehaj/semgrep
+
+<span class="c"># API key from https://console.typesafe.ai/</span>
+export SEMGREP_API_KEY=your-key
+
+<span class="c"># meanings combine: (A and B) or C, and NOT with -v</span>
+semgrep -n -e "network or remote connection failure" -v "a retry is happening" app.log</pre>
+<pre><span class="c"># as a Claude Code skill</span>
+claude plugin marketplace add uehaj/uehaj-marketplace
+claude plugin install uehaj@uehaj-marketplace
+<span class="c"># then, inside Claude Code</span>
+/uehaj:semgrep customer is asking for a refund tickets/*.txt</pre>
+    <p style="color:var(--mute);font-size:.9rem">Every line searched is sent to the TypeSafe API (or the endpoint in <code>SEMGREP_URL</code>). The name collides with the static-analysis tool <a href="https://semgrep.dev/">Semgrep</a>; rename one if you use both.</p>
+  </section>
+</main>
+<footer>MIT License · <a href="https://github.com/uehaj/jev-semgrep">uehaj/jev-semgrep</a> · <a href="https://github.com/uehaj/jev-semgrep/blob/main/README.ja.md">日本語 README</a></footer>
+
+<script>
+// rows: [line, text, prob|null, keep]. <m>…</m> marks the matched sentence.
+const S = [
+ {h:"Ask in one language, find every language",
+  c:"One Japanese meaning, “the customer is asking for a refund”, finds refund requests in French, Russian, German, Spanish, Chinese and Korean — and skips the thank-you notes.",
+  cmd:'semgrep -n -p -e "顧客が返金を求めている" tests/multi.txt',
+  rows:[[1,"Je veux être remboursé, le produit est arrivé cassé.",.98,1],[2,"Merci beaucoup, le support a été excellent.",null,0],
+   [3,"Я требую вернуть деньги, товар не работает.",.97,1],[4,"Спасибо, проблема решена, всё отлично.",null,0],
+   [5,"Ich möchte mein Geld zurück, das Gerät ist defekt.",.97,1],[6,"Vielen Dank für die schnelle Hilfe!",null,0],
+   [7,"Quiero un reembolso, el paquete llegó vacío.",.97,1],[8,"Gracias, todo funcionó perfectamente.",null,0],
+   [9,"我要求退款，商品坏了。",.97,1],[10,"谢谢，问题已经解决了。",null,0],
+   [11,"환불해 주세요. 제품이 고장났어요.",.97,1],[12,"감사합니다, 문제가 해결되었어요.",null,0],
+   [13,"Le serveur ne répond plus, connexion refusée sur le port 443.",null,0],[14,"Сервер недоступен: тайм-аут соединения с базой данных.",null,0]]},
+ {h:"Propositions, not topics",
+  c:"All six lines are “about a refund”. Only two are a customer asking for one. Vector search sees six neighbours; Jev sees two true statements.",
+  cmd:'semgrep -n -p -t 0 -e "customer is asking for a refund" tests/contrast.txt',bars:1,
+  rows:[[1,"返金してほしい。商品が壊れていた",.98,1],[2,"返金処理が完了しましたのでご確認ください",.10,0],[3,"当社の返金ポリシーは購入後30日以内です",.10,0],
+   [4,"The manager denied the refund request yesterday",.17,0],[5,"I demand a full refund immediately",.94,1],[6,"Refunds are processed within 5 business days",.08,0]],
+  note:"Threshold 0.5 — calibrated probabilities, no per-query tuning."},
+ {h:"AND / NOT are just booleans",
+  c:"Someone is angry AND it is the customer, not the staff. Lines 7 and 8 differ only in who hung up — their embeddings are nearly identical.",
+  cmd:'semgrep -n -e "someone is angry" -a "the customer, not the staff, is the one acting" tests/contrast.txt',
+  rows:[[1,"返金してほしい。商品が壊れていた",null,0],[2,"返金処理が完了しましたのでご確認ください",null,0],[3,"当社の返金ポリシーは購入後30日以内です",null,0],
+   [4,"The manager denied the refund request yesterday",null,0],[5,"I demand a full refund immediately",null,1],[6,"Refunds are processed within 5 business days",null,0],
+   [7,"カスタマーサポート担当者が怒って電話を切った",null,0],[8,"顧客が怒って電話を切った",null,1]],
+  note:"Line 7 (the support agent hung up angrily) scores 0.05 on the second meaning and is excluded."},
+ {h:"English meaning, Japanese hits",
+  c:"None of these lines contain “angry” or “frustrated”. Two of them are in Japanese. 51 lines of logs, tickets, code and small talk — 5 hits, 2 requests.",
+  cmd:'semgrep -n -e "customer is angry or frustrated" tests/corpus.txt',
+  rows:[[14,"ユーザー山田さんからの問い合わせ: 返金してほしい、商品が壊れていた",null,1],[16,"ユーザー佐藤さんからの問い合わせ: 注文した覚えのない請求が来ています。至急確認してください",null,1],
+   [18,"I want my money back. The item arrived broken and customer service ignored me.",null,1],[21,"Your product ruined my weekend. Never buying from you again.",null,1],
+   [23,"This is the third time I'm writing. Nobody has replied to my previous emails.",null,1]],
+  note:"5/51 lines, 2 requests, 3225 input tokens"},
+ {h:"One sentence at a time",
+  c:"--sentence joins wrapped lines, splits them into sentences and judges each one. Only the matching sentence is colored.",
+  cmd:'semgrep -n --sentence -e "the author admits they made a mistake" tests/prose.txt',
+  rows:[[1,"<m>I should have checked the input</m>",null,1],[2,"<m>before shipping, and that was my</m>",null,1],[3,"<m>mistake.</m> Next time I will add a test",null,1],
+   [4,"first.",null,0],[6,"The weather was lovely all week, and",null,0],[7,"we walked to the lake every morning.",null,0],
+   [8,"先週買った掃除機が初日から動かないので",null,0],[9,"返金してほしいです。よろしくお願いします。",null,0]]},
+ {h:"Records, not just lines",
+  c:"-z judges NUL-terminated records, as in grep -z. “Changes user-visible behaviour” is true of a whole commit, not of any one line in it.",
+  cmd:"git log -z --format='%h %s %b' | semgrep -z -n -e \"the change alters user-visible behaviour\" -v \"documentation only\"",
+  rows:[[7,'21120e9 Revert "feat: ship the /semgrep Claude Code skill" ...',null,1],[8,"51ae333 feat: ship the /semgrep Claude Code skill",null,1]]},
+];
+const $=id=>document.getElementById(id), still=matchMedia("(prefers-reduced-motion: reduce)").matches;
+let cur=0, playing=!still, token=0, ended=false;
+const wait=(ms,t)=>new Promise((ok,ng)=>setTimeout(()=>t===token?ok():ng(),ms));
+const esc=s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/&lt;(\/?)m>/g,"<$1m>");
+S.forEach((s,i)=>{const b=document.createElement("button");b.innerHTML='<i class="f"></i><span>'+(i+1)+". "+s.h+"</span>";b.title=s.h;b.onclick=()=>go(i);$("chap").append(b)});
+function row([n,tx,p,k],bars){
+  const d=document.createElement("div");d.className="row";
+  const ok=p!=null&&p>=.5, pv=p==null?"":'<span class="pv '+(ok?"ok":"ng")+'">['+p.toFixed(2)+"]</span>";
+  d.innerHTML='<span class="ln">'+n+'</span><span class="tx">'+esc(tx)+'</span><span class="pr">'+(bars?'<span class="meter"><i class="'+(ok?"ok":"")+'"></i></span>':"")+pv+"</span>";
+  d.querySelector(".pv")&&(d.querySelector(".pv").style.visibility="hidden");
+  return d;
+}
+function reveal(d,[,,p,k],drop){
+  d.querySelector(".pv")&&(d.querySelector(".pv").style.visibility="");
+  const m=d.querySelector(".meter i"); if(m) m.style.width=(p*100)+"%";
+  d.className="row "+(k?"hit":drop?"miss gone":"miss");
+}
+async function play(i){
+  const t=++token, s=S[i];
+  [...$("chap").children].forEach((b,j)=>{b.classList.toggle("done",j<i);b.classList.toggle("cur-c",j===i);b.firstChild.style.width=j===i?"0":""});
+  $("sh").textContent=s.h; $("sc").textContent=s.c; $("ttl").textContent="semgrep — "+(i+1)+"/"+S.length;
+  $("rows").innerHTML=""; $("note").className="note"; $("note").textContent=s.note||"";
+  const els=s.rows.map(r=>row(r,s.bars)); $("rows").append(...els);
+  if(still){ $("cmd").innerHTML='<span class="ps">$ </span>'+esc(s.cmd); els.forEach((d,j)=>reveal(d,s.rows[j],!s.bars&&!s.rows[j][3])); $("note").className="note on"; return; }
+  const fill=$("chap").children[i].firstChild, t0=performance.now(), total=s.cmd.length*28+s.rows.length*380+5200;
+  (function tick(){ if(t!==token) return; fill.style.width=Math.min(100,(performance.now()-t0)/total*100)+"%"; requestAnimationFrame(tick)})();
+  try{
+    for(let k=0;k<=s.cmd.length;k++){ $("cmd").innerHTML='<span class="ps">$ </span>'+esc(s.cmd.slice(0,k))+'<span class="cur"></span>'; await wait(k?22:400,t) }
+    await wait(350,t); $("cmd").innerHTML='<span class="ps">$ </span>'+esc(s.cmd);
+    els.forEach(d=>d.classList.add("in")); await wait(500,t);
+    for(let j=0;j<els.length;j++){ els[j].className="row in scan"; await wait(220,t); reveal(els[j],s.rows[j],false); await wait(120,t) }
+    await wait(900,t);
+    if(!s.bars) els.forEach((d,j)=>{ if(!s.rows[j][3]) d.classList.add("gone") });
+    await wait(300,t); $("note").className="note on";
+    await wait(Math.max(0,total-(performance.now()-t0)),t);
+    if(playing) go((i+1)%S.length); else ended=true;
+  }catch{}
+}
+function go(i){cur=i;ended=false;play(i)}
+$("pp").onclick=()=>{playing=!playing;$("pp").textContent=playing?"❚❚":"▶";$("pp").setAttribute("aria-label",playing?"Pause":"Play");if(playing&&(ended||still))go((cur+1)%S.length)};
+if(still){$("pp").textContent="▶";}
+go(0);
+const io=new IntersectionObserver(es=>es.forEach(e=>e.isIntersecting&&e.target.classList.add("vis")),{threshold:.2});
+document.querySelectorAll(".card").forEach(c=>io.observe(c));
+</script>
+</body>
+</html>
