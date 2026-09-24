@@ -83,6 +83,8 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
                    often end without 。. One extra request per 30 lines that have such breaks
                  rules: the rules only, no extra requests
                The expression is evaluated per sentence. With -z each record is split on its own
+               Sentences sent together (--chunk) read each other as context, so a verdict can shift with
+               where the chunks fall, and a sentence next to a match can match too
   -o           with --sentence, print only the matching sentences, one per line; -n gives the line where the
                sentence starts, -c and -A/-B/-C count sentences
   -p           print each meaning's probability at the end of the line (for tuning thresholds)
@@ -141,6 +143,8 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
                    データをつながないため。そうした改行がある 30 行ごとにリクエストが 1 つ増える
                  rules: 規則だけで決める。追加のリクエストなし
                式は文ごとに評価する。-z ではレコードごとに文に分け、当たったレコードを出す
+               一緒に送る文 (--chunk) は互いを文脈として読むので、区切りの位置で判定が変わることがあり、
+               当たった文の隣の文もつられて当たることがある
   -o           --sentence と併用し、当たった文だけを 1 行ずつ出す。-n は文が始まる行、-c と
                -A/-B/-C は文の数で数える
   -p           各意味の確率を行末に表示 (閾値調整用)
