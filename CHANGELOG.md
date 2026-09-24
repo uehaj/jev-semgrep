@@ -5,6 +5,19 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 
 ## [Unreleased]
 
+### Added
+- `--sentence`: judge each sentence instead of each line. Output is still the lines a matching sentence
+  touches, with the sentence in the match color. Wrapped lines are joined first, except at a blank line,
+  next to brackets or `;`, or before a line starting with `-` `*` `+` `#` `>` `"` or a digit, so JSONL,
+  lists and code keep their line boundaries. Japanese, Chinese, Thai, Lao, Khmer, Myanmar and Tibetan join
+  without a space. Sentences are cut by `Intl.Segmenter`. With `-z`, each record is split on its own.
+  Prompted by #5 by @nedzen.
+- `--sentence[=HOW]`: with `jev` (the default), unpunctuated breaks next to those scripts are also asked to
+  Jev (30 lines per request, a yes/no per break, kept apart at 0.7 or more), so one-line entries that end
+  without `。` are not glued together. `rules` uses the rules only, with no extra requests. A line starting
+  with closing punctuation (`。、」』）！？`) or following a line that ends in `、` always joins.
+- `-o`: with `--sentence`, print only the matching sentences, one per line, numbered by their first line.
+
 ## [0.3.0] - 2026-09-24
 
 _(first npm release since 0.2.0: also carries 0.2.2, which was tagged but never published)_

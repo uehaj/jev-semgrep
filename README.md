@@ -295,6 +295,59 @@ Matching records are printed NUL-terminated too, so pipe them through `tr '\0' '
 File names (`-l`) and counts (`-c`) stay on newlines, as they do in grep. With `-z`, `-n` numbers records,
 `-A` / `-B` / `-C` count neighbouring records, and `--chunk` counts records per request.
 
+### One sentence at a time (`--sentence`)
+
+`--sentence` judges each sentence instead of each line. The output is still lines, as in grep: every line a
+matching sentence touches is printed, and on a terminal the sentence itself is in grep's match color.
+Wrapped lines are joined before splitting, so a sentence that runs over several lines is judged as one.
+[`tests/prose.txt`](tests/prose.txt) wraps an English paragraph and a Japanese one:
+
+```sh
+$ ./semgrep -n --sentence -e "the author admits they made a mistake" tests/prose.txt
+1:I should have checked the input
+2:before shipping, and that was my
+3:mistake. Next time I will add a test
+```
+
+The sentence starts on line 1 and ends at `mistake.` on line 3; only that part is colored, not
+`Next time I will add a test`, which is judged separately and does not match.
+
+`-o` prints only the matching sentences, one per line, as `grep -o` prints only the matching part.
+`-n` then gives the line where the sentence starts. Japanese is joined without a space, as are Chinese,
+Thai, Lao, Khmer, Myanmar and Tibetan, which do not put spaces between words:
+
+```sh
+$ ./semgrep -n -o --sentence -e "the author admits they made a mistake" -e "customer is asking for a refund" tests/prose.txt
+1:I should have checked the input before shipping, and that was my mistake.
+8:先週買った掃除機が初日から動かないので返金してほしいです。
+```
+
+Without `-o`, `-c` counts lines and `-A` / `-B` / `-C` count lines, as usual. With `-o` they count sentences.
+With `-z`, each record is split on its own and matching records are printed whole.
+
+Jev finds a matching sentence inside a long line on its own, so `--sentence` is not needed for accuracy.
+Use it to see which sentence matched, to get the sentences with `-o`, and when AND should hold within one
+sentence: the expression is evaluated per sentence. For the same reason `-v X` alone prints every line
+with at least one sentence that is not X; to find lines that are not X as a whole, leave `--sentence` off.
+
+Japanese and Chinese entries often end without `。`: a chat message, a support ticket, a memo line. Joining
+them would glue separate entries into one "sentence". So by default (`--sentence`, the same as
+`--sentence=jev`) semgrep asks Jev about each unpunctuated break next to a script written without word
+spaces: "does this line break end a sentence or entry, or is it a wrap inside a sentence?" It sends 30 lines
+per request with one yes/no per break, and keeps the lines apart when the answer is 0.7 or more. On
+[`tests/corpus.txt`](tests/corpus.txt) this keeps the four one-line Japanese tickets apart, so
+`--sentence` finds the same refund requests (lines 14 and 18) as a line-by-line search, where the rules alone
+merged the tickets and missed line 18. The extra requests cost about as much as one more meaning; use
+`--sentence=rules` to skip them. Breaks between English lines are never asked: joining them keeps a space,
+and the full stop still ends the sentence.
+
+Where a newline cannot be inside a sentence, lines are not joined: at a blank line, next to brackets or
+`;` (JSON, code), and before a line starting with `-` `*` `+` `#` `>` `"` or a digit (list items,
+headings, quotes, numbers, timestamps). So JSONL keeps one line per record and each line is split on its
+own. Sentences are cut by `Intl.Segmenter` ([Unicode UAX #29](https://unicode.org/reports/tr29/)),
+which splits at `.` `!` `?` `。` `！` `？` but also after abbreviations such as `Mr.`. Logs are not prose:
+consecutive log lines that start with a letter, such as `WARN ...` after `ERROR ...`, get joined.
+
 ## Use it from Claude Code
 
 There is a Claude Code skill that runs semgrep for you: describe what you are looking for in plain words
@@ -355,6 +408,8 @@ usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
   --chunk=LINES lines per request (default 30)
   -j N         concurrent requests (default 8)
   -n           print line numbers
+  --sentence[=HOW] judge each sentence instead of each line; HOW is jev (default) or rules (see "One sentence at a time" above)
+  -o           with --sentence, print only the matching sentences
   -p           print each meaning's probability at the end of the line
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are
