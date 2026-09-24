@@ -1,0 +1,7 @@
+Ticket log
+---
+Ticket #12: Password reset requested.
+Ticket #13: Question about pricing plans.
+Ticket #14: Thanks for the quick support!
+Ticket #15: Delivery address change request.
+Ticket #16: I want a refund, the item was broken.
