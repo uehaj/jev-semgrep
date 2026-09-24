@@ -167,10 +167,11 @@ npx @uehaj/semgrep -n -e "顧客が怒っている、または不満を持って
 ```sh
 export SEMGREP_API_KEY=your-key                       # 環境変数
 echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env    # ユーザー単位 (先に mkdir -p)
-echo 'SEMGREP_API_KEY=your-key' > .env                # プロジェクト単位。カレントディレクトリから読む
 ```
 
-環境変数が優先で、足りない分は `./.env`、`~/.config/semgrep/.env` のうち最初に見つかった方から補います。
+環境変数が優先で、足りない分は `~/.config/semgrep/.env` から補います。カレントディレクトリの `.env` は読みません。
+clone したばかりのリポジトリのものかもしれず、`SEMGREP_URL` を通じてキーを別のサーバへ送らせ得るからです。
+プロジェクト単位の設定は、自分で読み込ませてください: `node --env-file=.env "$(command -v semgrep)" ...`。
 `SEMGREP_API_KEY` が無ければ `TYPESAFE_API_KEY` も使えます。
 
 ### 既定のオプション
@@ -480,7 +481,7 @@ npx skills add uehaj/uehaj-marketplace --skill semgrep -a claude-code -g
 
 スキルは意味を英語で書き、AND / OR / NOT を `-e` / `-a` / `-v` に振り分け、`-n` を付け、大きなディレクトリは
 課金に見合うファイルに絞り、最初の結果が怪しければ `--level loose` や `strict` で引き直します。
-API キーとエンドポイントの読み方はコマンドラインと同じです（`SEMGREP_API_KEY`、`./.env`、`~/.config/semgrep/.env`）。
+API キーとエンドポイントの読み方はコマンドラインと同じです（`SEMGREP_API_KEY`、`~/.config/semgrep/.env`）。
 
 ## 使い方
 

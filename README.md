@@ -179,10 +179,11 @@ Then give it an API key from the [TypeSafe console](https://console.typesafe.ai/
 ```sh
 export SEMGREP_API_KEY=your-key                       # environment variable
 echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env    # per user (mkdir -p first)
-echo 'SEMGREP_API_KEY=your-key' > .env                # per project, read from the current directory
 ```
 
-Variables already in the environment win; otherwise the first of `./.env` and `~/.config/semgrep/.env` fills them in.
+Variables already in the environment win; otherwise `~/.config/semgrep/.env` fills them in. A `.env` in the current
+directory is never read: it may belong to a repository you just cloned, and could send your key elsewhere through
+`SEMGREP_URL`. For per-project settings, load a file yourself: `node --env-file=.env "$(command -v semgrep)" ...`.
 `TYPESAFE_API_KEY` is accepted too when `SEMGREP_API_KEY` is not set.
 
 ### Default options
@@ -502,7 +503,7 @@ npx skills add uehaj/uehaj-marketplace --skill semgrep -a claude-code -g
 
 The skill writes the meaning in English, picks `-e` / `-a` / `-v` for AND / OR / NOT, adds `-n`, narrows large
 directories to files worth paying for, and re-runs with `--level loose` or `strict` when the first result looks off.
-The API key and endpoint are read the same way as on the command line (`SEMGREP_API_KEY`, `./.env`, `~/.config/semgrep/.env`).
+The API key and endpoint are read the same way as on the command line (`SEMGREP_API_KEY`, `~/.config/semgrep/.env`).
 
 ## Usage
 

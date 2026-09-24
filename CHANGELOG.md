@@ -5,6 +5,11 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 
 ## [Unreleased]
 
+### Security
+- **Breaking:** `./.env` in the current directory is no longer read; only the environment and
+  `~/.config/semgrep/.env` are. A `.env` committed to an untrusted repository could set `SEMGREP_URL` and send
+  the API key and the searched text to another server. Load a per-project file explicitly with `node --env-file`.
+
 ### Added
 - `git semgrep`: a `git-semgrep` command, so git runs it as a subcommand. Like `git grep`, it searches the tracked
   files, and FILE arguments are pathspecs. The `-r` skip list (`.env*`, keys, ...) still applies.
