@@ -50,7 +50,8 @@ h1 .w{display:inline-block;background:linear-gradient(90deg,var(--accent),#66d9e
 .ln{color:var(--green);text-align:right}.ln::after{content:":";color:var(--cyan)}
 .tx{white-space:pre-wrap;overflow-wrap:anywhere}
 .ask{display:none;color:var(--cyan)}.row.hit .ask{display:block}
-.tx m{color:var(--match);font-weight:700;font-style:normal}
+.tx m{font-style:normal;transition:color .6s}.row.hit .tx m{color:var(--red);font-weight:700}
+.tx u{text-decoration:underline dotted var(--cyan) 2px;text-underline-offset:3px}
 .pr{display:flex;align-items:center;gap:8px;min-width:0}
 .meter{width:120px;height:8px;border-radius:4px;background:#313244;overflow:hidden}
 .meter i{display:block;height:100%;width:0;background:var(--red);transition:width .7s cubic-bezier(.2,.8,.2,1)}
@@ -159,7 +160,7 @@ claude plugin install uehaj@uehaj-marketplace
 <footer>MIT License · <a href="https://github.com/uehaj/jev-semgrep">uehaj/jev-semgrep</a> · <a href="https://github.com/uehaj/jev-semgrep/blob/main/README.ja.md">日本語 README</a></footer>
 
 <script>
-// rows: [line, text, prob|null, keep]. <m>…</m> marks the matched sentence.
+// rows: [line, text, prob|null, keep, ask?]. <m>…</m> is what --color paints; <u>…</u> is a page annotation.
 const S = [
  {h:"Ask in one language, find every language",
   c:"One Japanese meaning, “the customer is asking for a refund”, finds refund requests in French, Russian, German, Spanish, Chinese and Korean — and skips the thank-you notes.",
@@ -202,7 +203,7 @@ const S = [
  {h:"Captures flow into meanings",pre:"issue #25",
   c:"Named groups of a regex term are handed to the meanings of the same AND term — -e, -a, -v and --i-want-to-know alike. Each line is sent with its own question; lines the regex misses are never sent.",
   cmd:"semgrep -n -e '/(?<time>\\d\\d:\\d\\d):\\d\\d (ERROR|FATAL)/' -a '$<time> is outside business hours (09:00–18:00)' tests/corpus.txt",ask:1,
-  rows:[[1, "2026-09-19 08:00:01 INFO  server started on port 8080", null, 0], [2, "2026-09-19 08:00:02 INFO  connected to database primary", null, 0], [3, "2026-09-19 08:01:15 WARN  slow query took 3200ms: SELECT * FROM orders", null, 0], [4, "2026-09-19 <m>08:02:30 ERROR</m> connection reset by peer while calling payment-gateway", null, 1, "08:02 is outside business hours (09:00–18:00)"], [5, "2026-09-19 08:02:31 INFO  retrying payment-gateway request (attempt 2/3)", null, 0], [6, "2026-09-19 <m>08:02:35 ERROR</m> timeout after 5000ms waiting for payment-gateway", null, 1, "08:02 is outside business hours (09:00–18:00)"], [7, "2026-09-19 08:05:00 INFO  scheduled backup completed successfully", null, 0], [8, "2026-09-19 08:06:12 WARN  disk usage at 91% on /var/lib/postgresql", null, 0], [9, "2026-09-19 <m>08:10:44 ERROR</m> DNS lookup failed for api.example.com", null, 1, "08:10 is outside business hours (09:00–18:00)"], [10, "2026-09-19 08:10:45 INFO  DNS lookup succeeded on retry", null, 0], [11, "2026-09-19 <m>09:00:00 ERROR</m> SSL handshake failed: certificate expired", null, 1, "09:00 is outside business hours (09:00–18:00)"], [12, "2026-09-19 <m>09:30:00 FATAL</m> out of memory: killed process 4412 (java)", null, 1, "09:30 is outside business hours (09:00–18:00)"]],
+  rows:[[1, "2026-09-19 08:00:01 INFO  server started on port 8080", null, 0], [2, "2026-09-19 08:00:02 INFO  connected to database primary", null, 0], [3, "2026-09-19 08:01:15 WARN  slow query took 3200ms: SELECT * FROM orders", null, 0], [4, "2026-09-19 <u>08:02:30 ERROR</u> connection reset by peer while calling payment-gateway", null, 1, "08:02 is outside business hours (09:00–18:00)"], [5, "2026-09-19 08:02:31 INFO  retrying payment-gateway request (attempt 2/3)", null, 0], [6, "2026-09-19 <u>08:02:35 ERROR</u> timeout after 5000ms waiting for payment-gateway", null, 1, "08:02 is outside business hours (09:00–18:00)"], [7, "2026-09-19 08:05:00 INFO  scheduled backup completed successfully", null, 0], [8, "2026-09-19 08:06:12 WARN  disk usage at 91% on /var/lib/postgresql", null, 0], [9, "2026-09-19 <u>08:10:44 ERROR</u> DNS lookup failed for api.example.com", null, 1, "08:10 is outside business hours (09:00–18:00)"], [10, "2026-09-19 08:10:45 INFO  DNS lookup succeeded on retry", null, 0], [11, "2026-09-19 <u>09:00:00 ERROR</u> SSL handshake failed: certificate expired", null, 1, "09:00 is outside business hours (09:00–18:00)"], [12, "2026-09-19 <u>09:30:00 FATAL</u> out of memory: killed process 4412 (java)", null, 1, "09:30 is outside business hours (09:00–18:00)"]],
   note:"5 of 12 lines sent, each with its own expanded question. $<name> survives double quotes in sh / bash / zsh; $1 does not."},
  {h:"English meaning, Japanese hits",
   c:"None of these lines contain “angry” or “frustrated”. Two of them are in Japanese. 51 lines of logs, tickets, code and small talk — 5 hits, 2 requests.",
@@ -212,15 +213,15 @@ const S = [
    [23,"This is the third time I'm writing. Nobody has replied to my previous emails.",null,1]],
   note:"5/51 lines, 2 requests, 3225 input tokens"},
  {h:"One sentence at a time",
-  c:"--sentence joins wrapped lines, splits them into sentences and judges each one. Only the matching sentence is colored.",
-  cmd:'semgrep -n --sentence -e "the author admits they made a mistake" tests/prose.txt',
+  c:"--sentence joins wrapped lines, splits them into sentences and judges each one. With --color, only the matching sentence turns grep's match color — not the whole line.",
+  cmd:'semgrep -n --color --sentence -e "the author admits they made a mistake" tests/prose.txt',
   rows:[[1,"<m>I should have checked the input</m>",null,1],[2,"<m>before shipping, and that was my</m>",null,1],[3,"<m>mistake.</m> Next time I will add a test",null,1],
    [4,"first.",null,0],[6,"The weather was lovely all week, and",null,0],[7,"we walked to the lake every morning.",null,0],
    [8,"先週買った掃除機が初日から動かないので",null,0],[9,"返金してほしいです。よろしくお願いします。",null,0]]},
  {h:"Pay once per template",pre:"PR #10",
   c:"--dedup masks ids, hashes, numbers, dates, paths and URLs, sends one line per template and reuses the answer. Jev is asked first which values could change a match, so “disk usage is above 90%” keeps 95% and 12% apart.",
   cmd:'semgrep --dedup -n -e "a request failed" app.log',
-  rows:[[1,"worker request <m>3fa9c1e27b</m> failed: connection reset",null,1],[2,"worker request <m>88d0e41a5c</m> failed: connection reset",null,1],[4,"worker request <m>0b7f2a9e13</m> failed: connection reset",null,1]],
+  rows:[[1,"worker request <u>3fa9c1e27b</u> failed: connection reset",null,1],[2,"worker request <u>88d0e41a5c</u> failed: connection reset",null,1],[4,"worker request <u>0b7f2a9e13</u> failed: connection reset",null,1]],
   note:"3/6 lines (4 sent of 6), 2 requests, 907 input tokens, ~$0.000038"},
  {h:"Records, not just lines",
   c:"-z judges NUL-terminated records, as in grep -z. “Changes user-visible behaviour” is true of a whole commit, not of any one line in it.",
@@ -230,7 +231,7 @@ const S = [
 const $=id=>document.getElementById(id), still=matchMedia("(prefers-reduced-motion: reduce)").matches;
 let cur=0, playing=!still, token=0, ended=false;
 const wait=(ms,t)=>new Promise((ok,ng)=>setTimeout(()=>t===token?ok():ng(),ms));
-const esc=s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/&lt;(\/?)m>/g,"<$1m>");
+const esc=s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/&lt;(\/?[mu])>/g,"<$1>");
 S.forEach((s,i)=>{const b=document.createElement("button");b.innerHTML='<i class="f"></i><span>'+(i+1)+". "+(s.pre?"★ ":"")+s.h+"</span>";b.title=s.h;b.onclick=()=>go(i);$("chap").append(b)});
 function row([n,tx,p,k,ask],bars){
   const d=document.createElement("div");d.className="row";
