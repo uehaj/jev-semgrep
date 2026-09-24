@@ -87,7 +87,7 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
   -B NUM       print NUM lines of leading context before each match
   -C NUM       print NUM lines of context before and after (-A NUM -B NUM)
   -c           print only a count of matching lines per file (like grep -c)
-  -q, --quiet  print nothing; exit 0 on a match, even if an error occurred (like grep -q)
+  -q, --quiet  print nothing, stop at the first match; exit 0 on a match, even after an error (like grep -q)
   --chunk=LINES lines per request (default 30)
                Lines in one request are each other's context, so a small chunk changes verdicts
                on ambiguous lines, not just speed
@@ -156,7 +156,7 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
   -B NUM       一致行の前 NUM 行も表示
   -C NUM       前後 NUM 行を表示 (-A NUM -B NUM)
   -c           一致した行数だけをファイルごとに表示 (grep -c 相当)
-  -q, --quiet  何も表示しない。一致があればエラーがあっても終了コード 0 (grep -q 相当)
+  -q, --quiet  何も表示せず、最初の一致で止まる。一致があればエラーがあっても終了コード 0 (grep -q 相当)
   --chunk=LINES 1 リクエストにまとめる行数 (既定 30)
                同じリクエストの行は互いの文脈になるので、小さくすると速さだけでなく曖昧な行の
                判定も変わる
@@ -424,8 +424,16 @@ async function evaluate(chunk) {
   return chunk.map((_, i) => meanings.map((_, m) => answers[`${id(i)}_${m}`].noul));
 }
 
+const zeros = meanings.map(() => 0);
+const isHit = p => expr.some(term => term.every(([m, not]) => (not ? p[m] < tNeg : p[m] >= tPos)));
+// -q stops at the first match, like grep -q. Unsent (blank) lines score 0, so a bare -v X matches before any request.
+// ponytail: process.exit may drop a warning still buffered for a stderr pipe; the exit status is what -q promises
+if (opt.quiet && allLines.length > lines.length && isHit(zeros)) process.exit(0);
 // Results are consumed in chunk order.
-const results = chunks.map(chunk => pooled(() => evaluate(chunk)));
+const results = chunks.map(chunk => pooled(() => evaluate(chunk).then(probs => {
+  if (opt.quiet && probs.some(isHit)) process.exit(0);
+  return probs;
+})));
 
 const color = opt.color === 'always' || (opt.color === 'auto' && process.stdout.isTTY && !process.env.NO_COLOR);
 if (!['auto', 'always', 'never'].includes(opt.color)) die('--color must be auto, always or never');
@@ -438,12 +446,11 @@ for (const [ci, result] of results.entries()) {
   const probs = await result;
   chunks[ci].forEach((l, i) => probOf.set(l, probs[i]));
 }
-const zeros = meanings.map(() => 0);
 const hits = new Map();
 let matched = 0;
 for (const l of allLines) {
   const p = probOf.get(l) ?? zeros;
-  if (!expr.some(term => term.every(([m, not]) => (not ? p[m] < tNeg : p[m] >= tPos)))) continue;
+  if (!isHit(p)) continue;
   matched++;
   if (!hits.has(l.file)) hits.set(l.file, new Map());
   hits.get(l.file).set(l.no, p);

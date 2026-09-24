@@ -439,7 +439,7 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
   -B NUM       print NUM lines of leading context before each match
   -C NUM       print NUM lines of context before and after (-A NUM -B NUM)
   -c           print only a count of matching lines per file (like grep -c)
-  -q, --quiet  print nothing; exit 0 on a match, even if an error occurred (like grep -q)
+  -q, --quiet  print nothing, stop at the first match; exit 0 on a match, even after an error (like grep -q)
   --chunk=LINES lines per request (default 30)
                Lines in one request are each other's context, so a small chunk changes verdicts
                on ambiguous lines, not just speed
