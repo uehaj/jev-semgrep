@@ -412,13 +412,24 @@ const lines = allLines.filter(l => l.text.trim());
 // Jev is asked first, once per run, which kinds of value could change a match, and those are left unmasked.
 // Measured on install.log (#19): reusing answers across different values got 2 of 11, 14 of 60 and 22 of 44
 // right for such meanings; the question named the right kinds for all seven meanings tried, at 0.7.
+// Placeholders and the marks for kept values start with a NUL, which no unit contains (a NUL makes a file
+// binary, and ends a record with -z), so no text in a line can pass for one ("value <num>" is not "value 12").
+const DATE = String.raw`\b(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),? +)?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) +\d{1,2}\b(?:,? +\d{4}\b)?`;
 const MASK = [ // [kind, pattern, placeholder, what Jev is told the kind is]
-  ['url', /https?:\/\/[^\s"'<>]+/g, '<url>', 'a URL'], // stops at quotes: jsonl has no spaces, and \S+ ate the fields after it
-  ['path', /(?:\/[\w.@+-]+){2,}/g, '<path>', 'a file path'],
-  ['time', /\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b|\b\d{4}-\d\d-\d\d(?:[T ]\d\d:\d\d(?::\d\d(?:\.\d+)?)?)?(?:Z|[+-]\d\d(?::?\d\d)?)?|\b\d{1,2}:\d\d(?::\d\d(?:\.\d+)?)?\b/g, '<time>', 'a date or a time of day'],
-  ['hex', /\b(?=[0-9a-f]{7,}\b)(?=[0-9a-f]*[a-f])[0-9a-f]*\d[0-9a-f]*\b/gi, '<hex>', 'a hex id or hash'], // needs a digit and a letter: not words spelled in a-f, not long decimals (sizes, counts)
-  ['num', /\b\d[\d.,:_-]*\b/g, '<num>', 'a number'],
+  ['url', /https?:\/\/[^\s"'<>\0]+/g, '\0u', 'a URL'], // stops at quotes (jsonl has no spaces) and at a kept value's mark
+  ['path', /(?:\/[\w.@+-]+){2,}/g, '\0p', 'a file path'],
+  // A month or weekday name is a date only next to a day of the month (syslog's "Thu Sep 10"), so "user May" stays a name.
+  ['time', new RegExp(String.raw`${DATE}|\b\d{4}-\d\d-\d\d(?:[T ]\d\d:\d\d(?::\d\d(?:\.\d+)?)?)?(?:Z|[+-]\d\d(?::?\d\d)?)?|\b\d{1,2}:\d\d(?::\d\d(?:\.\d+)?)?\b`, 'g'), '\0t', 'a date or a time of day'],
+  ['hex', /\b(?=[0-9a-f]{7,}\b)(?=[0-9a-f]*[a-f])[0-9a-f]*\d[0-9a-f]*\b/gi, '\0h', 'a hex id or hash'], // needs a digit and a letter: not words spelled in a-f, not long decimals (sizes, counts)
+  ['num', /\b\d[\d.,:_-]*\b/g, '\0n', 'a number'],
 ];
+// Take the kept values out first, so a folded kind cannot mask them (a time's digits as a number), and key on them.
+// Each leaves a numbered mark (NUL + a private-use character) so values stay tied to their place.
+const templateKey = (text, kept, fold) => {
+  const vals = [];
+  const rest = kept.reduce((s, [, re]) => s.replace(re, v => `\0${String.fromCharCode(0xe000 + vals.push(v))}`), text);
+  return [fold.reduce((s, [, re, to]) => s.replace(re, to), rest), ...vals].join('\0');
+};
 const repOf = new Map(); // unit -> the unit actually sent on its behalf
 let sent = lines;
 if (opt.dedup && lines.length) {
@@ -432,11 +443,7 @@ if (opt.dedup && lines.length) {
   const fold = MASK.filter(([kind]) => !keep.flat().includes(kind));
   const rep = new Map();
   for (const l of lines) {
-    // Take the kept values out first, so a folded kind cannot mask them (a time's digits as <num>), and key on them.
-    // Each leaves a numbered mark (a private-use character, which no mask matches) so values stay tied to their place.
-    const vals = [];
-    const rest = kept.reduce((s, [, re]) => s.replace(re, v => `\0${String.fromCharCode(0xe000 + vals.push(v))}`), l.text);
-    const key = [fold.reduce((s, [, re, to]) => s.replace(re, to), rest), ...vals].join('\0');
+    const key = templateKey(l.text, kept, fold);
     if (!rep.has(key)) rep.set(key, l);
     repOf.set(l, rep.get(key));
   }

@@ -101,6 +101,20 @@ $J --dedup -n -e 'a request failed' "$T/ids" 2>/dev/null | grep -qx '2:worker re
 [ "$($J --dedup -n -e 'the request failed' "$T/json" 2>/dev/null | cut -d: -f1)" = "1" ]
 # the per-meaning question runs under -j too, and several meanings still combine
 [ "$($J --dedup -j 1 -c -e 'a request failed' -e 'disk usage is above 90%' "$T/ids" "$T/disk" 2>/dev/null | tr '\n' ' ')" = "$T/ids:3 $T/disk:2 " ]
+# The grouping key itself, offline: which lines share a key once Jev has named the kinds to keep.
+# (Through the API these hide behind Jev's answer: when it keeps numbers too, the bugs below never show.)
+node --input-type=module -e "
+const src = (await import('node:fs')).readFileSync('../semgrep.mjs', 'utf8');
+const { MASK, templateKey } = new Function(src.slice(src.indexOf('const DATE ='), src.indexOf('const repOf =')) + 'return { MASK, templateKey };')();
+const key = (t, keep) => templateKey(t, MASK.filter(([k]) => keep.includes(k)), MASK.filter(([k]) => !keep.includes(k)));
+const check = (a, b, keep, same) => { if ((key(a, keep) === key(b, keep)) !== same) { console.error('dedup key:', a, '|', b, keep); process.exit(1); } };
+check('value 12', 'value 99', [], true);
+check('value 12', 'value <num>', [], false);                          // text that looks like a placeholder is not one
+check('user May failed to log in', 'user Jan failed to log in', [], false); // a month name without a day is not a date
+check('Thu Sep 10 20:33:51 done', 'Fri Oct 17 21:00:00 done', [], true);   // syslog dates still fold
+check('Thu Sep 10 20:33:51 done', 'Thu Sep 17 20:33:51 done', ['time'], false); // a kept date keeps its day
+check('primary https://a/500 secondary https://a/fixed', 'primary https://a/fixed secondary https://a/500', ['num'], false); // the URL mask kept the mark
+"
 # empty input asks nothing
 [ "$(printf '' | $J --dedup -c -e 'about cats' 2>/dev/null)" = "0" ]
 # with --sentence the unit is a sentence, and sentences fold like lines
