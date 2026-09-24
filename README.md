@@ -496,6 +496,50 @@ The result is written to `tests/report.md`. Latest: precision 0.94, recall 0.98.
 - 429 / 529 are retried up to 6 times with exponential backoff.
 - Accuracy is best in English. Japanese works but is noisier.
 
+## FAQ
+
+Some options were left out because a standard tool in front of semgrep already does the job. These are the
+combinations.
+
+### How do I judge a whole paragraph as one unit? Why is there no `--paragraph`?
+
+Join each paragraph into one line first. `fmt` joins the lines of a paragraph and keeps the blank lines
+between paragraphs:
+
+```sh
+fmt -w 100000 essay.txt | semgrep -n -e "the author admits they made a mistake"
+```
+
+Each output line is then a whole paragraph, and `-n` counts the lines of `fmt`'s output, not of the file.
+`fmt` puts a space where it joins two Japanese lines; Jev reads through it. To judge sentences across
+wrapped lines you need neither: `--sentence` already joins them.
+
+### How do I search a JSONL chat log one message at a time?
+
+Take the text out with `jq` and end each message with NUL, then judge records with `-z`:
+
+```sh
+jq -j '.content + "\u0000"' chat.jsonl | semgrep -z -n --sentence -e "the customer is asking for a refund" | tr '\0' '\n'
+```
+
+Adjust `.content` to where your log keeps the text. Each message becomes one record, so a sentence never
+runs into the next speaker's message, and the JSON punctuation is not sent. `-n` numbers messages. The file
+also works as is, one JSON object per line; `jq` just gives cleaner units.
+
+### My records are separated by something other than NUL. Why is there no `--record-separator`?
+
+Turn the separator into NUL and use `-z`. For records separated by a `----` line:
+
+```sh
+perl -0777 -pe 's/\n----\n/\0/g' notes.txt | semgrep -z -e "a decision was made" | tr '\0' '\n'
+awk '/^----$/ { printf "%c", 0; next } { print }' notes.txt | semgrep -z -e "a decision was made" | tr '\0' '\n'
+```
+
+NUL is what `git log -z`, `find -print0` and `xargs -0` already emit, so `-z` covers them directly (#6).
+A general separator would bring escaping, multi-byte and regex-or-literal questions for a case one line of
+`perl` or `awk` handles. The `awk` form works with the BSD awk on macOS, which does not take a
+multi-character `RS`.
+
 ## License
 
 MIT
