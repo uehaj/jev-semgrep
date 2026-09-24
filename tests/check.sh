@@ -49,4 +49,6 @@ z_in | $J -z -e 'the customer is asking for a refund' 2>/dev/null | od -An -c | 
 # -o prints the sentence itself, joined, numbered by its first line; Japanese joins without a space
 [ "$($J -n -o --sentence -e 'the author admits they made a mistake' prose.txt 2>/dev/null)" = "1:I should have checked the input before shipping, and that was my mistake." ]
 [ "$($J -n -o --sentence -e 'customer is asking for a refund' prose.txt 2>/dev/null)" = "8:先週買った掃除機が初日から動かないので返金してほしいです。" ]
+# --sentence=jev keeps unpunctuated Japanese entries apart, so the refund requests match as they do per line
+[ "$($J -n --sentence -e 'the customer is asking for a refund' corpus.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "14 18 " ]
 echo OK

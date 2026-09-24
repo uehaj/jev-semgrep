@@ -12,7 +12,7 @@ const die = msg => { console.error(`semgrep: ${msg}\nTry 'semgrep --help' for mo
 process.on('uncaughtException', e => die(e.message));
 
 // A bare --color means --color=auto (as in grep). parseArgs cannot express an optional value, so fill it in first.
-const argv = process.argv.slice(2).map(a => (a === '--color' ? '--color=auto' : a === '--null-data' ? '-z' : a));
+const argv = process.argv.slice(2).map(a => (a === '--color' ? '--color=auto' : a === '--sentence' ? '--sentence=jev' : a === '--null-data' ? '-z' : a));
 const { values: opt, positionals: files, tokens } = parseArgs({
   args: argv,
   allowPositionals: true,
@@ -34,7 +34,7 @@ const { values: opt, positionals: files, tokens } = parseArgs({
     C: { type: 'string' }, // N lines of context on both sides
     n: { type: 'boolean', default: false }, // line numbers
     z: { type: 'boolean', default: false }, // records are NUL-terminated, on input and output (grep -z)
-    sentence: { type: 'boolean', default: false }, // the unit of judgement is a sentence
+    sentence: { type: 'string' }, // the unit of judgement is a sentence; jev / rules decide where wrapped lines join
     o: { type: 'boolean', default: false }, // with --sentence, print only the matching sentences (grep -o)
     p: { type: 'boolean', default: false }, // print each meaning's probability
     color: { type: 'string', default: 'auto' }, // auto / always / never
@@ -74,12 +74,15 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
                and counts stay on newlines. -n numbers records, -A/-B/-C count records, --chunk counts
                records. Pairs with tools that already emit records: git log -z, find -print0, xargs -0
                  git log -z --format='%h %s %b' | semgrep -z -e "the change alters user-visible behaviour"
-  --sentence   judge each sentence instead of each line. Output is still the lines a matching sentence
+  --sentence[=HOW] judge each sentence instead of each line. Output is still the lines a matching sentence
                touches, with the sentence in the match color. Wrapped lines are joined before splitting,
                except at a blank line, next to brackets or ; (JSON, code), or before a line starting with
                - * + # > " or a digit (list, heading, quote, number). Scripts without spaces between words
-               (Japanese, Chinese, Thai, Lao, Khmer, Myanmar, Tibetan) join without one. The expression is
-               evaluated per sentence. With -z each record is split on its own and matching records print
+               (Japanese, Chinese, Thai, Lao, Khmer, Myanmar, Tibetan) join without one. HOW:
+                 jev (default): also ask Jev about unpunctuated breaks next to those scripts, where entries
+                   often end without 。. One extra request per 30 lines that have such breaks
+                 rules: the rules only, no extra requests
+               The expression is evaluated per sentence. With -z each record is split on its own
   -o           with --sentence, print only the matching sentences, one per line; -n gives the line where the
                sentence starts, -c and -A/-B/-C count sentences
   -p           print each meaning's probability at the end of the line (for tuning thresholds)
@@ -129,11 +132,15 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
                -n はレコード番号、-A/-B/-C は前後のレコード数、--chunk はレコード数を数える。
                レコードを出すツールとそのまま繋がる: git log -z、find -print0、xargs -0
                  git log -z --format='%h %s %b' | semgrep -z -e "ユーザーに見える振る舞いを変えている"
-  --sentence   行ではなく文ごとに判定する。出力は当たった文がかかる元の行のままで、文の部分を色で
+  --sentence[=HOW] 行ではなく文ごとに判定する。出力は当たった文がかかる元の行のままで、文の部分を色で
                強調する。文に分ける前に折り返した行をつなぐ。ただし空行、括弧や ; (JSON やコード)、
                - * + # > " や数字で始まる行 (箇条書き・見出し・引用・番号) の前ではつながない。単語の間に
                空白を置かない文字 (日本語・中国語・タイ語・ラオ語・クメール語・ミャンマー語・チベット語)
-               は空白なしでつなぐ。式は文ごとに評価する。-z ではレコードごとに文に分け、当たったレコードを出す
+               は空白なしでつなぐ。HOW:
+                 jev (既定): 上の文字に接する句点の無い改行を Jev にも聞く。句点で終わらない 1 行 1 件の
+                   データをつながないため。そうした改行がある 30 行ごとにリクエストが 1 つ増える
+                 rules: 規則だけで決める。追加のリクエストなし
+               式は文ごとに評価する。-z ではレコードごとに文に分け、当たったレコードを出す
   -o           --sentence と併用し、当たった文だけを 1 行ずつ出す。-n は文が始まる行、-c と
                -A/-B/-C は文の数で数える
   -p           各意味の確率を行末に表示 (閾値調整用)
@@ -196,6 +203,7 @@ for (const [k, label] of [['t', '-t'], ['T', '-T'], ['chunk', '--chunk'], ['j', 
 if (chunkLines < 1) die('--chunk must be at least 1');
 if (tPos < 0 || tPos > 1 || tNeg < 0 || tNeg > 1) die('-t / -T must be between 0 and 1');
 if (Number(opt.j) < 1) die('-j must be at least 1');
+if (opt.sentence !== undefined && !['jev', 'rules'].includes(opt.sentence)) die('--sentence must be jev or rules');
 
 // The unit of judgement. Without -z it is a line; with -z it is a NUL-terminated record, which may
 // span several lines. Everything downstream works on an array of units, so only the terminator changes.
@@ -220,6 +228,39 @@ function expand(path) {
     .flatMap(d => expand(path.endsWith('/') ? path + d.name : `${path}/${d.name}`)); // not path.join(): it would drop the leading ./
 }
 const targets = (files.length ? files : [opt.r ? '.' : '-']).flatMap(f => (f === '-' ? [f] : expand(f)));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let usedTokens = 0, usedCost = 0, requestCount = 0;
+// One request with retries: 429 / 529 / 5xx, connection errors and timeouts back off exponentially.
+async function post(state, questions) {
+  for (let attempt = 0; ; attempt++) {
+    let res;
+    try {
+      res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...(credential && { authorization: `Bearer ${credential}` }) },
+        body: JSON.stringify({ model, state, questions }),
+        signal: AbortSignal.timeout(60_000),
+      });
+    } catch (e) {
+      if (attempt < 6) { await sleep(500 * 2 ** attempt); continue; }
+      throw new Error(`${apiHost}: ${e.cause?.message ?? e.message}`);
+    }
+    if ((res.status === 429 || res.status === 529 || res.status >= 500) && attempt < 6) { await sleep(500 * 2 ** attempt); continue; }
+    if (!res.ok) throw new Error(`${apiHost} ${res.status}: ${await res.text()}`);
+    const { answers, usage = {} } = await res.json();
+    requestCount++;
+    usedTokens += usage.input_tokens ?? 0;
+    usedCost += typeof usage.cost === 'number' ? usage.cost : 0;
+    return answers;
+  }
+}
+// Run up to -j requests at once.
+let running = 0;
+const waiters = [];
+const acquire = () => (running++ < Number(opt.j) ? Promise.resolve() : new Promise(r => waiters.push(r)));
+const release = () => (running--, waiters.shift()?.());
+const pooled = async fn => { await acquire(); try { return await fn(); } finally { release(); } };
+
 // --sentence: the unit is a sentence. Lines are joined as wrapped prose, except where a newline cannot be inside
 // a sentence: at a blank line, next to structure characters (JSON, code), or before a list item, heading, quote or
 // number. Each joined piece is then split by Intl.Segmenter (Unicode UAX #29 sentence boundaries).
@@ -231,7 +272,7 @@ const hardBreak = (prev, next) => !prev || !next || /[{}\[\]<>|;]$/.test(prev) |
 // lines -> [{ text, spans }]. A span [unit, from, to] is where the sentence lies in the original units: the unit
 // is the 1-based line (or record) number from unitOf, from/to are character offsets inside it (baseOf shifts a
 // line's offset inside its record with -z). Output maps matching sentences back to these units.
-function toSentences(lines, unitOf, baseOf) {
+function toSentences(lines, unitOf, baseOf, split = new Set()) { // split: breaks Jev judged to end an entry
   const out = [];
   let text = '', marks = []; // marks: { o: offset in text, unit, base: offset in the unit, len }
   const flush = () => {
@@ -251,7 +292,7 @@ function toSentences(lines, unitOf, baseOf) {
   lines.forEach((line, i) => {
     const prev = text.trimEnd(), next = line.trim();
     const mark = { unit: unitOf(i), base: baseOf(i) + line.length - line.trimStart().length, len: next.length };
-    if (hardBreak(prev, next)) { flush(); if (next) { text = next; marks.push({ ...mark, o: 0 }); } return; }
+    if (hardBreak(prev, next) || split.has(i)) { flush(); if (next) { text = next; marks.push({ ...mark, o: 0 }); } return; }
     text = prev + (CJK.test(prev.at(-1)) && CJK.test(next[0]) ? '' : ' '); // no space for scripts without word spaces
     marks.push({ ...mark, o: text.length });
     text += next;
@@ -260,31 +301,64 @@ function toSentences(lines, unitOf, baseOf) {
   return out;
 }
 
+// Where the rules would join, a break still needs judging if a script without word spaces touches it and the line
+// does not end a sentence: in Japanese or Chinese, entries often end without 。, and joining leaves no trace of the
+// break. A line starting with closing punctuation continues the previous one (kinsoku), and so does a line
+// ending in 、. With --sentence=jev such breaks are asked, 30 lines per request, a yes/no per break. A break needs
+// p >= 0.7: real breaks measured 0.81 and up, while wraps a person made at a phrase boundary reach 0.5 to 0.6.
+const CLOSING = /^[。、，．」』）】〕！？]/;
+const needsJudging = (prev, next) => prev && next && !hardBreak(prev, next) && !/[。！？!?、，]$/.test(prev) && !CLOSING.test(next)
+  && (CJK.test(prev.at(-1)) || CJK.test(next[0]));
+const BREAK_ABOUT = 'A line break either ends a sentence or a separate entry (a new message, item or sentence starts on the next line), or it is only a wrap in the middle of a sentence (the sentence continues on the next line).';
+async function judgeBreaks(lines) { // -> Set of i where the break before lines[i] ends a sentence or entry
+  const ask = [];
+  for (let i = 1; i < lines.length; i++) if (needsJudging(lines[i - 1].trim(), lines[i].trim())) ask.push(i);
+  const split = new Set();
+  const id = k => `L${String(k).padStart(3, '0')}`;
+  const jobs = [];
+  for (let s = 0; s < lines.length - 1; s += 29) { // windows of 30 lines sharing one line, so every break is inside one
+    const qs = ask.filter(i => i > s && i < s + 30);
+    if (!qs.length) continue;
+    const state = Object.fromEntries(lines.slice(s, s + 30).map((l, k) => [id(k), l.slice(0, MAX_UNIT_CHARS)]));
+    const questions = Object.fromEntries(qs.map(i => [`b${i}`, { type: 'noul', instructions: `${BREAK_ABOUT} Does the line break between ${id(i - 1 - s)} and ${id(i - s)} end a sentence or entry (rather than being a wrap inside a sentence)?` }]));
+    jobs.push(pooled(() => post(state, questions)).then(a => qs.forEach(i => { if (a[`b${i}`].noul >= 0.7) split.add(i); })));
+  }
+  await Promise.all(jobs);
+  return split;
+}
+
 const sources = new Map(); // file -> the units printed (lines or records; sentences with -o); includes blank lines
 const spansOf = new Map(); // file -> spans of each sentence (--sentence only)
 const allLines = []; // { file, no, text }; includes blank lines; what the expression is evaluated over
+const read = new Map(); // file -> units as read (lines, or records with -z)
 for (const file of targets) {
   let buf;
   try { buf = readFileSync(file === '-' ? 0 : file); } catch (e) { warn(file, e); continue; }
   // With -z a NUL is the record terminator, so the binary sniff would reject exactly the input we want.
   if (!opt.z && buf.subarray(0, 8192).includes(0)) continue;
-  let src = buf.toString('utf8').split(SEP);
+  const src = buf.toString('utf8').split(SEP);
   if (src.at(-1) === '') src.pop();
+  read.set(file, src);
+}
+// Each run of lines that may join: the whole file, or each record with -z. starts: offset of each line in its unit.
+const runsOf = src => (opt.z
+  ? src.map((rec, r) => { const ls = rec.split('\n'), starts = [0]; for (const l of ls) starts.push(starts.at(-1) + l.length + 1); return { lines: ls, unitOf: () => r + 1, baseOf: i => starts[i] }; })
+  : [{ lines: src, unitOf: i => i + 1, baseOf: () => 0 }]);
+const runsByFile = new Map([...read].map(([file, src]) => [file, opt.sentence ? runsOf(src) : []]));
+const splits = new Map(); // run -> Set of breaks Jev judged to end an entry
+if (opt.sentence === 'jev')
+  await Promise.all([...runsByFile.values()].flat().map(run => judgeBreaks(run.lines).then(sp => splits.set(run, sp))));
+for (const [file, src] of read) {
   sources.set(file, src);
+  let units = src;
   if (opt.sentence) {
     // With -z a record is a hard boundary, and lines inside it are joined like any wrapped prose.
-    const sentences = opt.z
-      ? src.flatMap((rec, r) => {
-        const starts = [0];
-        for (const l of rec.split('\n')) starts.push(starts.at(-1) + l.length + 1);
-        return toSentences(rec.split('\n'), () => r + 1, i => starts[i]);
-      })
-      : toSentences(src, i => i + 1, () => 0);
+    const sentences = runsByFile.get(file).flatMap(run => toSentences(run.lines, run.unitOf, run.baseOf, splits.get(run)));
     spansOf.set(file, sentences.map(u => u.spans));
     if (opt.o) sources.set(file, sentences.map(u => u.text));
-    src = sentences.map(u => u.text);
+    units = sentences.map(u => u.text);
   }
-  src.forEach((text, i) => allLines.push({ file, no: i + 1, text }));
+  units.forEach((text, i) => allLines.push({ file, no: i + 1, text }));
 }
 // Blank and whitespace-only lines are not sent; they count as probability 0 for every meaning (never match -e, always match -v).
 const lines = allLines.filter(l => l.text.trim());
@@ -301,10 +375,6 @@ for (let i = 0; i < lines.length; ) {
   chunks.push(chunk);
 }
 
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-let usedTokens = 0;
-let usedCost = 0;
-
 async function evaluate(chunk) {
   const id = i => `L${String(i).padStart(3, '0')}`;
   const state = Object.fromEntries(chunk.map((l, i) => [id(i), l.text.slice(0, MAX_UNIT_CHARS)]));
@@ -312,40 +382,12 @@ async function evaluate(chunk) {
   chunk.forEach((_, i) => meanings.forEach((text, m) => {
     questions[`${id(i)}_${m}`] = { type: 'noul', instructions: `Does line ${id(i)} match the meaning: "${text}"?` };
   }));
-  for (let attempt = 0; ; attempt++) {
-    let res;
-    try {
-      res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', ...(credential && { authorization: `Bearer ${credential}` }) },
-        body: JSON.stringify({ model, state, questions }),
-        signal: AbortSignal.timeout(60_000),
-      });
-    } catch (e) {
-      if (attempt < 6) { await sleep(500 * 2 ** attempt); continue; } // retry on connection errors and timeouts too
-      throw new Error(`${apiHost}: ${e.cause?.message ?? e.message}`);
-    }
-    if ((res.status === 429 || res.status === 529 || res.status >= 500) && attempt < 6) {
-      await sleep(500 * 2 ** attempt);
-      continue;
-    }
-    if (!res.ok) throw new Error(`${apiHost} ${res.status}: ${await res.text()}`);
-    const { answers, usage = {} } = await res.json();
-    usedTokens += usage.input_tokens ?? 0;
-    usedCost += typeof usage.cost === 'number' ? usage.cost : 0;
-    return chunk.map((_, i) => meanings.map((_, m) => answers[`${id(i)}_${m}`].noul));
-  }
+  const answers = await post(state, questions);
+  return chunk.map((_, i) => meanings.map((_, m) => answers[`${id(i)}_${m}`].noul));
 }
 
-// Run up to -j requests at once; results are consumed in chunk order.
-let running = 0;
-const waiters = [];
-const acquire = () => (running++ < Number(opt.j) ? Promise.resolve() : new Promise(r => waiters.push(r)));
-const release = () => (running--, waiters.shift()?.());
-const results = chunks.map(async chunk => {
-  await acquire();
-  try { return await evaluate(chunk); } finally { release(); }
-});
+// Results are consumed in chunk order.
+const results = chunks.map(chunk => pooled(() => evaluate(chunk)));
 
 const color = opt.color === 'always' || (opt.color === 'auto' && process.stdout.isTTY && !process.env.NO_COLOR);
 if (!['auto', 'always', 'never'].includes(opt.color)) die('--color must be auto, always or never');
@@ -424,7 +466,7 @@ for (const file of targets) {
 if (process.stderr.isTTY) {
   // The API's own usage.cost when reported (OpenRouter does); else an estimate at Jev's list price, only for TypeSafe itself.
   const cost = usedCost > 0 ? `, $${usedCost.toFixed(6)}` : SEMGREP_URL ? '' : `, ~$${(usedTokens * 0.042 / 1e6).toFixed(6)}`;
-  console.error(`${matched}/${allLines.length} ${opt.sentence ? 'sentences' : opt.z ? 'records' : 'lines'} (${lines.length} sent), ${chunks.length} requests, ${usedTokens} input tokens${cost}`);
+  console.error(`${matched}/${allLines.length} ${opt.sentence ? 'sentences' : opt.z ? 'records' : 'lines'} (${lines.length} sent), ${requestCount} requests, ${usedTokens} input tokens${cost}`);
 }
 // process.exit() can drop buffered stdout when piped, so set exitCode instead.
 process.exitCode = hadError ? 2 : matched ? 0 : 1;

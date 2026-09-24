@@ -330,6 +330,17 @@ Use it to see which sentence matched, to get the sentences with `-o`, and when A
 sentence: the expression is evaluated per sentence. For the same reason `-v X` alone prints every line
 with at least one sentence that is not X; to find lines that are not X as a whole, leave `--sentence` off.
 
+Japanese and Chinese entries often end without `。`: a chat message, a support ticket, a memo line. Joining
+them would glue separate entries into one "sentence". So by default (`--sentence`, the same as
+`--sentence=jev`) semgrep asks Jev about each unpunctuated break next to a script written without word
+spaces: "does this line break end a sentence or entry, or is it a wrap inside a sentence?" It sends 30 lines
+per request with one yes/no per break, and keeps the lines apart when the answer is 0.7 or more. On
+[`tests/corpus.txt`](tests/corpus.txt) this keeps the four one-line Japanese tickets apart, so
+`--sentence` finds the same refund requests (lines 14 and 18) as a line-by-line search, where the rules alone
+merged the tickets and missed line 18. The extra requests cost about as much as one more meaning; use
+`--sentence=rules` to skip them. Breaks between English lines are never asked: joining them keeps a space,
+and the full stop still ends the sentence.
+
 Where a newline cannot be inside a sentence, lines are not joined: at a blank line, next to brackets or
 `;` (JSON, code), and before a line starting with `-` `*` `+` `#` `>` `"` or a digit (list items,
 headings, quotes, numbers, timestamps). So JSONL keeps one line per record and each line is split on its
@@ -397,7 +408,7 @@ usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
   --chunk=LINES lines per request (default 30)
   -j N         concurrent requests (default 8)
   -n           print line numbers
-  --sentence   judge each sentence instead of each line (see "One sentence at a time" above)
+  --sentence[=HOW] judge each sentence instead of each line; HOW is jev (default) or rules (see "One sentence at a time" above)
   -o           with --sentence, print only the matching sentences
   -p           print each meaning's probability at the end of the line
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
