@@ -19,10 +19,12 @@
   },
   "type": "module",
   "bin": {
-    "semgrep": "semgrep.mjs"
+    "semgrep": "semgrep.mjs",
+    "git-semgrep": "git-semgrep.mjs"
   },
   "files": [
     "semgrep.mjs",
+    "git-semgrep.mjs",
     "README.md",
     "README.ja.md",
     "docs/"

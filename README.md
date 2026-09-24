@@ -123,6 +123,38 @@ queries, where cosine scores need top-k or per-query tuning. And there is no ind
 the files in front of you. The flip side is that every query pays for the whole corpus again, so for
 repeated queries over a large, fixed corpus a vector index is cheaper and faster.
 
+## Regex terms
+
+`-e`/`-a`/`-v '/pattern/flags'` (first and last character `/`, JavaScript flags) is matched locally,
+as a plain regex, with no request at all. It prefilters its AND term: only the lines it holds for
+ever ask that term's meanings, so a cheap regex in front of a meaning cuts the bill. A line is sent
+only if some term's regexes all hold for it (a term with no regex holds for every line), so with
+`-e '/re/' -a A -e B` a line without `re` is still sent, asked `B` only. A query of regex terms alone
+sends nothing, except that `--sentence` (`=jev`, the default) still asks Jev where wrapped lines
+break; use `--sentence=rules` to stay offline. Anything that isn't shaped like `/…/flags` is still a meaning, so
+`-e '/etc 以下のファイルを変更している'` (no closing `/`) is unaffected; a meaning that really starts
+and ends with `/` can be written with a leading space to dodge the regex reading.
+
+```sh
+$ ./semgrep -e '/ERROR|FATAL/' app.log                               # no requests at all
+$ ./semgrep -e '/timeout/i' -a '顧客に影響が出ている' app.log         # only lines with "timeout" go to Jev
+```
+
+A regex's named and numbered groups pass to the other meanings of the *same* AND term as
+`$<name>`, `$1`-`$99`, `$&`, `$$` — ECMAScript's replacement-pattern syntax
+(`String.prototype.replace`'s `GetSubstitution`), with one deviation: `$<name>` naming no group is
+an error rather than an empty string (so is a reference to a negated regex's group). A `$n` naming
+no group stays literal, as in ECMAScript, so `$100 以上の請求` is unaffected.
+
+```sh
+$ ./semgrep -e '/(?<date>\d{4}-\d\d-\d\d) (?<time>\d\d:\d\d)/' \
+            -a '$<time> が深夜（0時〜5時）であり、$<date> が週末である' app.log
+#   2026-09-19 03:12 ... → asks "03:12 が深夜（0時〜5時）であり、2026-09-19 が週末である"
+```
+
+Prefer `$<name>` and single quotes: `$<name>` survives double quotes in sh/bash/zsh; `$1`, `$time`
+and `${time}` don't (the shell expands them itself). `-p` prints `1.00`/`0.00` for a regex term.
+
 ## Install
 
 Two ways to use it: as a command-line tool (this section), or as a Claude Code skill
@@ -171,7 +203,8 @@ A script calling semgrep would pick these up too (grep dropped `GREP_OPTIONS` fo
 
 The API is configured by exactly three settings: `SEMGREP_API_KEY` (or `TYPESAFE_API_KEY`), `SEMGREP_URL` and `SEMGREP_MODEL`.
 Any endpoint that speaks TypeSafe's `POST /v1/systemone` works. The key is sent to `SEMGREP_URL` as is, so set the
-two together. `--model=ID` on the command line overrides `SEMGREP_MODEL`.
+two together. On the command line, `--sys1-model=ID`, `--sys1-url=URL` and `--sys1-api-key=KEY` override
+the three. A key given this way shows up in `ps` and shell history, so prefer `.env` for it.
 
 ```sh
 # OpenRouter
@@ -311,6 +344,22 @@ you mean to scan. A file named explicitly on the command line is always searched
 matching file once, in the order matches are found, and works with or without `-r`. `-c` prints the number of
 matching lines per file instead.
 
+### As a git subcommand (`git semgrep`)
+
+`npm install -g` also installs `git-semgrep`, so git runs it as `git semgrep`. Like `git grep`, it searches only
+the files git tracks (ignored files and build output are never sent), and FILE arguments are pathspecs relative
+to the current directory.
+
+```sh
+$ cd tests && git semgrep -l -e "customer is asking for a refund" fixture.txt tickets
+fixture.txt
+tickets/a.txt
+tickets/sub/b.txt
+```
+
+Without FILE it searches every tracked file under the current directory. The `-r` skip list (`.env*`, keys, ...)
+applies even to tracked files. For help use `git semgrep -h`: git takes `--help` itself and looks for a man page.
+
 ### Everything that is *not* something
 
 ```sh
@@ -391,6 +440,38 @@ own. Sentences are cut by `Intl.Segmenter` ([Unicode UAX #29](https://unicode.or
 which splits at `.` `!` `?` `。` `！` `？` but also after abbreviations such as `Mr.`. Logs are not prose:
 consecutive log lines that start with a letter, such as `WARN ...` after `ERROR ...`, get joined.
 
+### One line per template (`--dedup`)
+
+Cost is proportional to the text sent, and machine-generated logs are mostly one skeleton with a different
+id or number in it. `--dedup` masks ids, hashes, numbers, dates and times, paths and URLs, groups lines by
+the result, sends one line per group and reuses its answer for the rest. What is sent is that line's
+original text, and every line is printed as itself:
+
+```sh
+$ ./semgrep --dedup -n -e "a request failed" app.log
+1:worker request 3fa9c1e27b failed: connection reset
+2:worker request 88d0e41a5c failed: connection reset
+4:worker request 0b7f2a9e13 failed: connection reset
+3/6 lines (4 sent of 6), 2 requests, 907 input tokens, ~$0.000038
+```
+
+Whether a value may be folded depends on the meaning: a number decides "disk usage is above 90%", a time
+decides "happened at night". So Jev is first asked, one small request per meaning, which kinds of value
+could change a match, and those kinds are kept apart (one of the two requests above). With
+`-e "disk usage is above 90%"` the same file keeps `95%` and `12%` apart and prints only `5:disk usage 95%`.
+
+Measured on real logs, with nothing kept: a 43,071-line system log folds into 550 templates (1.2% of the
+bytes), `install.log` to 21.1%, a Claude Code transcript (jsonl) only to 56.8%. It is for machine-generated
+logs; prose has no shared skeleton, and a meaning that reads a timestamp folds almost nothing. With `-z` or
+`--sentence` the records or sentences fold instead of lines.
+
+To see how far your own logs fold before paying for a search, `node scripts/dedup-measure.mjs FILE...`
+counts lines, templates and the share of bytes sent, offline, with the same masks; `--keep=num,time` shows
+a meaning that keeps those kinds apart.
+
+The request's other lines are each line's context (#9), and `--dedup` changes them, so a line near the
+threshold can be judged differently than in a full pass.
+
 ## Use it from Claude Code
 
 There is a Claude Code skill that runs semgrep for you: describe what you are looking for in plain words
@@ -463,6 +544,8 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                file and line number use grep's colors; with -p, probabilities are
                green at or above the positive threshold, red below the negative one,
                yellow in between. NO_COLOR is honored
+  --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
+               the API settings, overriding SEMGREP_MODEL, SEMGREP_URL, SEMGREP_API_KEY
   -h, --help   this help (Japanese when LANG / LC_ALL / LC_MESSAGES starts with ja)
 ```
 
