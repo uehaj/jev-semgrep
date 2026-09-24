@@ -47,7 +47,7 @@ h1 .w{display:inline-block;background:linear-gradient(90deg,var(--accent),#66d9e
 .row.hit{opacity:1;background:#8ce99a14}
 .row.miss{opacity:.18}
 .row.gone{max-height:0;padding:0 6px;opacity:0}
-.ln{color:var(--green);text-align:right}.ln::after{content:":";color:var(--cyan)}
+.ln{color:var(--green);text-align:right}.ln::after{content:":";color:var(--cyan)}.ln.none::after{content:""}
 .tx{white-space:pre-wrap;overflow-wrap:anywhere}
 .ask{display:none;color:var(--cyan)}.row.hit .ask{display:block}
 .tx m{font-style:normal;transition:color .6s}.row.hit .tx m{color:var(--red);font-weight:700}
@@ -147,6 +147,7 @@ footer{padding:32px 0 56px;color:var(--mute);font-size:.9rem;text-align:center;b
       <div class="card"><h3>🔣 Regex terms <span class="new card-b">coming</span></h3><p><code>-e '/ERROR|FATAL/'</code> runs locally for free, prefilters what Jev sees, and hands captures to meanings as <code>$&lt;name&gt;</code>: <code>-a '$&lt;time&gt; is at night'</code> asks each line about its own time.</p></div>
       <div class="card"><h3>🗜️ One request per template <span class="new card-b">coming</span></h3><p><code>--dedup</code> folds machine logs by skeleton: a 43,071-line system log becomes 550 templates, 1.2% of the bytes.</p></div>
       <div class="card"><h3>🔑 Any endpoint</h3><p>TypeSafe by default; OpenRouter, Vercel AI Gateway or any server that speaks <code>POST /v1/systemone</code> via <code>SEMGREP_URL</code>.</p></div>
+      <div class="card"><h3>🌳 git semgrep <span class="new card-b">coming</span></h3><p>Searches only the files git tracks, like <code>git grep</code>. Paths are pathspecs; ignored files are never sent.</p></div>
       <div class="card"><h3>🤖 Claude Code skill</h3><p>Describe what you want in plain words; the skill builds the expression, runs it and reports <code>file:line</code> hits.</p></div>
     </div>
   </section>
@@ -158,6 +159,9 @@ npm install -g @uehaj/semgrep
 
 <span class="c"># API key from https://console.typesafe.ai/</span>
 export SEMGREP_API_KEY=your-key
+
+<span class="c"># coming: search the files git tracks, like git grep</span>
+git semgrep -l -e "customer is asking for a refund"
 
 <span class="c"># other endpoints: set the URL and its key together</span>
 export SEMGREP_URL=https://openrouter.ai/api/v1/systemone SEMGREP_API_KEY=sk-or-...
@@ -241,6 +245,10 @@ const S = [
   c:"-z judges NUL-terminated records, as in grep -z. “Changes user-visible behaviour” is true of a whole commit, not of any one line in it.",
   cmd:"git log -z --format='%h %s %b' | semgrep -z -n -e \"the change alters user-visible behaviour\" -v \"documentation only\"",
   rows:[[7,'21120e9 Revert "feat: ship the /semgrep Claude Code skill" ...',null,1],[8,"51ae333 feat: ship the /semgrep Claude Code skill",null,1]]},
+ {h:"Search what git tracks",pre:"PR #36",
+  c:"npm install -g also installs git-semgrep, so git runs it as git semgrep. Like git grep, it searches only the files git tracks, and ignored files and build output are never sent.",
+  cmd:'cd tests && git semgrep -l -e "customer is asking for a refund" fixture.txt tickets',
+  rows:[[null,"fixture.txt",null,1],[null,"tickets/a.txt",null,1],[null,"tickets/sub/b.txt",null,1]]},
 ];
 const $=id=>document.getElementById(id), still=matchMedia("(prefers-reduced-motion: reduce)").matches;
 let cur=0, playing=!still, token=0, ended=false;
@@ -250,7 +258,7 @@ S.forEach((s,i)=>{const b=document.createElement("button");b.innerHTML='<i class
 function row([n,tx,p,k,ask],bars){
   const d=document.createElement("div");d.className="row";
   const ok=p!=null&&p>=.5, pv=p==null?"":'<span class="pv '+(ok?"ok":"ng")+'">['+p.toFixed(2)+"]</span>";
-  d.innerHTML='<span class="ln">'+n+'</span><span class="tx">'+esc(tx)+(ask?'<span class="ask">→ Jev: “'+esc(ask)+'”</span>':"")+'</span><span class="pr">'+(bars?'<span class="meter"><i class="'+(ok?"ok":"")+'"></i></span>':"")+pv+"</span>";
+  d.innerHTML=(n==null?'<span class="ln none"></span>':'<span class="ln">'+n+'</span>')+'<span class="tx">'+esc(tx)+(ask?'<span class="ask">→ Jev: “'+esc(ask)+'”</span>':"")+'</span><span class="pr">'+(bars?'<span class="meter"><i class="'+(ok?"ok":"")+'"></i></span>':"")+pv+"</span>";
   d.querySelector(".pv")&&(d.querySelector(".pv").style.visibility="hidden");
   return d;
 }
