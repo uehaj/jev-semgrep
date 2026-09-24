@@ -159,7 +159,7 @@ semgrep を呼ぶスクリプトもこの既定値を拾います（grep が `GR
 
 API の設定は `SEMGREP_API_KEY`（または `TYPESAFE_API_KEY`）、`SEMGREP_URL`、`SEMGREP_MODEL` の 3 つだけです。
 TypeSafe の `POST /v1/systemone` と同じ形で話すエンドポイントなら使えます。キーは `SEMGREP_URL` の先へそのまま
-送られるので、2 つは組にして設定してください。
+送られるので、2 つは組にして設定してください。コマンドラインの `--model=ID` は `SEMGREP_MODEL` より優先します。
 
 ```sh
 # OpenRouter
