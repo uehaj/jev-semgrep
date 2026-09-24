@@ -15,13 +15,13 @@ for bad in '-e refund' 'file.txt' '--' '--nope'; do
 done
 out=$($J -n -e 'ネットワークやリモート接続の障害' -e 'customer is asking for a refund' fixture.txt 2>/dev/null | cut -d: -f1)
 for n in 4 6 7 13 30; do echo "$out" | grep -qx "$n"; done
-for n in 1 8 11 15 26; do ! echo "$out" | grep -qx "$n"; done
+for n in 1 8 11 15 26; do if echo "$out" | grep -qx "$n"; then exit 1; fi; done
 [ "$($J -n -e 'ネットワークやリモート接続の障害' -a 'a retry is happening or was attempted' fixture.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "5 " ]
 [ "$($J -n -e 'ネットワークやリモート接続の障害' -v 'a retry is happening or was attempted' fixture.txt 2>/dev/null | cut -d: -f1 | grep -cx 5)" = 0 ]
 $J -n -v 'a timestamped server log line' fixture.txt 2>/dev/null | cut -d: -f1 | grep -qx 11
 out=$($J -n -e 'customer is asking for a refund' -e '!a timestamped server log line' fixture.txt 2>/dev/null | cut -d: -f1)
 for n in 7 11 20; do echo "$out" | grep -qx "$n"; done
-! echo "$out" | grep -qx 4
+if echo "$out" | grep -qx 4; then exit 1; fi
 if $J -e 'recipe for cooking pasta' fixture.txt 2>/dev/null; then exit 1; fi
 
 # output shapes of -l / -c / -r / -C
@@ -81,7 +81,8 @@ printf '{"url":"https://example.com/a","status":"failed"}\n{"url":"https://examp
 # every line is still printed, with its own original text rather than the representative's or the mask
 [ "$($J --dedup -c -t 0 -e 'anything at all' "$T/ids" 2>/dev/null)" = "4" ]
 $J --dedup -n -e 'a request failed' "$T/ids" 2>/dev/null | grep -qx '2:worker request 88d0e41a5c failed: connection reset'
-! $J --dedup -e 'a request failed' "$T/ids" 2>/dev/null | grep -q '<'
+# (placeholders start with a NUL, so a leaked mask would show one; "! … | grep" would never stop set -e)
+if $J --dedup -e 'a request failed' "$T/ids" 2>/dev/null | od -An -c | grep -q '\\0'; then exit 1; fi
 # a meaning that reads the number keeps numbers apart (#19)
 [ "$(sent -e "'disk usage is above 90%'" "$T/disk")" = "3 sent of 3" ]
 [ "$($J --dedup -n -e 'disk usage is above 90%' "$T/disk" 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 3 " ]
