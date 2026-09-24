@@ -142,7 +142,7 @@ footer{padding:32px 0 56px;color:var(--mute);font-size:.9rem;text-align:center;b
       <div class="card"><h3>🧮 Real booleans</h3><p>Each meaning yields an independent probability, so AND / OR / NOT are plain boolean operations. One threshold (0.5) works across queries.</p></div>
       <div class="card"><h3>📦 Zero dependencies</h3><p>One file, Node.js 20.12+ and <code>fetch</code>. 30 lines per request, 8 requests in parallel. No index to build.</p></div>
       <div class="card"><h3>✂️ Lines, sentences, records</h3><p><code>--sentence</code> finds sentences across line breaks and, with <code>--color</code>, colors just the matching sentence inside a line; <code>-z</code> judges NUL-terminated records like <code>git log -z</code>.</p></div>
-      <div class="card"><h3>🎯 Answers, not restatements <span class="new card-b">coming</span></h3><p><code>-Q</code> / <code>--question</code> asks whether a line <em>answers</em> X, where <code>-e X</code> asks whether it <em>says</em> X. A denial answers a yes/no question; asking again answers nothing. <code>-q</code> stops at the first match, like <code>grep -q</code>.</p></div>
+      <div class="card"><h3>🎯 Answers, not restatements <span class="new card-b">coming</span></h3><p><code>-Q</code> / <code>--question</code> shows lines that <em>tell you</em> X, where <code>-e X</code> shows lines that <em>say</em> X. A denial answers a yes/no question; asking again answers nothing. <code>-q</code> stops at the first match, like <code>grep -q</code>.</p></div>
       <div class="card"><h3>🔣 Regex terms <span class="new card-b">coming</span></h3><p><code>-e '/ERROR|FATAL/'</code> runs locally for free, prefilters what Jev sees, and hands captures to meanings as <code>$&lt;name&gt;</code>: <code>-a '$&lt;time&gt; is at night'</code> asks each line about its own time.</p></div>
       <div class="card"><h3>🗜️ One request per template <span class="new card-b">coming</span></h3><p><code>--dedup</code> folds machine logs by skeleton: a 43,071-line system log becomes 550 templates, 1.2% of the bytes.</p></div>
       <div class="card"><h3>🔑 Any endpoint</h3><p>TypeSafe by default; OpenRouter, Vercel AI Gateway or any server that speaks <code>POST /v1/systemone</code> via <code>SEMGREP_URL</code>.</p></div>
@@ -191,15 +191,15 @@ const S = [
   cmd:'semgrep -n -p -t 0 -e "customer is asking for a refund" tests/contrast.en.txt',bars:1,
   rows:[[1, "I want a refund. The item was broken.", 0.99, 1], [2, "The refund has been processed. Please check your account.", 0.11, 0], [3, "Our refund policy is within 30 days of purchase.", 0.09, 0], [4, "The manager denied the refund request yesterday", 0.17, 0], [5, "I demand a full refund immediately", 0.93, 1], [6, "Refunds are processed within 5 business days", 0.07, 0], [7, "The support agent got angry and hung up the phone.", 0.05, 0], [8, "The customer got angry and hung up the phone.", 0.06, 0]],
   note:"Threshold 0.5 — calibrated probabilities, no per-query tuning."},
- {h:"-e says it, -Q answers it",pre:"main",
-  c:"-e X asks whether the line says X. -Q X asks whether the line answers X: a reason for a why, a yes or a no for a whether. Asking the question again answers nothing. -Q X is shorthand for -e \"the line answers: X\".",
+ {h:"-e says X, -Q tells you X",pre:"main",
+  c:"-e X shows lines that say X. -Q X shows lines that tell you X: the reason for a why, a yes or a no for a whether. A line asking the same question tells you nothing. -Q X is shorthand for -e \"the line answers: X\".",
   cmd:'semgrep -n -Q "whether the server is down" tests/intent.txt',
   rows:[[5,"The server is down.",null,1],[6,"The server is healthy and responding normally.",null,1],[7,"Is the server down?",null,0],[8,"The server room felt warm today.",null,0]],
   note:"2/17 lines (17 sent), 1 requests, 1087 input tokens, ~$0.000046",
   side:'<p><b>Same words, two questions.</b></p><table>'+
-   '<tr><td><code>-e <span class="q">"ジョブはなぜ失敗したか"</span></code></td><td></td></tr>'+
+   '<tr><td><code>-e <span class="q">"ジョブはなぜ失敗したか"</span></code><br><small>lines that say “why did the job fail”</small></td><td></td></tr>'+
    '<tr><td>なぜジョブは失敗したのですか <small>(asks the same)</small></td><td class="ok">0.98</td></tr>'+
-   '<tr><td><code>-Q <span class="q">"why the job failed"</span></code></td><td></td></tr>'+
+   '<tr><td><code>-Q <span class="q">"why the job failed"</span></code><br><small>lines that tell you why the job failed</small></td><td></td></tr>'+
    '<tr><td>ジョブはディスク容量不足のために失敗した <small>(the reason)</small></td><td class="ok">0.93</td></tr>'+
    '<tr><td>なぜジョブは失敗したのですか <small>(asks the same)</small></td><td class="ng">0.12</td></tr></table>'+
    '<p style="margin-top:12px">The question’s grammar says what kind of answer is wanted:</p><table><tr><td></td><td>kind</td><td>answers</td><td>asks</td></tr>'+
