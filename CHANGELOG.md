@@ -6,6 +6,7 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
+- `--model=ID`: the model id on the command line, overriding `SEMGREP_MODEL`. Also allowed in `SEMGREP_OPTS`.
 - `-Q`, `--question QUESTION`: matches lines that answer the question, not lines asking it. Shorthand for
   `-e "the line answers: QUESTION"`. "the cat's name" matches a line stating it, not a line asking for it;
   for a yes/no question ("whether the server is down") a line that denies it still answers it and matches.

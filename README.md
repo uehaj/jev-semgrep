@@ -171,7 +171,7 @@ A script calling semgrep would pick these up too (grep dropped `GREP_OPTIONS` fo
 
 The API is configured by exactly three settings: `SEMGREP_API_KEY` (or `TYPESAFE_API_KEY`), `SEMGREP_URL` and `SEMGREP_MODEL`.
 Any endpoint that speaks TypeSafe's `POST /v1/systemone` works. The key is sent to `SEMGREP_URL` as is, so set the
-two together.
+two together. `--model=ID` on the command line overrides `SEMGREP_MODEL`.
 
 ```sh
 # OpenRouter
