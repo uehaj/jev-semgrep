@@ -80,7 +80,7 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
 
 Exit status: 0 matched / 1 no match / 2 error
 
-Environment (read from the environment, else from ./.env, else from ~/.config/semgrep/.env):
+Environment (read from the environment, else from ~/.config/semgrep/.env; ./.env is never read):
   SEMGREP_API_KEY    API key. Falls back to TYPESAFE_API_KEY. Get one at https://console.typesafe.ai/
   SEMGREP_URL        endpoint (default https://api.typesafe.ai/v1/systemone). Any TypeSafe-compatible
                      /v1/systemone works, e.g. https://openrouter.ai/api/v1/systemone
@@ -127,7 +127,7 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
 
 終了コード: 一致あり 0 / なし 1 / エラー 2 (引数・読めないファイル・API 障害)
 
-環境変数 (環境、無ければ ./.env、無ければ ~/.config/semgrep/.env から読む):
+環境変数 (環境、無ければ ~/.config/semgrep/.env から読む。./.env は読まない):
   SEMGREP_API_KEY    API キー。無ければ TYPESAFE_API_KEY。取得は https://console.typesafe.ai/
   SEMGREP_URL        送信先 (既定 https://api.typesafe.ai/v1/systemone)。TypeSafe 互換の
                      /v1/systemone なら可。例 https://openrouter.ai/api/v1/systemone
@@ -140,16 +140,17 @@ if (opt.help) {
   process.exit(0);
 }
 
-// Only these variables configure the API. The first .env found fills in what the environment lacks.
-const found = ['.env', `${homedir()}/.config/semgrep/.env`].find(existsSync);
-if (found) process.loadEnvFile(found); // never overrides variables already set
+// Only these variables configure the API; ~/.config/semgrep/.env fills in what the environment lacks. Never ./.env:
+// the current directory may be an untrusted checkout, and its .env could point SEMGREP_URL at a server that collects the key.
+const userEnv = `${homedir()}/.config/semgrep/.env`;
+if (existsSync(userEnv)) process.loadEnvFile(userEnv); // never overrides variables already set
 const { SEMGREP_URL, SEMGREP_MODEL, SEMGREP_API_KEY, TYPESAFE_API_KEY } = process.env;
 const apiUrl = SEMGREP_URL || 'https://api.typesafe.ai/v1/systemone';
 const apiHost = (() => { try { return new URL(apiUrl).host; } catch { die(`SEMGREP_URL is not a URL: ${apiUrl}`); } })();
 const model = SEMGREP_MODEL || 'jev-latest';
 const credential = SEMGREP_API_KEY || TYPESAFE_API_KEY;
 // A compatible local server may need no key; the TypeSafe default always does.
-if (!credential && !SEMGREP_URL) die('SEMGREP_API_KEY is not set. Put it in ./.env or ~/.config/semgrep/.env');
+if (!credential && !SEMGREP_URL) die('SEMGREP_API_KEY is not set. Export it or put it in ~/.config/semgrep/.env');
 
 // Expression: a list of AND terms joined by OR. Each literal is [meaning index, negated]. meanings holds each distinct meaning once.
 const expr = [];
