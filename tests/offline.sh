@@ -119,6 +119,25 @@ reset; $E SEMGREP_URL=$base/v1 TYPESAFE_API_KEY=k2 node ../semgrep.mjs -e cat "$
 code 2 "SEMGREP_URL not a URL" -- $E SEMGREP_URL=nope node ../semgrep.mjs -e cat "$F"
 code 2 "the TypeSafe default needs a key" -- $E node ../semgrep.mjs -e cat "$F"
 
+# git semgrep: tracked files only, pathspecs relative to the current directory, never stdin
+R="$tmp/repo" GS="$E SEMGREP_URL=$base/v1 node $PWD/../git-semgrep.mjs" SG="$PWD/../semgrep.mjs"
+mkdir -p "$R/sub" "$tmp/plain"
+printf 'cat\n' >"$R/a.txt"; printf 'cat\n' >"$R/sub/b.txt"; printf 'cat\n' >"$R/ignored.txt"; printf 'cat\n' >"$R/.env.sample"
+echo ignored.txt >"$R/.gitignore"
+(cd "$R" && git init -q && git add a.txt sub/b.txt .gitignore .env.sample)
+eq "$(cd "$R" && $GS -l -e cat | tr '\n' ' ')" "a.txt sub/b.txt " "git semgrep: tracked files, not ignored ones or the skip list"
+eq "$(cd "$R/sub" && $GS -l -e cat)" "b.txt" "git semgrep: under the current directory"
+eq "$(cd "$R" && $GS -n -e cat a.txt)" "a.txt:1:cat" "git semgrep: pathspec, file name even for one file"
+code 1 "git semgrep: never stdin" -- sh -c "cd '$R' && echo cat | $GS -e cat -- nothing"
+code 2 "git semgrep: outside a repository" -- sh -c "cd '$tmp/plain' && $GS -e cat"
+# more than execFileSync's default 1 MiB of paths; empty files send nothing
+mkdir "$R/many"
+(cd "$R" && node -e 'for (let i = 0; i < 20000; i++) require("fs").writeFileSync(`many/${"x".repeat(60)}${i}`, "")' && git add many)
+code 1 "git semgrep: over 1 MiB of paths" -- sh -c "cd '$R' && $GS -e cat -- many"
+# SEMGREP_GIT in ./.env does not turn plain semgrep into git semgrep
+printf 'SEMGREP_GIT=1\n' >"$tmp/plain/.env"
+eq "$(cd "$tmp/plain" && echo cat | $E SEMGREP_URL=$base/v1 node "$SG" -e cat)" "cat" "SEMGREP_GIT in .env"
+
 # --help: exit 0, Japanese by locale, lists the options
 code 0 "--help" -- $E LANG=C node ../semgrep.mjs --help
 eq "$($E LANG=C node ../semgrep.mjs -h | head -1 | cut -c1-14)" "usage: semgrep" "-h"

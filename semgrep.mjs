@@ -64,7 +64,7 @@ const { values: opt, positionals: files, tokens } = parseArgs({
 // --help: Japanese when the locale starts with ja, English otherwise
 const HELP_EN = `usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
 grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is omitted.
-As git semgrep, FILE are pathspecs and every tracked file is searched, like git grep.
+As git semgrep, FILE arguments are pathspecs and every tracked file is searched, like git grep.
 
   -e MEANING   lines matching this meaning (several -e are OR'd)
   -Q, --question QUESTION  lines that answer QUESTION, not lines asking it; the same as
@@ -273,13 +273,15 @@ function expand(path) {
 }
 // As git semgrep, FILE arguments are pathspecs and the files are the tracked ones, like git grep. The skip list
 // still applies, since these files were not named one by one. Deleted files, submodules and symlinks are left out.
+const asGit = globalThis.SEMGREP_GIT === true; // set by git-semgrep.mjs
 const lsFiles = () => {
-  try { return execFileSync('git', ['ls-files', '-z', '--', ...files], { encoding: 'utf8' }); } catch { process.exit(2); } // git has said why
+  try { return execFileSync('git', ['ls-files', '-z', '--', ...files], { encoding: 'utf8', maxBuffer: Infinity }); }
+  catch (e) { if (e.status == null) die(`git ls-files: ${e.message}`); process.exit(2); } // git exited non-zero: it has said why
 };
 const gitFiles = () => lsFiles().split('\0')
   .filter(p => p && !p.split('/').some(d => SKIP_DIRS.includes(d)) && !SKIP_FILE.test(p.split('/').at(-1))
     && lstatSync(p, { throwIfNoEntry: false })?.isFile());
-const targets = process.env.SEMGREP_GIT ? gitFiles()
+const targets = asGit ? gitFiles()
   : (files.length ? files : [opt.r ? '.' : '-']).flatMap(f => (f === '-' ? [f] : expand(f)));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let usedTokens = 0, usedCost = 0, requestCount = 0;
@@ -497,7 +499,7 @@ const highlight = (text, rs) => {
 const startNo = (file, k) => (opt.o ? spansOf.get(file)[k - 1][0][0] : k); // -o: the unit where the sentence starts
 
 const after = Number(opt.A ?? opt.C ?? 0), before = Number(opt.B ?? opt.C ?? 0);
-const multi = opt.r || process.env.SEMGREP_GIT || targets.length > 1; // grep -r and git grep prefix file names even for a single file
+const multi = opt.r || asGit || targets.length > 1; // grep -r and git grep prefix file names even for a single file
 let lastPrinted = null; // [file, line number]; used to print -- between context groups
 for (const file of opt.quiet ? [] : targets) {
   if (!sources.has(file)) continue;
