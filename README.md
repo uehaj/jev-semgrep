@@ -14,7 +14,7 @@ and applies a threshold.
 ./semgrep -n -e "customer is angry or frustrated" tickets.txt
 ```
 
-- Zero dependencies. One file, Node.js 20.12+ and `fetch`.
+- Zero dependencies. One file, Node.js 20.16+ and `fetch`.
 - Fast. 30 lines go into one request, requests run 8 at a time. A 210-line file finishes in under a second.
 - Meanings combine with AND / OR / NOT.
 - **Language-agnostic.** The meaning and the text can each be in any language. A Japanese meaning finds French, Russian, Chinese and Korean lines alike. No translation step, same speed, same cost.
@@ -161,7 +161,7 @@ Two ways to use it: as a command-line tool (this section), or as a Claude Code s
 (see [Use it from Claude Code](#use-it-from-claude-code) below). The skill falls back to `npx @uehaj/semgrep`,
 so if you only use it through Claude Code you can skip the install here entirely and just set the API key.
 
-Requires Node.js 20.12 or later. No other dependencies.
+Requires Node.js 20.16 or later. No other dependencies.
 
 ```sh
 npm install -g @uehaj/semgrep
@@ -537,9 +537,11 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                on ambiguous lines, not just speed
   -j N         concurrent requests (default 8)
   -n           print line numbers
+  -z, --null-data  judge NUL-terminated records instead of lines, and print them NUL-terminated (see "Records that span several lines" above)
   --sentence[=HOW] judge each sentence instead of each line; HOW is jev (default) or rules (see "One sentence at a time" above)
   -o           with --sentence, print only the matching sentences
   -p           print each meaning's probability at the end of the line
+  --dedup      judge one line per template and reuse its answer for the rest (see "One line per template" above)
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are
                green at or above the positive threshold, red below the negative one,
