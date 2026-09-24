@@ -119,8 +119,11 @@ repeated queries over a large, fixed corpus a vector index is cheaper and faster
 
 `-e`/`-a`/`-v '/pattern/flags'` (first and last character `/`, JavaScript flags) is matched locally,
 as a plain regex, with no request at all. It prefilters its AND term: only the lines it holds for
-ever ask that term's meanings, so a cheap regex in front of a meaning cuts the bill and the lines it
-rejects are never sent anywhere. Anything that isn't shaped like `/…/flags` is still a meaning, so
+ever ask that term's meanings, so a cheap regex in front of a meaning cuts the bill. A line is sent
+only if some term's regexes all hold for it (a term with no regex holds for every line), so with
+`-e '/re/' -a A -e B` a line without `re` is still sent, asked `B` only. A query of regex terms alone
+sends nothing, except that `--sentence` (`=jev`, the default) still asks Jev where wrapped lines
+break; use `--sentence=rules` to stay offline. Anything that isn't shaped like `/…/flags` is still a meaning, so
 `-e '/etc 以下のファイルを変更している'` (no closing `/`) is unaffected; a meaning that really starts
 and ends with `/` can be written with a leading space to dodge the regex reading.
 

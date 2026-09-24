@@ -60,71 +60,68 @@ z_in | $J -z -e 'the customer is asking for a refund' 2>/dev/null | od -An -c | 
 # --sentence=jev keeps unpunctuated Japanese entries apart, so the refund requests match as they do per line
 [ "$($J -n --sentence -e 'the customer is asking for a refund' corpus.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "14 18 " ]
 
+T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 # -e '/regex/': matched locally, no Jev involved. NOKEY proves it: no key, no .env, still runs.
-NOKEY="env -u TYPESAFE_API_KEY -u SEMGREP_API_KEY -u SEMGREP_URL HOME=/nonexistent-semgrep-test-home"
-[ "$($NOKEY $J -n -e '/ERROR|FATAL/' fixture.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "4 6 13 28 " ]
-[ -z "$(printf 'TIMEOUT here\nfine\n' | $NOKEY $J -e '/timeout/' 2>/dev/null)" ]           # without -i, case matters
-[ "$(printf 'TIMEOUT here\nfine\n' | $NOKEY $J -e '/timeout/i' 2>/dev/null)" = "TIMEOUT here" ]  # flags
-[ "$($NOKEY $J -n -v '/ERROR/' fixture.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 2 3 5 7 8 9 10 11 12 14 15 16 17 18 19 20 21 22 23 24 25 26 27 29 30 " ]
-[ "$($NOKEY $J -n -e '!/ERROR/' fixture.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 2 3 5 7 8 9 10 11 12 14 15 16 17 18 19 20 21 22 23 24 25 26 27 29 30 " ]
-[ "$($NOKEY $J -n -e '/ERROR/' -e '/lookup/' fixture.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "4 6 13 14 28 " ]  # OR
-[ "$($NOKEY $J -n -e '/ERROR/' -a '/timeout/' fixture.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "6 " ]           # AND
-[ "$($NOKEY $J -n -e '/ERROR/' -v '/timeout/' fixture.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "4 13 28 " ]     # AND NOT
+# $NJ skips $J's --env-file (a ../.env would bring the key back), SEMGREP_OPTS= drops the user's defaults.
+NOKEY="env -u TYPESAFE_API_KEY -u SEMGREP_API_KEY -u SEMGREP_URL SEMGREP_OPTS= HOME=/nonexistent-semgrep-test-home"
+NJ="node ../semgrep.mjs"
+[ "$($NOKEY $NJ -n -e '/ERROR|FATAL/' fixture.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "4 6 13 28 " ]
+[ -z "$(printf 'TIMEOUT here\nfine\n' | $NOKEY $NJ -e '/timeout/' 2>/dev/null)" ]           # without -i, case matters
+[ "$(printf 'TIMEOUT here\nfine\n' | $NOKEY $NJ -e '/timeout/i' 2>/dev/null)" = "TIMEOUT here" ]  # flags
+[ "$($NOKEY $NJ -n -v '/ERROR/' fixture.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 2 3 5 7 8 9 10 11 12 14 15 16 17 18 19 20 21 22 23 24 25 26 27 29 30 " ]
+[ "$($NOKEY $NJ -n -e '!/ERROR/' fixture.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 2 3 5 7 8 9 10 11 12 14 15 16 17 18 19 20 21 22 23 24 25 26 27 29 30 " ]
+[ "$($NOKEY $NJ -n -e '/ERROR/' -e '/lookup/' fixture.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "4 6 13 14 28 " ]  # OR
+[ "$($NOKEY $NJ -n -e '/ERROR/' -a '/timeout/' fixture.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "6 " ]           # AND
+[ "$($NOKEY $NJ -n -e '/ERROR/' -v '/timeout/' fixture.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "4 13 28 " ]     # AND NOT
 # a regex with no closing / is still a meaning: with no key this errors on "SEMGREP_API_KEY is not set", a real regex term wouldn't
-$NOKEY $J -e '/etc 以下のファイルを変更している' fixture.txt 2>&1 >/dev/null | grep -qx 'semgrep: SEMGREP_API_KEY is not set. Put it in ./.env or ~/.config/semgrep/.env'
+$NOKEY $NJ -e '/etc 以下のファイルを変更している' fixture.txt 2>&1 >/dev/null | grep -qx 'semgrep: SEMGREP_API_KEY is not set. Put it in ./.env or ~/.config/semgrep/.env'
 # an invalid pattern exits 2, one line, like grep
-if $NOKEY $J -e '/(/' fixture.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 ]; then exit 1; fi
+if $NOKEY $NJ -e '/(/' fixture.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 ]; then exit 1; fi
+[ "$($NOKEY $NJ -e '/(/' fixture.txt 2>&1 | wc -l | tr -d ' ')" = "1" ]
 # $<name> naming no group, and naming a negated regex's group, are errors -- caught before any request
-if $NOKEY $J -e '/(?<t>\d+)/' -a '$<nope>' fixture.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 ]; then exit 1; fi
-if $NOKEY $J -e A -v '/(?<t>\d+)/' -a '$<t>' fixture.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 ]; then exit 1; fi
+if $NOKEY $NJ -e '/(?<t>\d+)/' -a '$<nope>' fixture.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 ]; then exit 1; fi
+if $NOKEY $NJ -e A -v '/(?<t>\d+)/' -a '$<t>' fixture.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 ]; then exit 1; fi
 # so is $1 when only a negated regex has a group 1
-if $NOKEY $J -e '!/(x)/' -a '$1 is valid' fixture.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 ]; then exit 1; fi
+if $NOKEY $NJ -e '!/(x)/' -a '$1 is valid' fixture.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 ]; then exit 1; fi
 # -p over a term whose regex failed: its meaning is 0.00, not a crash (it read the failed match's captures).
 # Nothing is sent: the only line fails /A/. SEMGREP_URL only gets past the missing-key check.
-[ "$(printf 'B\n' | $NOKEY SEMGREP_URL=http://127.0.0.1:1 $J -p -e '/A/' -a 'a meaning' -e '/B/' 2>/dev/null)" = "$(printf 'B\t[0.00 0.00 1.00]')" ]
+[ "$(printf 'B\n' | $NOKEY SEMGREP_URL=http://127.0.0.1:1 $NJ -p -e '/A/' -a 'a meaning' -e '/B/' 2>/dev/null)" = "$(printf 'B\t[0.00 0.00 1.00]')" ]
 # --sentence=rules (no extra Jev calls) and -z apply regex terms per unit
-[ "$($NOKEY $J -n --sentence=rules -e '/mistake/i' prose.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 2 3 " ]
-[ "$(printf 'usage 95%%\0usage 10%%\0' | $NOKEY $J -z -c -e '/usage 9\d%/' 2>/dev/null)" = "1" ]
+[ "$($NOKEY $NJ -n --sentence=rules -e '/mistake/i' prose.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 2 3 " ]
+[ "$(printf 'usage 95%%\0usage 10%%\0' | $NOKEY $NJ -z -c -e '/usage 9\d%/' 2>/dev/null)" = "1" ]
 # -p shows 1.00 / 0.00 for a regex term, no request needed
-[ "$($NOKEY $J -p -e '/ERROR/' fixture.txt 2>/dev/null | grep -c '\[1.00\]')" = "4" ]
-[ "$($NOKEY $J -c -p -t 0 -e '/nope-never-matches/' fixture.txt 2>/dev/null)" = "0" ]
+[ "$($NOKEY $NJ -p -e '/ERROR/' fixture.txt 2>/dev/null | grep -c '\[1.00\]')" = "4" ]
+[ "$(printf 'plain\n' | $NOKEY $NJ -p -v '/ERROR/' 2>/dev/null)" = "$(printf 'plain\t[0.00]')" ]
 
-# With the API, via a local mock that logs each request's questions and answers everything noul:1: exact
-# prefilter and capture behaviour, without real cost or nondeterminism.
-MOCKLOG=/tmp/semgrep-mock.$$.jsonl
-node mock-jev.mjs "$MOCKLOG" > /tmp/semgrep-mockport.$$ 2>/tmp/semgrep-mockerr.$$ &
-MOCKPID=$!
-trap 'kill $MOCKPID 2>/dev/null; rm -f "$MOCKLOG" /tmp/semgrep-mockport.$$ /tmp/semgrep-mockerr.$$' EXIT
-for _ in 1 2 3 4 5; do [ -s /tmp/semgrep-mockport.$$ ] && break; sleep 0.1; done
-MOCKPORT=$(cat /tmp/semgrep-mockport.$$)
-MOCK="env -u TYPESAFE_API_KEY -u SEMGREP_API_KEY SEMGREP_URL=http://127.0.0.1:$MOCKPORT"
+# Nothing is sent where no term can hold: SEMGREP_URL points at a closed port, so any request would fail with exit 2.
+DEAD="$NOKEY SEMGREP_URL=http://127.0.0.1:1 $NJ"
+[ "$(printf 'plain line\n' | $DEAD -c -e '/re/' -a 'anything' 2>/dev/null || echo "exit $?")" = "$(printf '0\nexit 1')" ]  # 1: no match, 2 would be a failed request
+[ "$(printf 'has re in it\n' | $DEAD -c -e '/re/' 2>/dev/null)" = "1" ]
 
-# only units matching /re/ are sent; sent count is exactly the units asked (noul:1 makes every ask a hit)
-[ "$($MOCK $J -c -e '/ERROR/' -a 'anything' fixture.txt 2>/dev/null)" = "4" ]
+# Captures, offline: the expansion function itself ($<name>, $$, $&, $n with two digits or one, $9 with no group).
+node --input-type=module -e "
+const src = (await import('node:fs')).readFileSync('../semgrep.mjs', 'utf8');
+const cut = (a, b) => src.slice(src.indexOf(a), src.indexOf(b));
+const expandCaptures = new Function(cut('const SUBST =', 'for (const term of expr)') + cut('function expandCaptures', '// asksByUnit') + 'return expandCaptures;')();
+const m = /(?<t>\d\d:\d\d) (\w+)/.exec('at 03:12 alert fired');
+const eq = (text, want) => { const got = expandCaptures(text, [m]); if (got !== want) { console.error('expand:', text, '->', got); process.exit(1); } };
+eq('\$<t> が深夜である', '03:12 が深夜である');
+eq('\$\$ \$& \$9', '\$ 03:12 alert \$9');
+eq('\$2 \$20 \$02', 'alert alert0 alert');
+eq('\$100 以上の請求', '03:12' + '00 以上の請求');
+"
 
-# captures expand into the question; $$, $&, and a literal $9 (no such group) all come through
-printf '2026-09-19 03:12 alert fired\n' > /tmp/semgrep-cap.$$.txt
-$MOCK $J -e '/(?<t>\d\d:\d\d)/' -a '$<t> が深夜（0時〜5時）であり、$$ $& $9' /tmp/semgrep-cap.$$.txt >/dev/null 2>&1
-grep -q '03:12 が深夜（0時〜5時）であり、\$ 03:12 \$9' "$MOCKLOG"
-rm -f /tmp/semgrep-cap.$$.txt
-: > "$MOCKLOG"
+# With the API: the stderr summary (printed only to a terminal, hence script(1)) counts the units sent.
+if script --version >/dev/null 2>&1; then onpty() { script -qec "$1" /dev/null </dev/null; }; else onpty() { script -q /dev/null sh -c "$1" </dev/null; }; fi
+sent() { onpty "$J $* 2>&1 >/dev/null" | grep -o '([0-9]* sent)'; }
+[ "$(sent -e "'/ERROR/'" -a "'a network or remote connection failure'" fixture.txt)" = "(4 sent)" ]   # only the 4 ERROR lines
+[ "$(sent -e "'/ERROR/'" -a "'a network or remote connection failure'" -e "'customer is asking for a refund'" fixture.txt)" = "(30 sent)" ]  # the second term has no regex
+# a line without the regex is asked only the other term: A is true of both lines (line 2 alone scores 0.96),
+# yet line 2 does not match through it
+printf 'the invoice was paid on time\nthe weather is sunny today\n' > "$T/ab"
+[ "$($J -n -e '/invoice/' -a 'the line is a complete English sentence' -e 'the line is about cooking' "$T/ab" 2>/dev/null | cut -d: -f1)" = "1" ]
+# the captured value reaches Jev: 03:12 is at night, 14:40 is not, though the meaning's text is the same
+printf '2026-09-19 03:12 alert fired\n2026-09-19 14:40 alert fired\n' > "$T/night"
+[ "$($J -n -e '/(?<t>\d\d:\d\d)/' -a '$<t> is between midnight and 5 a.m.' "$T/night" 2>/dev/null | cut -d: -f1)" = "1" ]
 
-# a unit is asked only the meanings of surviving terms: a non-matching line gets TERMB only, never TERMA
-printf 'has re in it\nplain line\n' > /tmp/semgrep-ab.$$.txt
-$MOCK $J -t 0 -e '/re/' -a TERMA -e TERMB /tmp/semgrep-ab.$$.txt >/dev/null 2>&1
-[ "$(grep -o TERMA "$MOCKLOG" | wc -l | tr -d ' ')" = "1" ]   # only the line containing "re" was asked TERMA
-[ "$(grep -o TERMB "$MOCKLOG" | wc -l | tr -d ' ')" = "2" ]   # TERMB has no regex guard, asked for every line
-rm -f /tmp/semgrep-ab.$$.txt
-: > "$MOCKLOG"
-
-# with only a regex term and no meaning, nothing is ever sent, even reachable via the mock
-printf 'has re in it\n' > /tmp/semgrep-only.$$.txt
-$MOCK $J -e '/re/' /tmp/semgrep-only.$$.txt >/dev/null 2>&1
-[ ! -s "$MOCKLOG" ]
-rm -f /tmp/semgrep-only.$$.txt
-
-kill $MOCKPID 2>/dev/null
-wait $MOCKPID 2>/dev/null || true
-trap - EXIT
-rm -f "$MOCKLOG" /tmp/semgrep-mockport.$$ /tmp/semgrep-mockerr.$$
 echo OK

@@ -8,7 +8,7 @@ import { homedir } from 'node:os';
 import { parseArgs } from 'node:util';
 
 // Errors are one line plus exit code 2, like grep. No stack traces.
-const die = msg => { console.error(`semgrep: ${msg}\nTry 'semgrep --help' for more information.`); process.exit(2); };
+const die = (msg, hint = true) => { console.error(`semgrep: ${msg}${hint ? "\nTry 'semgrep --help' for more information." : ''}`); process.exit(2); };
 process.on('uncaughtException', e => die(e.message));
 
 // Settings come from the environment; the first .env found fills in what the environment lacks.
@@ -222,7 +222,7 @@ const RE_SHAPE = /^\/(.*)\/([dgimsuvy]*)$/s;
 function compileRegex(pattern, flags) {
   let re, probe;
   try { re = new RegExp(pattern, flags); probe = new RegExp(`${pattern}|`, flags).exec(''); }
-  catch (e) { die(`invalid regex '/${pattern}/${flags}': ${e.message}`); }
+  catch (e) { die(`invalid regex '/${pattern}/${flags}': ${e.message}`, false); } // one line, like grep: the pattern is the problem, not the usage
   return { re, names: new Set(Object.keys(probe.groups ?? {})), count: probe.length - 1 };
 }
 const expr = [];
@@ -460,7 +460,7 @@ function expandCaptures(text, matches) {
     if (amp) return whole;
     if (name !== undefined) return named.get(name) ?? '';
     const n = numRef(num, positional.length);
-    return n ? positional[n - 1] + num.slice(String(n).length) : `$${num}`;
+    return n ? positional[n - 1] + (num.length === 2 && +num === n ? '' : num.slice(1)) : `$${num}`; // $02 is group 2; $20 is group 2 then "0"
   });
 }
 // asksByUnit: unit -> Map(expanded meaning text -> probability, null until answered)
