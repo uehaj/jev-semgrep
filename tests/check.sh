@@ -46,7 +46,9 @@ z_in() { printf 'the package arrived\nand I want my money back for it\0the sky i
 z_in | $J -z -e 'the customer is asking for a refund' 2>/dev/null | od -An -c | grep -q '\\0'
 
 # --dedup. The summary line ("… (N sent of M) …") is only printed to a terminal, so run under script(1).
-sent() { script -q /dev/null sh -c "$J --dedup $* 2>&1 >/dev/null" | grep -o '[0-9]* sent of [0-9]*'; }
+# util-linux script answers --version and takes the command with -c; BSD script takes it as arguments.
+if script --version >/dev/null 2>&1; then onpty() { script -qec "$1" /dev/null; }; else onpty() { script -q /dev/null sh -c "$1"; }; fi
+sent() { onpty "$J --dedup $* 2>&1 >/dev/null" | grep -o '[0-9]* sent of [0-9]*'; }
 ids() { printf 'worker request 3fa9c1e27b failed: connection reset\nworker request 88d0e41a5c failed: connection reset\nworker request 0b7f2a9e13 failed: connection reset\nworker started\n'; }
 disk() { printf 'disk usage 95%%\ndisk usage 12%%\ndisk usage 97%%\n'; }
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
@@ -55,6 +57,7 @@ printf 'backup finished at 09:00\nbackup finished at 23:30\nbackup finished at 1
 printf 'fetch /admin/config via https://example.org\nfetch https://example.org via /admin/config\n' > "$T/swap"
 printf 'GET https://example.com/admin/users\nGET https://example.com/public/index\nGET https://evil.example.net/public/index\n' > "$T/url"
 printf 'the same line\nthe same line\nthe same line\n' > "$T/same"
+printf '{"url":"https://example.com/a","status":"failed"}\n{"url":"https://example.com/b","status":"success"}\n' > "$T/json"
 # identical lines are one group whatever the meaning
 [ "$(sent -e "'about cats'" "$T/same")" = "1 sent of 3" ]
 # ids carry no meaning for a failure: the three failures fold into one, and each member gets the answer
@@ -78,6 +81,9 @@ $J --dedup -n -e 'a request failed' "$T/ids" 2>/dev/null | grep -qx '2:worker re
 # (they were one, and the second line took the first one's match)
 [ "$(sent -e "'the line fetches /admin/config from https://example.org'" "$T/swap")" = "2 sent of 2" ]
 [ "$($J --dedup -n -e 'the line fetches /admin/config from https://example.org' "$T/swap" 2>/dev/null | cut -d: -f1)" = "1" ]
+# a URL mask stops at the quote: in jsonl it swallowed the fields after it, and failed and success were one group
+[ "$(sent -e "'the request failed'" "$T/json")" = "2 sent of 2" ]
+[ "$($J --dedup -n -e 'the request failed' "$T/json" 2>/dev/null | cut -d: -f1)" = "1" ]
 # the per-meaning question runs under -j too, and several meanings still combine
 [ "$($J --dedup -j 1 -c -e 'a request failed' -e 'disk usage is above 90%' "$T/ids" "$T/disk" 2>/dev/null | tr '\n' ' ')" = "$T/ids:3 $T/disk:2 " ]
 # empty input asks nothing

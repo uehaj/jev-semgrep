@@ -270,7 +270,7 @@ async function post(state, questions) {
 // Measured on install.log (#19): reusing answers across different values got 2 of 11, 14 of 60 and 22 of 44
 // right for such meanings; the question named the right kinds for all seven meanings tried, at 0.7.
 const MASK = [ // [kind, pattern, placeholder, what Jev is told the kind is]
-  ['url', /https?:\/\/\S+/g, '<url>', 'a URL'],
+  ['url', /https?:\/\/[^\s"'<>]+/g, '<url>', 'a URL'], // stops at quotes: jsonl has no spaces, and \S+ ate the fields after it
   ['path', /(?:\/[\w.@+-]+){2,}/g, '<path>', 'a file path'],
   ['time', /\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b|\b\d{4}-\d\d-\d\d(?:[T ]\d\d:\d\d(?::\d\d(?:\.\d+)?)?)?(?:Z|[+-]\d\d(?::?\d\d)?)?|\b\d{1,2}:\d\d(?::\d\d(?:\.\d+)?)?\b/g, '<time>', 'a date or a time of day'],
   ['hex', /\b(?=[0-9a-f]{7,}\b)(?=[0-9a-f]*[a-f])[0-9a-f]*\d[0-9a-f]*\b/gi, '<hex>', 'a hex id or hash'], // needs a digit and a letter: not words spelled in a-f, not long decimals (sizes, counts)
