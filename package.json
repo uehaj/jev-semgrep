@@ -33,7 +33,8 @@
     "node": ">=20.16"
   },
   "scripts": {
-    "test": "sh tests/check.sh",
+    "test": "sh tests/offline.sh && sh tests/check.sh",
+    "test:offline": "sh tests/offline.sh",
     "judge": "node --no-warnings tests/judge.mts",
     "release": "sh scripts/release.sh"
   }

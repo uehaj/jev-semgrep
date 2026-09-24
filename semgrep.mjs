@@ -529,5 +529,4 @@ if (process.stderr.isTTY && !opt.quiet) {
   console.error(`${matched}/${allLines.length} ${opt.sentence ? 'sentences' : opt.z ? 'records' : 'lines'} (${lines.length} sent), ${requestCount} requests, ${usedTokens} input tokens${cost}`);
 }
 // process.exit() can drop buffered stdout when piped, so set exitCode instead.
-// -q: a match wins over an error, as in grep -q
-process.exitCode = matched && (opt.quiet || !hadError) ? 0 : hadError ? 2 : 1;
+process.exitCode = hadError ? 2 : matched ? 0 : 1; // -q exited 0 at its first match, even after an error
