@@ -41,7 +41,9 @@ code 2 "no meaning" -- $J -n "$F"
 # -Q X is -e "the line answers: X", sent once when both are given
 eq "$($J -n -Q owl "$F" | nums)" "7 " "-Q"
 eq "$($J -n --question owl "$F" | nums)" "7 " "--question"
-eq "$($J -p --color=never -Q owl -e 'the line answers: owl' "$F")" "$(printf 'the line answers: owl\t[0.90]')" "-Q and its -e are one meaning"
+reset
+eq "$($J -p --color=never -Q owl -e 'the line answers: owl' "$F")" "$(printf 'the line answers: owl\t[0.90 0.90]')" "-p: a column per term"
+eq "$(stat asked)" "7" "-Q and its -e are one question per line"
 eq "$($J -n -Q owl -e cat "$F" | nums)" "1 4 7 " "-Q OR -e"
 eq "$($J -n -e owl -v 'the line answers: owl' "$F" | nums)" "8 " "-e owl without the -Q line"
 
@@ -111,6 +113,19 @@ code 2 "-q no match and an unreadable file" -- $J -q -e zebra "$F" "$tmp/none"
 reset; $J -q --chunk 1 -j 1 -e cat "$F"; eq "$(stat count)" "1" "-q stops after the first match"
 reset; $J -q --chunk 1 -j 1 -e zebra "$F" || true; eq "$(stat count)" "7" "-q without a match sends every line"
 reset; $J -q -v cat "$F"; eq "$(stat count)" "0" "-q, a bare -v matches the blank line before any request"
+reset; $J -q -e '/dog/' -e zebra "$F"; eq "$(stat count)" "0" "-q, a regex term matches before any request"
+reset; $J -q --chunk 1 -j 1 -e '/cat/' -a cat "$F"; eq "$(stat count)" "1" "-q stops at the first regex-guarded match"
+code 1 "-Q is never a regex" -- $J -q -Q '/cat/' "$F"
+
+# --dedup with regex terms (#25). The fake scores the pre-question 0.05, so every kind folds; each meaning costs 5 questions.
+printf '%s\n' 'cat 03:12 at 03:12' 'cat 03:12 at 14:40' >"$tmp/cap"
+reset; eq "$($J -n --dedup -e '/ at (?<t>\d\d:\d\d)/' -a 'cat $<t>' "$tmp/cap" | nums)" "1 " "--dedup: a referenced capture splits a template"
+eq "$(stat asked)" "7" "--dedup: one pre-question for the unexpanded meaning, one question per capture value"
+printf '%s\n' 'usage 95% cat' 'usage 10% cat' >"$tmp/use"
+reset; eq "$($J -n --dedup -e '/usage 9\d%/' -e dog "$tmp/use" | nums)" "1 " "--dedup: a regex term is matched per line, not per template"
+eq "$(stat asked)" "6" "--dedup: those two lines are still one group for the meaning"
+reset; eq "$($J -c --dedup -e '/cat/' "$F")" "2" "--dedup, regex terms only"
+eq "$(stat count)" "0" "--dedup, regex terms only: no requests, no pre-question"
 
 # SEMGREP_URL: a compatible endpoint; the key goes there as a bearer token, no key means no header
 reset; $J -e cat "$F" >/dev/null; eq "$(stat auth)" "null" "no key, no authorization header"

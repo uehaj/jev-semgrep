@@ -1,20 +1,21 @@
 // A stand-in for Jev, for tests/offline.sh. A line scores 0.05 unless it contains the meaning verbatim; then it
 // scores 0.9, or N when the line carries "@N" (e.g. "a cat @0.4"). Each request takes 30ms, so -j shows up.
-// GET returns {"count", "max", "auth"}: judging requests so far, most requests in flight at once, the last
+// GET returns {"count", "asked", "max", "auth"}: judging requests and questions so far, most requests in flight at once, the last
 // authorization header; GET /reset also zeroes them. Prints the port it listens on.
 import { createServer } from 'node:http';
 
-let count = 0, inFlight = 0, max = 0, auth = null;
+let count = 0, asked = 0, inFlight = 0, max = 0, auth = null;
 const server = createServer(async (req, res) => {
   if (req.method === 'GET') {
-    res.end(JSON.stringify({ count, max, auth }));
-    if (req.url === '/reset') count = max = 0, auth = null;
+    res.end(JSON.stringify({ count, asked, max, auth }));
+    if (req.url === '/reset') count = asked = max = 0, auth = null;
     return;
   }
   let body = '';
   for await (const c of req) body += c;
   const { state, questions } = JSON.parse(body);
   count++;
+  asked += Object.keys(questions).length;
   max = Math.max(max, ++inFlight);
   auth = req.headers.authorization ?? null;
   await new Promise(r => setTimeout(r, 30));
