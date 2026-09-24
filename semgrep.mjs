@@ -297,8 +297,9 @@ if (opt.dedup && lines.length) {
   const rep = new Map();
   for (const l of lines) {
     // Take the kept values out first, so a folded kind cannot mask them (a time's digits as <num>), and key on them.
+    // Each leaves a numbered mark (a private-use character, which no mask matches) so values stay tied to their place.
     const vals = [];
-    const rest = kept.reduce((s, [, re]) => s.replace(re, v => (vals.push(v), '\0')), l.text);
+    const rest = kept.reduce((s, [, re]) => s.replace(re, v => `\0${String.fromCharCode(0xe000 + vals.push(v))}`), l.text);
     const key = [fold.reduce((s, [, re, to]) => s.replace(re, to), rest), ...vals].join('\0');
     if (!rep.has(key)) rep.set(key, l);
     repOf.set(l, rep.get(key));
