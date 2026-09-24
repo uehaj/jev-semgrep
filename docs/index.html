@@ -64,7 +64,7 @@ h1 .w{display:inline-block;background:linear-gradient(90deg,var(--accent),#66d9e
 .body{display:flex;gap:18px;align-items:flex-start}.main{flex:1;min-width:0}
 .side{display:none;flex:0 0 44%;background:#181825;border:1px solid #313244;border-radius:10px;padding:12px 14px;font:.85rem/1.5 system-ui;color:#a6adc8;animation:slide .6s both}
 .side.on{display:block}.side p{margin:0 0 8px}.side table{border-collapse:collapse;width:100%;font:12.5px/1.5 var(--mono)}
-.side td{padding:3px 0;vertical-align:top}.side td:last-child{color:var(--yellow);text-align:right;white-space:nowrap;padding-left:10px;font-family:system-ui}
+.side td{padding:3px 0;vertical-align:top}.side td+td{text-align:right;white-space:nowrap;padding-left:10px;font-family:system-ui}.side td:nth-child(2){color:var(--yellow)}.side td.ok{color:var(--green)}.side td.ng{color:var(--red)}
 .side code{color:var(--t-fg)}.side .q{color:var(--green)}
 @keyframes slide{from{opacity:0;transform:translateX(24px)}}
 @media (max-width:760px){.body{flex-direction:column}.side{flex-basis:auto;width:100%}}
@@ -132,7 +132,7 @@ footer{padding:32px 0 56px;color:var(--mute);font-size:.9rem;text-align:center;b
       <div class="chap" id="chap"></div>
     </div>
   </div>
-  <p style="text-align:center;color:var(--mute);font-size:.85rem">Outputs are real runs, copied from the <a href="https://github.com/uehaj/jev-semgrep#readme">README</a> and open pull requests. Scenes marked ★ <span class="new" style="vertical-align:1px">coming</span> are not released yet; the two regex scenes (issue #25) show what its spec requires: the same lines as <code>grep -E</code>, and the questions each line would be sent with.</p>
+  <p style="text-align:center;color:var(--mute);font-size:.85rem">Outputs are real runs, copied from the <a href="https://github.com/uehaj/jev-semgrep#readme">README</a> and open pull requests. Scenes marked ★ <span class="new" style="vertical-align:1px">coming</span> are not released yet; the two regex scenes (PR #30) show what its spec requires: the same lines as <code>grep -E</code>, and the questions each line would be sent with.</p>
 
   <section>
     <h2>Why it is different</h2>
@@ -142,7 +142,7 @@ footer{padding:32px 0 56px;color:var(--mute);font-size:.9rem;text-align:center;b
       <div class="card"><h3>🧮 Real booleans</h3><p>Each meaning yields an independent probability, so AND / OR / NOT are plain boolean operations. One threshold (0.5) works across queries.</p></div>
       <div class="card"><h3>📦 Zero dependencies</h3><p>One file, Node.js 20.12+ and <code>fetch</code>. 30 lines per request, 8 requests in parallel. No index to build.</p></div>
       <div class="card"><h3>✂️ Lines, sentences, records</h3><p><code>--sentence</code> finds sentences across line breaks and, with <code>--color</code>, colors just the matching sentence inside a line; <code>-z</code> judges NUL-terminated records like <code>git log -z</code>.</p></div>
-      <div class="card"><h3>🎯 Intent grep <span class="new card-b">coming</span></h3><p><code>--i-want-to-know</code> finds lines that <em>answer</em> a need — including the denial — and skips lines that merely ask.</p></div>
+      <div class="card"><h3>🎯 Intent grep <span class="new card-b">coming</span></h3><p><code>-Q</code> / <code>--question</code> finds lines that <em>answer</em> a question — including the denial — and skips lines that merely ask. <code>-q</code> stops at the first match, like <code>grep -q</code>.</p></div>
       <div class="card"><h3>🔣 Regex terms <span class="new card-b">coming</span></h3><p><code>-e '/ERROR|FATAL/'</code> runs locally for free, prefilters what Jev sees, and hands captures to meanings as <code>$&lt;name&gt;</code>: <code>-a '$&lt;time&gt; is at night'</code> asks each line about its own time.</p></div>
       <div class="card"><h3>🗜️ One request per template <span class="new card-b">coming</span></h3><p><code>--dedup</code> folds machine logs by skeleton: a 43,071-line system log becomes 550 templates, 1.2% of the bytes.</p></div>
       <div class="card"><h3>🔑 Any endpoint</h3><p>TypeSafe by default; OpenRouter, Vercel AI Gateway or any server that speaks <code>POST /v1/systemone</code> via <code>SEMGREP_URL</code>.</p></div>
@@ -187,27 +187,24 @@ const S = [
    [11,"환불해 주세요. 제품이 고장났어요.",.97,1],[12,"감사합니다, 문제가 해결되었어요.",null,0],
    [13,"Le serveur ne répond plus, connexion refusée sur le port 443.",null,0],[14,"Сервер недоступен: тайм-аут соединения с базой данных.",null,0]]},
  {h:"Propositions, not topics",
-  c:"All six lines are “about a refund”. Only two are a customer asking for one. Vector search sees six neighbours; Jev sees two true statements.",
-  cmd:'semgrep -n -p -t 0 -e "customer is asking for a refund" tests/contrast.txt',bars:1,
-  rows:[[1,"返金してほしい。商品が壊れていた",.98,1],[2,"返金処理が完了しましたのでご確認ください",.10,0],[3,"当社の返金ポリシーは購入後30日以内です",.10,0],
-   [4,"The manager denied the refund request yesterday",.17,0],[5,"I demand a full refund immediately",.94,1],[6,"Refunds are processed within 5 business days",.08,0]],
+  c:"Six of these lines are “about a refund”. Only two are a customer asking for one. Vector search sees six neighbours; Jev sees two true statements.",
+  cmd:'semgrep -n -p -t 0 -e "customer is asking for a refund" tests/contrast.en.txt',bars:1,
+  rows:[[1, "I want a refund. The item was broken.", 0.99, 1], [2, "The refund has been processed. Please check your account.", 0.11, 0], [3, "Our refund policy is within 30 days of purchase.", 0.09, 0], [4, "The manager denied the refund request yesterday", 0.17, 0], [5, "I demand a full refund immediately", 0.93, 1], [6, "Refunds are processed within 5 business days", 0.07, 0], [7, "The support agent got angry and hung up the phone.", 0.05, 0], [8, "The customer got angry and hung up the phone.", 0.06, 0]],
   note:"Threshold 0.5 — calibrated probabilities, no per-query tuning."},
- {h:"Answers, not echoes",pre:"PR #28",
-  c:"--i-want-to-know (-k) asks whether a line answers an information need. Asking the question answers nothing; for a yes/no need, the denial answers it too.",
-  cmd:'semgrep -n --i-want-to-know "whether the server is down" tests/intent.txt',
+ {h:"Answers, not echoes",pre:"main",
+  c:"-Q / --question finds lines that answer a question. Asking the question answers nothing; for a yes/no question, the denial answers it too.",
+  cmd:'semgrep -n --question "whether the server is down" tests/intent.txt',
   rows:[[5,"The server is down.",null,1],[6,"The server is healthy and responding normally.",null,1],[7,"Is the server down?",null,0],[8,"The server room felt warm today.",null,0]],
-  note:"2/17 lines (17 sent), 1 requests, 1070 input tokens, ~$0.000045",
-  side:'<p>The argument reads as the object of “know”, and its grammar already says what kind of answer is wanted:</p><table>'+
-   [["the cat\'s name","a fact"],["whether the server is down","yes / no"],["why the job failed","a reason"],["how to get a refund","a method"]]
-   .map(([q,k])=>'<tr><td><code>--i-want-to-know <span class="q">"'+q+'"</span></code></td><td>'+k+'</td></tr>').join("")+'</table>'},
+  note:"2/17 lines (17 sent), 1 requests, 1087 input tokens, ~$0.000046",
+  side:'<p>The question’s grammar already says what kind of answer is wanted. Measured on tests/intent.txt: a line that answers vs a line that asks.</p><table><tr><td></td><td>kind</td><td>answers</td><td>asks</td></tr>'+
+   [["the cat's name", "a fact", 0.83, 0.05], ["whether the server is down", "yes / no", 0.86, 0.1], ["why the job failed", "a reason", 0.93, 0.12], ["how to get a refund", "a method", 0.96, 0.16]]
+   .map(([q,k,a,b])=>'<tr><td><code>-Q <span class="q">"'+q+'"</span></code></td><td>'+k+'</td><td class="ok">'+a.toFixed(2)+'</td><td class="ng">'+b.toFixed(2)+'</td></tr>').join("")+'</table>'},
  {h:"AND / NOT are just booleans",
   c:"Someone is angry AND it is the customer, not the staff. Lines 7 and 8 differ only in who hung up — their embeddings are nearly identical.",
-  cmd:'semgrep -n -e "someone is angry" -a "the customer, not the staff, is the one acting" tests/contrast.txt',
-  rows:[[1,"返金してほしい。商品が壊れていた",null,0],[2,"返金処理が完了しましたのでご確認ください",null,0],[3,"当社の返金ポリシーは購入後30日以内です",null,0],
-   [4,"The manager denied the refund request yesterday",null,0],[5,"I demand a full refund immediately",null,1],[6,"Refunds are processed within 5 business days",null,0],
-   [7,"カスタマーサポート担当者が怒って電話を切った",null,0],[8,"顧客が怒って電話を切った",null,1]],
-  note:"Line 7 (the support agent hung up angrily) scores 0.05 on the second meaning and is excluded."},
- {h:"Regex where regex is enough",pre:"issue #25",
+  cmd:'semgrep -n -e "someone is angry" -a "the customer, not the staff, is the one acting" tests/contrast.en.txt',
+  rows:[[1, "I want a refund. The item was broken.", null, 0], [2, "The refund has been processed. Please check your account.", null, 0], [3, "Our refund policy is within 30 days of purchase.", null, 0], [4, "The manager denied the refund request yesterday", null, 0], [5, "I demand a full refund immediately", null, 1], [6, "Refunds are processed within 5 business days", null, 0], [7, "The support agent got angry and hung up the phone.", null, 0], [8, "The customer got angry and hung up the phone.", null, 1]],
+  note:"Line 7, where the support agent hung up angrily, fails the second meaning and is excluded."},
+ {h:"Regex where regex is enough",pre:"PR #30",
   c:"A meaning written as /…/flags is matched locally, with no request. Combined with -a, only the lines it matches are sent to Jev, and named groups flow into the meaning as $<name>.",
   cmd:"semgrep -n -e '/ERROR|FATAL/' tests/corpus.txt",
   rows:[[1,"2026-09-19 08:00:01 INFO  server started on port 8080",null,0],[2,"2026-09-19 08:00:02 INFO  connected to database primary",null,0],[3,"2026-09-19 08:01:15 WARN  slow query took 3200ms: SELECT * FROM orders",null,0],
@@ -217,19 +214,18 @@ const S = [
    [10,"2026-09-19 08:10:45 INFO  DNS lookup succeeded on retry",null,0],[11,"2026-09-19 09:00:00 ERROR SSL handshake failed: certificate expired",null,1],
    [12,"2026-09-19 09:30:00 FATAL out of memory: killed process 4412 (java)",null,1]],
   note:"0 requests — same lines as grep -E."},
- {h:"Captures flow into meanings",pre:"issue #25",
-  c:"Named groups of a regex term are handed to the meanings of the same AND term — -e, -a, -v and --i-want-to-know alike. Each line is sent with its own question; lines the regex misses are never sent.",
+ {h:"Captures flow into meanings",pre:"PR #30",
+  c:"Named groups of a regex term are handed to the meanings of the same AND term — -e, -a, -v and -Q alike. Each line is sent with its own question; lines the regex misses are never sent.",
   cmd:"semgrep -n -e '/(?<time>\\d\\d:\\d\\d):\\d\\d (ERROR|FATAL)/' -a '$<time> is outside business hours (09:00–18:00)' tests/corpus.txt",ask:1,
   rows:[[1, "2026-09-19 08:00:01 INFO  server started on port 8080", null, 0], [2, "2026-09-19 08:00:02 INFO  connected to database primary", null, 0], [3, "2026-09-19 08:01:15 WARN  slow query took 3200ms: SELECT * FROM orders", null, 0], [4, "2026-09-19 <u>08:02:30 ERROR</u> connection reset by peer while calling payment-gateway", null, 1, "08:02 is outside business hours (09:00–18:00)"], [5, "2026-09-19 08:02:31 INFO  retrying payment-gateway request (attempt 2/3)", null, 0], [6, "2026-09-19 <u>08:02:35 ERROR</u> timeout after 5000ms waiting for payment-gateway", null, 1, "08:02 is outside business hours (09:00–18:00)"], [7, "2026-09-19 08:05:00 INFO  scheduled backup completed successfully", null, 0], [8, "2026-09-19 08:06:12 WARN  disk usage at 91% on /var/lib/postgresql", null, 0], [9, "2026-09-19 <u>08:10:44 ERROR</u> DNS lookup failed for api.example.com", null, 1, "08:10 is outside business hours (09:00–18:00)"], [10, "2026-09-19 08:10:45 INFO  DNS lookup succeeded on retry", null, 0], [11, "2026-09-19 <u>09:00:00 ERROR</u> SSL handshake failed: certificate expired", null, 1, "09:00 is outside business hours (09:00–18:00)"], [12, "2026-09-19 <u>09:30:00 FATAL</u> out of memory: killed process 4412 (java)", null, 1, "09:30 is outside business hours (09:00–18:00)"]],
   note:"5 of 12 lines sent, each with its own expanded question. $<name> survives double quotes in sh / bash / zsh; $1 does not."},
  {h:"English meaning, Japanese hits",
-  c:"None of these lines contain “angry” or “frustrated”. Two of them are in Japanese. 51 lines of logs, tickets, code and small talk — 5 hits, 2 requests.",
+  c:"None of these lines contain “angry” or “frustrated”. Two of them are in Japanese. 51 lines of logs, tickets, code and small talk — 5 hits.",
   cmd:'semgrep -n -e "customer is angry or frustrated" tests/corpus.txt',
   rows:[[14,"ユーザー山田さんからの問い合わせ: 返金してほしい、商品が壊れていた",null,1],[16,"ユーザー佐藤さんからの問い合わせ: 注文した覚えのない請求が来ています。至急確認してください",null,1],
    [18,"I want my money back. The item arrived broken and customer service ignored me.",null,1],[21,"Your product ruined my weekend. Never buying from you again.",null,1],
-   [23,"This is the third time I'm writing. Nobody has replied to my previous emails.",null,1]],
-  note:"5/51 lines, 2 requests, 3225 input tokens"},
- {h:"Sentences across line breaks",
+   [23,"This is the third time I'm writing. Nobody has replied to my previous emails.",null,1]],},
+ {h:"Sentences across line breaks",pre:"main",
   c:"--sentence finds sentences across line breaks — English and Japanese alike — and judges each one. With --color, only the matching sentence inside a line changes color.",
   cmd:'semgrep -n --color --sentence -e "the author admits they made a mistake" -e "customer is asking for a refund" tests/prose.txt',
   rows:[[1,"<m>I should have checked the input</m>",null,1],[2,"<m>before shipping, and that was my</m>",null,1],[3,"<m>mistake.</m> Next time I will add a test",null,1],
@@ -273,7 +269,7 @@ function reveal(d,[,,p,k],drop){
 async function play(i){
   const t=++token, s=S[i];
   [...$("chap").children].forEach((b,j)=>{b.classList.toggle("done",j<i);b.classList.toggle("cur-c",j===i);b.firstChild.style.width=j===i?"0":""});
-  $("sh").innerHTML=esc(s.h)+(s.pre?'<span class="new">coming · '+s.pre+"</span>":""); $("sc").textContent=s.c; $("ttl").textContent="semgrep — "+(i+1)+"/"+S.length;
+  $("sh").innerHTML=esc(s.h)+(s.pre?'<span class="new">coming · '+(s.pre==="main"?"merged, next release":s.pre)+"</span>":""); $("sc").textContent=s.c; $("ttl").textContent="semgrep — "+(i+1)+"/"+S.length;
   $("rows").innerHTML=""; $("sents").innerHTML=""; $("side").className="side"; $("side").innerHTML=s.side||""; $("note").className="note"; $("note").textContent=s.note||"";
   const els=s.rows.map(r=>row(r,s.bars)); $("rows").append(...els);
   if(still){ (s.sent||[]).forEach(x=>chip(x,s.rows)); $("cmd").innerHTML='<span class="ps">$ </span>'+esc(s.cmd); els.forEach((d,j)=>reveal(d,s.rows[j],!s.bars&&!s.rows[j][3])); $("note").className="note on"; s.side&&($("side").className="side on"); return; }
