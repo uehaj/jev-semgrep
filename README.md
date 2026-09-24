@@ -78,16 +78,20 @@ Jev reads the line and the question together (a cross-encoder shape), so who did
 "asked for" versus "already done" all change the answer. An embedding of the line is fixed before it
 ever sees your query, so it can only measure topical closeness.
 
-All six lines below are "about a refund". Only two are a customer asking for one:
+All eight lines below are "about a refund" (the same contrast as `tests/contrast.txt`, translated to
+English as `tests/contrast.en.txt` — see [Search across languages](#search-across-languages) above for
+the case where the meaning and the text differ in language). Only two are a customer asking for one:
 
 ```sh
-$ ./semgrep -n -p -t 0 -e "customer is asking for a refund" tests/contrast.txt
-1:返金してほしい。商品が壊れていた	[0.98]
-2:返金処理が完了しましたのでご確認ください	[0.10]
-3:当社の返金ポリシーは購入後30日以内です	[0.10]
+$ ./semgrep -n -p -t 0 -e "customer is asking for a refund" tests/contrast.en.txt
+1:I want a refund. The item was broken.	[0.99]
+2:The refund has been processed. Please check your account.	[0.11]
+3:Our refund policy is within 30 days of purchase.	[0.09]
 4:The manager denied the refund request yesterday	[0.17]
-5:I demand a full refund immediately	[0.94]
-6:Refunds are processed within 5 business days	[0.08]
+5:I demand a full refund immediately	[0.93]
+6:Refunds are processed within 5 business days	[0.07]
+7:The support agent got angry and hung up the phone.	[0.05]
+8:The customer got angry and hung up the phone.	[0.06]
 ```
 
 Because each meaning yields an independent probability, **logical AND and NOT are plain boolean
@@ -95,25 +99,61 @@ operations**, not a trick with set differences or "negative queries":
 
 ```sh
 # about a refund, but NOT a customer asking for one → completed, policy, denied, timelines
-$ ./semgrep -n -e "about a refund" -v "the customer is asking for a refund" tests/contrast.txt
-2:返金処理が完了しましたのでご確認ください
-3:当社の返金ポリシーは購入後30日以内です
+$ ./semgrep -n -e "about a refund" -v "the customer is asking for a refund" tests/contrast.en.txt
+2:The refund has been processed. Please check your account.
+3:Our refund policy is within 30 days of purchase.
 4:The manager denied the refund request yesterday
 6:Refunds are processed within 5 business days
 
 # angry AND it is the customer, not the staff
-$ ./semgrep -n -e "someone is angry" -a "the customer, not the staff, is the one acting" tests/contrast.txt
+$ ./semgrep -n -e "someone is angry" -a "the customer, not the staff, is the one acting" tests/contrast.en.txt
 5:I demand a full refund immediately
-8:顧客が怒って電話を切った
+8:The customer got angry and hung up the phone.
 ```
 
-Line 7, `カスタマーサポート担当者が怒って電話を切った` (the *support agent* hung up angrily), scores 0.05
-on the second meaning and is excluded. Cosine similarity between lines 7 and 8 is close to 1.
+Line 7, `The support agent got angry and hung up the phone.`, scores 0.05 on the second meaning and is
+excluded, even though it differs from line 8 by one word (*support agent* vs. *customer*) — wording an
+embedding would place right next to line 8's. (We could not reproduce a cosine-similarity number for
+this pair: no embedding-model access was available in this environment, and no prior measurement script
+exists in the repository or its history to rerun. The argument stands on the wording alone: an embedding
+of line 7 has no way to see that "support agent" changes who the sentence is about.)
 
 Two more practical consequences. The probabilities are calibrated, so one threshold (0.5) works across
 queries, where cosine scores need top-k or per-query tuning. And there is no index to build: semgrep reads
 the files in front of you. The flip side is that every query pays for the whole corpus again, so for
 repeated queries over a large, fixed corpus a vector index is cheaper and faster.
+
+## Regex terms
+
+`-e`/`-a`/`-v '/pattern/flags'` (first and last character `/`, JavaScript flags) is matched locally,
+as a plain regex, with no request at all. It prefilters its AND term: only the lines it holds for
+ever ask that term's meanings, so a cheap regex in front of a meaning cuts the bill. A line is sent
+only if some term's regexes all hold for it (a term with no regex holds for every line), so with
+`-e '/re/' -a A -e B` a line without `re` is still sent, asked `B` only. A query of regex terms alone
+sends nothing, except that `--sentence` (`=jev`, the default) still asks Jev where wrapped lines
+break; use `--sentence=rules` to stay offline. Anything that isn't shaped like `/…/flags` is still a meaning, so
+`-e '/etc 以下のファイルを変更している'` (no closing `/`) is unaffected; a meaning that really starts
+and ends with `/` can be written with a leading space to dodge the regex reading.
+
+```sh
+$ ./semgrep -e '/ERROR|FATAL/' app.log                               # no requests at all
+$ ./semgrep -e '/timeout/i' -a '顧客に影響が出ている' app.log         # only lines with "timeout" go to Jev
+```
+
+A regex's named and numbered groups pass to the other meanings of the *same* AND term as
+`$<name>`, `$1`-`$99`, `$&`, `$$` — ECMAScript's replacement-pattern syntax
+(`String.prototype.replace`'s `GetSubstitution`), with one deviation: `$<name>` naming no group is
+an error rather than an empty string (so is a reference to a negated regex's group). A `$n` naming
+no group stays literal, as in ECMAScript, so `$100 以上の請求` is unaffected.
+
+```sh
+$ ./semgrep -e '/(?<date>\d{4}-\d\d-\d\d) (?<time>\d\d:\d\d)/' \
+            -a '$<time> が深夜（0時〜5時）であり、$<date> が週末である' app.log
+#   2026-09-19 03:12 ... → asks "03:12 が深夜（0時〜5時）であり、2026-09-19 が週末である"
+```
+
+Prefer `$<name>` and single quotes: `$<name>` survives double quotes in sh/bash/zsh; `$1`, `$time`
+and `${time}` don't (the shell expands them itself). `-p` prints `1.00`/`0.00` for a regex term.
 
 ## Install
 
@@ -163,7 +203,7 @@ A script calling semgrep would pick these up too (grep dropped `GREP_OPTIONS` fo
 
 The API is configured by exactly three settings: `SEMGREP_API_KEY` (or `TYPESAFE_API_KEY`), `SEMGREP_URL` and `SEMGREP_MODEL`.
 Any endpoint that speaks TypeSafe's `POST /v1/systemone` works. The key is sent to `SEMGREP_URL` as is, so set the
-two together.
+two together. `--model=ID` on the command line overrides `SEMGREP_MODEL`.
 
 ```sh
 # OpenRouter
@@ -185,31 +225,52 @@ or run it in place with `node semgrep.mjs ...`.
 ## Examples
 
 All examples run against [`tests/corpus.txt`](tests/corpus.txt), a 51-line mix of server logs,
-support tickets in English and Japanese, source code, SQL and small talk.
+support tickets in English and Japanese, source code, SQL and small talk. Where a Japanese line would
+otherwise show up in the output below, this section instead uses [`tests/corpus.en.txt`](tests/corpus.en.txt),
+the same 51 lines with the Japanese ones translated to English — the cross-language behaviour itself is
+shown once, in [Search across languages](#search-across-languages) above.
 
 ### Find lines by a concept, in any language
 
 ```sh
-$ ./semgrep -n -e "customer is angry or frustrated" tests/corpus.txt
-14:ユーザー山田さんからの問い合わせ: 返金してほしい、商品が壊れていた
-16:ユーザー佐藤さんからの問い合わせ: 注文した覚えのない請求が来ています。至急確認してください
+$ ./semgrep -n -e "customer is angry or frustrated" tests/corpus.en.txt
+14:Inquiry from user Yamada: I want a refund, the item was broken
+16:Inquiry from user Sato: I'm being charged for an order I never placed, it looks like fraud, please check urgently
 18:I want my money back. The item arrived broken and customer service ignored me.
 21:Your product ruined my weekend. Never buying from you again.
 23:This is the third time I'm writing. Nobody has replied to my previous emails.
-5/51 lines, 2 requests, 3225 input tokens
+5/51 lines (51 sent), 2 requests, 3054 input tokens, ~$0.000128
 ```
 
-None of these lines contain the words "angry" or "frustrated". The Japanese lines were found by an English meaning.
+None of these lines contain the words "angry" or "frustrated".
+
+### Lines that answer a question (`-Q`)
+
+`-e` asks whether a line states a meaning. `-Q QUESTION` (`--question`) finds lines that answer it instead.
+A line that *asks* the question is close to it in meaning but answers nothing, and for a yes/no question
+a line that *denies* it still answers it:
+
+```sh
+$ ./semgrep -n -Q "whether the server is down" tests/intent.txt
+5:The server is down.
+6:The server is healthy and responding normally.
+2/17 lines (17 sent), 1 requests, 1087 input tokens, ~$0.000046
+```
+
+Both the confirming line and the denying line match: each settles whether the server is down. `Is the
+server down?` does not match, because asking is not answering; `-e "asking whether the server is down"`
+would match it instead. `-Q X` is shorthand for `-e "the line answers: X"`, so it combines with `-a` / `-v`
+/ `!` and OR's with other terms exactly like `-e`.
 
 ### OR: two meanings, and see the probabilities with `-p`
 
 ```sh
-$ ./semgrep -n -p -e "返金の要求" -e "配送先の変更依頼" tests/corpus.txt
-14:ユーザー山田さんからの問い合わせ: 返金してほしい、商品が壊れていた	[0.97 0.02]
-17:ユーザー高橋さんからの問い合わせ: 配送先の住所を変更したいのですが	[0.01 0.96]
+$ ./semgrep -n -p -e "customer is asking for a refund" -e "delivery address change request" tests/corpus.en.txt
+14:Inquiry from user Yamada: I want a refund, the item was broken	[0.99 0.01]
+17:Inquiry from user Takahashi: I'd like to change the delivery address	[0.01 0.99]
 18:I want my money back. The item arrived broken and customer service ignored me.	[0.96 0.01]
-22:Can I change the delivery address for order #8821?	[0.02 0.96]
-4/51 lines, 2 requests, 4602 input tokens
+22:Can I change the delivery address for order #8821?	[0.02 0.99]
+4/51 lines (51 sent), 2 requests, 4275 input tokens, ~$0.000180
 ```
 
 The bracket shows one probability per meaning, in the order given. Use it to pick a threshold.
@@ -238,11 +299,11 @@ Line 5, `retrying payment-gateway request (attempt 2/3)`, is a network failure b
 ### Mixed: (finance AND negative) OR weather
 
 ```sh
-$ ./semgrep -n -e "about economy, finance or markets" -a "the news is negative or a decline" -e "about weather" tests/corpus.txt
-36:今日の天気は晴れ、最高気温は28度です
+$ ./semgrep -n -e "about economy, finance or markets" -a "the news is negative or a decline" -e "about weather" tests/corpus.en.txt
+36:Today's weather is sunny, high of 28 degrees
 43:Stock prices fell 3% after the earnings report missed expectations.
-48:明日は雨の予報なので傘を持っていきます
-3/51 lines, 2 requests, 5673 input tokens
+48:Tomorrow's forecast is rain so I'll bring an umbrella
+3/51 lines (51 sent), 2 requests, 5499 input tokens, ~$0.000231
 ```
 
 `The central bank raised interest rates` is about finance but not a decline, so it is out.
@@ -250,13 +311,13 @@ $ ./semgrep -n -e "about economy, finance or markets" -a "the news is negative o
 ### Strictness presets
 
 ```sh
-$ ./semgrep --level strict -n -e "a security risk or dangerous destructive operation" tests/corpus.txt
+$ ./semgrep --level strict -n -e "a security risk or dangerous destructive operation" tests/corpus.en.txt
 33:DROP TABLE sessions;
 49:API keys must never be committed to the repository.
 
-$ ./semgrep --level loose -n -e "a security risk or dangerous destructive operation" tests/corpus.txt
+$ ./semgrep --level loose -n -e "a security risk or dangerous destructive operation" tests/corpus.en.txt
 11:2026-09-19 09:00:00 ERROR SSL handshake failed: certificate expired
-16:ユーザー佐藤さんからの問い合わせ: 注文した覚えのない請求が来ています。至急確認してください
+16:Inquiry from user Sato: I'm being charged for an order I never placed, it looks like fraud, please check urgently
 33:DROP TABLE sessions;
 49:API keys must never be committed to the repository.
 ```
@@ -266,13 +327,13 @@ $ ./semgrep --level loose -n -e "a security risk or dangerous destructive operat
 ### Recursive search and file names only
 
 ```sh
-$ ./semgrep -r -n -e "customer is asking for a refund" docs/
-docs/tickets/a.txt:7:ユーザー山田さんからの問い合わせ: 返金してほしい、商品が壊れていた
-docs/tickets/sub/b.txt:1:The customer wants a refund for the broken lamp.
+$ ./semgrep -r -n -e "customer is asking for a refund" tests/tickets/
+tests/tickets/a.txt:7:Ticket #16: I want a refund, the item was broken.
+tests/tickets/sub/b.txt:1:The customer wants a refund for the broken lamp.
 
-$ ./semgrep -rl -e "customer is asking for a refund" docs/
-docs/tickets/a.txt
-docs/tickets/sub/b.txt
+$ ./semgrep -rl -e "customer is asking for a refund" tests/tickets/
+tests/tickets/a.txt
+tests/tickets/sub/b.txt
 ```
 
 `-r` walks directories in sorted order and skips `.git`, `node_modules`, `.ssh`, `.aws`, `.gnupg`, binary files
@@ -412,7 +473,7 @@ Then, inside Claude Code:
 
 ```
 /uehaj:semgrep customer is asking for a refund tickets/*.txt
-/uehaj:semgrep 未テストのまま入った修正 git log --oneline -200
+/uehaj:semgrep a fix that shipped without a test git log --oneline -200
 ```
 
 Claude Code installs plugins, not single skills. If you want just this one skill, the
@@ -429,13 +490,15 @@ The API key and endpoint are read the same way as on the command line (`SEMGREP_
 ## Usage
 
 ```
-usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
+usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
 
   -e MEANING   lines matching this meaning (several -e are OR'd)
-  -a MEANING   AND onto the preceding -e term.      -e A -a B -e C  =  (A and B) or C
-  -v MEANING   AND NOT onto the preceding -e term.  -e A -v B       =  A and not B
+  -Q, --question QUESTION  lines that answer QUESTION, not lines asking it; the same as
+               -e "the line answers: QUESTION" (see "Lines that answer a question" above)
+  -a MEANING   AND onto the preceding -e/-Q term.      -e A -a B -e C  =  (A and B) or C
+  -v MEANING   AND NOT onto the preceding -e/-Q term.  -e A -v B       =  A and not B
                At the front it is a bare negation.  -v B            =  not B  (like grep -v)
-  !MEANING     a leading ! negates just that meaning, in -e / -a / -v alike
+  !MEANING     a leading ! negates just that meaning, in -e / -Q / -a / -v alike
                -e A -e '!B'  =  A or not B.   -a '!C' is the same as -v C
   --level=LEVEL strictness preset, sets both thresholds (default normal)
                  loose  : -t 0.3 -T 0.7  catch more, accept some noise
@@ -451,6 +514,7 @@ usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
   -B NUM       print NUM lines of leading context before each match
   -C NUM       print NUM lines of context before and after (-A NUM -B NUM)
   -c           print only a count of matching lines per file (like grep -c)
+  -q, --quiet  print nothing, stop at the first match; exit 0 on a match, even after an error (like grep -q)
   --chunk=LINES lines per request (default 30)
                Lines in one request are each other's context, so a small chunk changes verdicts
                on ambiguous lines, not just speed

@@ -12,7 +12,7 @@ const files = args.filter(a => !a.startsWith('--keep='));
 if (!files.length) { console.error('usage: dedup-measure.mjs [--keep=num,time,...] FILE...'); process.exit(2); }
 
 const src = readFileSync(new URL('../semgrep.mjs', import.meta.url), 'utf8');
-const { MASK, templateKey } = new Function(`${src.slice(src.indexOf('const DATE ='), src.indexOf('const repOf ='))}return { MASK, templateKey };`)();
+const { MASK, templateKey } = new Function(`${src.slice(src.indexOf('const DATE ='), src.indexOf('// Regex terms are never folded'))}return { MASK, templateKey };`)();
 const bad = keep.filter(k => !MASK.some(([kind]) => kind === k));
 if (bad.length) { console.error(`unknown kind: ${bad.join(', ')} (kinds: ${MASK.map(([k]) => k).join(', ')})`); process.exit(2); }
 const kept = MASK.filter(([k]) => keep.includes(k)), fold = MASK.filter(([k]) => !keep.includes(k));

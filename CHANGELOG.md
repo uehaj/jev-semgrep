@@ -6,6 +6,13 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
+- `--model=ID`: the model id on the command line, overriding `SEMGREP_MODEL`. Also allowed in `SEMGREP_OPTS`.
+- `-Q`, `--question QUESTION`: matches lines that answer the question, not lines asking it. Shorthand for
+  `-e "the line answers: QUESTION"`. "the cat's name" matches a line stating it, not a line asking for it;
+  for a yes/no question ("whether the server is down") a line that denies it still answers it and matches.
+  Closes #22.
+- `-q`, `--quiet`: print nothing and report only through the exit status, like `grep -q`. Stops at the first
+  match, so the remaining lines are not sent. A match exits 0 even if another file could not be read.
 - `--sentence`: judge each sentence instead of each line. Output is still the lines a matching sentence
   touches, with the sentence in the match color. Wrapped lines are joined first, except at a blank line,
   next to brackets or `;`, or before a line starting with `-` `*` `+` `#` `>` `"` or a digit, so JSONL,
@@ -21,6 +28,13 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   and URLs are masked for grouping only; the representative's original text is sent and its answer is
   reused for the group. Jev is first asked, once per meaning, which of those kinds could change a match,
   and those are kept apart (#8, #19). The stderr summary reads `N sent of M`.
+  With regex terms, `--dedup` groups after the prefilter: regex terms are matched on every unit, never
+  taken from a representative, and units whose referenced captures differ are judged apart (#25).
+- `-e`/`-a`/`-v '/pattern/flags'`: a regex term, matched locally with no request at all. It prefilters its
+  AND term, so only the units it holds for ever ask that term's meanings. Its named and numbered groups pass
+  to the term's meanings as `$<name>`, `$1`-`$99`, `$&`, `$$` (ECMAScript's `GetSubstitution`, with one
+  deviation: `$<name>` naming no group, or a negated regex's group, is an error). `-p` prints `1.00`/`0.00`
+  for a regex term.
 
 ### Fixed
 - Docs: `--chunk` changes results, not just speed. Lines in one request are each other's context, so

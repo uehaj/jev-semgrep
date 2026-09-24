@@ -111,6 +111,38 @@ top-k か質問ごとの閾値調整が要ります。また索引を作らず�
 裏返すと、問い合わせのたびにコーパス全体分を払うので、同じ大きなコーパスに何度も問い合わせるなら
 ベクトル索引の方が安くて速いです。
 
+## 正規表現項
+
+`-e`/`-a`/`-v '/pattern/flags'`（先頭と末尾が `/`、フラグは JavaScript のもの）はローカルで判定される
+ただの正規表現で、リクエストは一切発生しません。同じ AND 項の絞り込みになり、これが当たった行だけが
+その項の意味を尋ねられるので、意味の前に安い正規表現を置くとコストが下がります。行が送られるのは、
+どれかの項の正規表現がすべて当たったときだけです（正規表現の無い項はどの行にも当たる扱い）。そのため
+`-e '/re/' -a A -e B` では、`re` を含まない行も送られ、`B` だけを尋ねられます。正規表現項だけの式は何も
+送りません。ただし `--sentence`（既定の `=jev`）は折り返しの切れ目を Jev に尋ねるので、送らずに済ませたい
+ときは `--sentence=rules` を使います。`/…/flags` の形をしていないものは今まで通り意味です。`-e '/etc 以下のファイルを変更している'`
+（閉じる `/` が無い）は影響を受けません。本当に `/` で始まり `/` で終わる意味は、正規表現と誤認されない
+よう先頭にスペースを置けます。
+
+```sh
+$ ./semgrep -e '/ERROR|FATAL/' app.log                               # リクエストなし
+$ ./semgrep -e '/timeout/i' -a '顧客に影響が出ている' app.log         # timeout を含む行だけ Jev へ
+```
+
+正規表現の名前付き・番号付きグループは、同じ AND 項の他の意味に `$<name>`、`$1`-`$99`、`$&`、`$$` として
+渡ります。ECMAScript の置換パターン構文（`String.prototype.replace` の `GetSubstitution`）そのもので、
+違いは 1 点だけ: `$<name>` が存在しないグループを指すのは（空文字列ではなく）エラーです（否定した正規
+表現のグループを指すのも同様）。`$n` が存在しないグループを指す場合は ECMAScript と同じくそのまま
+文字として残るので、`$100 以上の請求` は影響を受けません。
+
+```sh
+$ ./semgrep -e '/(?<date>\d{4}-\d\d-\d\d) (?<time>\d\d:\d\d)/' \
+            -a '$<time> が深夜（0時〜5時）であり、$<date> が週末である' app.log
+#   2026-09-19 03:12 ... → 「03:12 が深夜（0時〜5時）であり、2026-09-19 が週末である」と尋ねる
+```
+
+`$<name>` と単一引用符を勧めます。`$<name>` は sh/bash/zsh のダブルクォート内でも生き残りますが、
+`$1`、`$time`、`${time}` はシェル自身に展開されてしまいます。`-p` は正規表現項に `1.00`/`0.00` を表示します。
+
 ## インストール
 
 使い方は 2 通りあります。コマンドラインツールとして使う（この節）か、Claude Code のスキルとして使う
@@ -159,7 +191,7 @@ semgrep を呼ぶスクリプトもこの既定値を拾います（grep が `GR
 
 API の設定は `SEMGREP_API_KEY`（または `TYPESAFE_API_KEY`）、`SEMGREP_URL`、`SEMGREP_MODEL` の 3 つだけです。
 TypeSafe の `POST /v1/systemone` と同じ形で話すエンドポイントなら使えます。キーは `SEMGREP_URL` の先へそのまま
-送られるので、2 つは組にして設定してください。
+送られるので、2 つは組にして設定してください。コマンドラインの `--model=ID` は `SEMGREP_MODEL` より優先します。
 
 ```sh
 # OpenRouter
@@ -195,6 +227,23 @@ $ ./semgrep -n -e "customer is angry or frustrated" tests/corpus.txt
 ```
 
 どの行にも「angry」「frustrated」という語はありません。英語の意味で日本語の行も拾えています。
+
+### 問いに答えている行を探す (`-Q`)
+
+`-e` は「その意味が成り立つか」を聞く。`-Q QUESTION` (`--question`) は、その問いに答えている行を探す。
+質問している行は意味としては近いが、答えてはいない。Yes/No の問いなら、それを否定する行も答えたことに
+なる:
+
+```sh
+$ ./semgrep -n -Q "whether the server is down" tests/intent.txt
+5:The server is down.
+6:The server is healthy and responding normally.
+2/17 lines (17 sent), 1 requests, 1087 input tokens, ~$0.000046
+```
+
+確認する行も否定する行も、どちらもサーバが落ちているかどうかを解消しているので一致する。`Is the server
+down?` は尋ねているだけで答えていないので一致しない。`-Q X` は `-e "the line answers: X"` の略記なので、
+`-a` / `-v` / `!` を `-e` と同じように併用でき、他の項とは OR で結ばれる。
 
 ### OR で 2 つの意味。`-p` で確率も見る
 
@@ -261,13 +310,13 @@ $ ./semgrep --level loose -n -e "a security risk or dangerous destructive operat
 ### ディレクトリを再帰検索、ファイル名だけ表示
 
 ```sh
-$ ./semgrep -r -n -e "customer is asking for a refund" docs/
-docs/tickets/a.txt:7:ユーザー山田さんからの問い合わせ: 返金してほしい、商品が壊れていた
-docs/tickets/sub/b.txt:1:The customer wants a refund for the broken lamp.
+$ ./semgrep -r -n -e "customer is asking for a refund" tests/tickets/
+tests/tickets/a.txt:7:Ticket #16: I want a refund, the item was broken.
+tests/tickets/sub/b.txt:1:The customer wants a refund for the broken lamp.
 
-$ ./semgrep -rl -e "customer is asking for a refund" docs/
-docs/tickets/a.txt
-docs/tickets/sub/b.txt
+$ ./semgrep -rl -e "customer is asking for a refund" tests/tickets/
+tests/tickets/a.txt
+tests/tickets/sub/b.txt
 ```
 
 `-r` はディレクトリを名前順にたどり、`.git`、`node_modules`、`.ssh`、`.aws`、`.gnupg`、バイナリ（先頭 8 KB に NUL がある）、
@@ -420,13 +469,15 @@ API キーとエンドポイントの読み方はコマンドラインと同じ�
 ## 使い方
 
 ```
-usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
+usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
 
   -e MEANING   この意味に合う行 (複数指定は OR)
-  -a MEANING   直前の -e 項に AND で連結。-e A -a B -e C は (A and B) or C
-  -v MEANING   直前の -e 項に AND NOT で連結。-e A -v B は A and not B
+  -Q, --question QUESTION  QUESTION に答えている行 (尋ねている行ではない)。-e "the line answers: QUESTION"
+               と同じ (上の「問いに答えている行を探す」参照)
+  -a MEANING   直前の -e/-Q 項に AND で連結。-e A -a B -e C は (A and B) or C
+  -v MEANING   直前の -e/-Q 項に AND NOT で連結。-e A -v B は A and not B
                先頭に置けば単独の否定。-v B は not B (grep -v 相当)
-  !MEANING     -e / -a / -v のどこでも、先頭に ! を付けるとその意味だけ否定
+  !MEANING     -e / -Q / -a / -v のどこでも、先頭に ! を付けるとその意味だけ否定
                -e A -e '!B' は A or not B。-a '!C' は -v C と同じ
   --level=LEVEL 厳しさ。肯定と否定の閾値をまとめて決める (既定 normal)
                  loose  : -t 0.3 -T 0.7  多少あやしくても拾う
@@ -442,6 +493,7 @@ usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
   -B NUM       一致行の前 NUM 行も表示
   -C NUM       前後 NUM 行を表示 (-A NUM -B NUM)
   -c           一致した行数だけをファイルごとに表示 (grep -c 相当)
+  -q, --quiet  何も表示せず、最初の一致で止まる。一致があればエラーがあっても終了コード 0 (grep -q 相当)
   --chunk=LINES 1 リクエストにまとめる行数 (既定 30)
                同じリクエストの行は互いの文脈になるので、小さくすると速さだけでなく曖昧な行の
                判定も変わる
