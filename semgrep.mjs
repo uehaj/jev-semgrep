@@ -66,6 +66,14 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
                At the front it is a bare negation.  -v B            =  not B  (like grep -v)
   !MEANING     a leading ! negates just that meaning, in -e / -a / -v alike
                -e A -e '!B'  =  A or not B.   -a '!C' is the same as -v C
+  /RE/FLAGS    a regex term (first and last char /, JS flags dgimsuvy): matched locally, no
+               request. Prefilters its AND term: only units it holds for ask that term's meanings
+                 -e '/ERROR|FATAL/'  -a '/timeout/i'  -v '/^DEBUG/'   !/RE/ negates it, as above
+               named/numbered groups pass to that term's meanings as $<name>, $1-$99, $&, $$
+               (ECMAScript's replace patterns). $<name> naming no group, or a negated regex's
+               group, is an error; prefer $<name> and single quotes ($1 doesn't survive double
+               quotes in sh/bash/zsh). A meaning that really starts and ends with / needs a
+               leading space to not be read as a regex
   --level=LEVEL strictness preset, sets both thresholds (default normal)
                  loose  : -t 0.3 -T 0.7  catch more, accept some noise
                  normal : -t 0.5 -T 0.5
@@ -131,6 +139,14 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
                先頭に置けば単独の否定。-v B は not B (grep -v 相当)
   !MEANING     -e / -a / -v のどこでも、先頭に ! を付けるとその意味だけ否定
                -e A -e '!B' は A or not B。-a '!C' は -v C と同じ
+  /RE/FLAGS    正規表現項 (先頭と末尾が /、フラグは JS の dgimsuvy)。ローカルで判定しリクエストなし。
+               同じ AND 項の絞り込みになり、これが当たった行だけその項の意味を尋ねる
+                 -e '/ERROR|FATAL/'  -a '/timeout/i'  -v '/^DEBUG/'   !/RE/ は上と同じく否定
+               名前付き・番号付きグループは同じ項の意味に $<name>, $1-$99, $&, $$ として渡る
+               (ECMAScript の置換パターン)。$<name> が存在しないグループを指す、または否定した
+               正規表現のグループを指すのはエラー。$<name> と単一引用符を推奨 ($1 は sh/bash/zsh
+               のダブルクォート内で生き残らない)。/ で始まり / で終わる本物の意味は、正規表現と
+               誤認されないよう先頭にスペースを置く
   --level=LEVEL 厳しさ。肯定と否定の閾値をまとめて決める (既定 normal)
                  loose  : -t 0.3 -T 0.7  多少あやしくても拾う
                  normal : -t 0.5 -T 0.5
@@ -198,25 +214,48 @@ const apiUrl = SEMGREP_URL || 'https://api.typesafe.ai/v1/systemone';
 const apiHost = (() => { try { return new URL(apiUrl).host; } catch { die(`SEMGREP_URL is not a URL: ${apiUrl}`); } })();
 const model = SEMGREP_MODEL || 'jev-latest';
 const credential = SEMGREP_API_KEY || TYPESAFE_API_KEY;
-// A compatible local server may need no key; the TypeSafe default always does.
-if (!credential && !SEMGREP_URL) die('SEMGREP_API_KEY is not set. Put it in ./.env or ~/.config/semgrep/.env');
 
-// Expression: a list of AND terms joined by OR. Each literal is [meaning index, negated]. meanings holds each distinct meaning once.
+// Expression: a list of AND terms joined by OR. Each literal is a meaning { kind:'m', text, not } or a
+// regex { kind:'r', re, names, count, not }, matched locally. A leading ! negates just that literal.
+// /pattern/flags (first and last char /, JS flags) is a regex term; anything else is a meaning.
+const RE_SHAPE = /^\/(.*)\/([dgimsuvy]*)$/s;
+function compileRegex(pattern, flags) {
+  let re, probe;
+  try { re = new RegExp(pattern, flags); probe = new RegExp(`${pattern}|`, flags).exec(''); }
+  catch (e) { die(`invalid regex '/${pattern}/${flags}': ${e.message}`); }
+  return { re, names: new Set(Object.keys(probe.groups ?? {})), count: probe.length - 1 };
+}
 const expr = [];
-const meanings = [];
 for (const tk of tokens) {
   if (tk.kind !== 'option' || !['e', 'a', 'v'].includes(tk.name)) continue;
   if (tk.name === 'a' && expr.length === 0) die('-a needs a preceding -e');
-  const not = tk.value.startsWith('!'); // per-meaning negation: "!MEANING"
-  const text = not ? tk.value.slice(1) : tk.value;
+  const bang = tk.value.startsWith('!'); // per-literal negation: "!MEANING" / "!/re/"
+  const text = bang ? tk.value.slice(1) : tk.value;
   if (!text.trim()) die(`-${tk.name}: MEANING must not be empty`);
-  let m = meanings.indexOf(text);
-  if (m < 0) m = meanings.push(text) - 1;
-  const lit = [m, not !== (tk.name === 'v')];
+  const not = bang !== (tk.name === 'v');
+  const shape = RE_SHAPE.exec(text);
+  const lit = shape ? { kind: 'r', not, ...compileRegex(shape[1], shape[2]) } : { kind: 'm', not, text };
   if (tk.name === 'e' || expr.length === 0) expr.push([lit]);
   else expr.at(-1).push(lit);
 }
-if (!meanings.length) die('no -e MEANING given');
+if (!expr.length) die('no -e MEANING given');
+// Captures: $<name>, $1-$99, $&, $$ (ECMAScript's GetSubstitution), scoped to one AND term's non-negated
+// regexes. Deviation from ECMAScript: $<name> naming no group is an error, not an empty string. A group of
+// a negated regex can't be referenced either. $n naming no group stays literal, as in ECMAScript.
+const SUBST = /\$(?:(\$)|(&)|<([^>]*)>|(\d{1,2}))/g;
+for (const term of expr) {
+  const posNames = new Set(), negNames = new Set();
+  for (const lit of term) if (lit.kind === 'r') for (const n of lit.names) (lit.not ? negNames : posNames).add(n);
+  for (const lit of term) if (lit.kind === 'm') for (const m of lit.text.matchAll(SUBST)) {
+    const name = m[3];
+    if (name === undefined || posNames.has(name)) continue;
+    die(negNames.has(name) ? `$<${name}>: refers to a negated regex's group` : `$<${name}>: no such capture group`);
+  }
+}
+const hasMeanings = expr.some(term => term.some(lit => lit.kind === 'm'));
+// A compatible local server may need no key; the TypeSafe default always does. Regex-only queries never call the API.
+if ((hasMeanings || opt.sentence === 'jev') && !credential && !SEMGREP_URL) die('SEMGREP_API_KEY is not set. Put it in ./.env or ~/.config/semgrep/.env');
+
 const levels = { loose: [0.3, 0.7], normal: [0.5, 0.5], strict: [0.7, 0.3] };
 const level = levels[opt.level];
 if (!level) die(`--level must be one of ${Object.keys(levels).join(', ')}`);
@@ -386,8 +425,49 @@ for (const [file, src] of read) {
   }
   units.forEach((text, i) => allLines.push({ file, no: i + 1, text }));
 }
-// Blank and whitespace-only lines are not sent; they count as probability 0 for every meaning (never match -e, always match -v).
-const lines = allLines.filter(l => l.text.trim());
+// Local regex evaluation + prefilter: a term is only asked its meanings for a unit once every regex
+// literal in the term already holds; captures from the term's own non-negated regexes are then expanded
+// into the meaning text (ECMAScript's GetSubstitution, see SUBST above). A unit no term can hold for, and
+// blank/whitespace-only units, are never sent (blank units count as probability 0 for every meaning).
+const execAt = (lit, text) => { lit.re.lastIndex = 0; return lit.re.exec(text); }; // reset: /re/g or /re/y would else carry state across units
+function regexPart(term, text) { // -> { ok, matches }: matches are the non-negated regexes' exec results
+  let ok = true;
+  const matches = [];
+  for (const lit of term) {
+    if (lit.kind !== 'r') continue;
+    const m = execAt(lit, text);
+    if ((m !== null) === lit.not) ok = false;
+    if (!lit.not) matches.push(m);
+  }
+  return { ok, matches };
+}
+function expandCaptures(text, matches) {
+  const named = new Map(), positional = [];
+  for (const m of matches) {
+    for (let i = 1; i < m.length; i++) positional.push(m[i] ?? '');
+    if (m.groups) for (const [k, v] of Object.entries(m.groups)) named.set(k, v ?? '');
+  }
+  const whole = matches[0]?.[0] ?? '';
+  return text.replace(SUBST, (all, dollar, amp, name, num) => {
+    if (dollar) return '$';
+    if (amp) return whole;
+    if (name !== undefined) return named.get(name) ?? '';
+    if (num.length === 2 && Number(num) >= 1 && Number(num) <= positional.length) return positional[Number(num) - 1];
+    const n1 = Number(num[0]);
+    return n1 >= 1 && n1 <= positional.length ? positional[n1 - 1] + num.slice(1) : `$${num}`;
+  });
+}
+// asksByUnit: unit -> Map(expanded meaning text -> probability, null until answered)
+const asksByUnit = new Map();
+for (const l of allLines) {
+  const asks = new Map();
+  if (l.text.trim()) for (const term of expr) {
+    const { ok, matches } = regexPart(term, l.text);
+    if (ok) for (const lit of term) if (lit.kind === 'm') asks.set(expandCaptures(lit.text, matches), null);
+  }
+  asksByUnit.set(l, asks);
+}
+const lines = allLines.filter(l => asksByUnit.get(l).size);
 
 // Chunk by line count and by characters. The API caps state + longest question at 32k tokens.
 const chunks = [];
@@ -404,37 +484,49 @@ for (let i = 0; i < lines.length; ) {
 async function evaluate(chunk) {
   const id = i => `L${String(i).padStart(3, '0')}`;
   const state = Object.fromEntries(chunk.map((l, i) => [id(i), l.text.slice(0, MAX_UNIT_CHARS)]));
+  const keys = chunk.map(l => [...asksByUnit.get(l).keys()]);
   const questions = {};
-  chunk.forEach((_, i) => meanings.forEach((text, m) => {
-    questions[`${id(i)}_${m}`] = { type: 'noul', instructions: `Does line ${id(i)} match the meaning: "${text}"?` };
+  chunk.forEach((_, i) => keys[i].forEach((text, k) => {
+    questions[`${id(i)}_${k}`] = { type: 'noul', instructions: `Does line ${id(i)} match the meaning: "${text}"?` };
   }));
   const answers = await post(state, questions);
-  return chunk.map((_, i) => meanings.map((_, m) => answers[`${id(i)}_${m}`].noul));
+  chunk.forEach((l, i) => keys[i].forEach((text, k) => asksByUnit.get(l).set(text, answers[`${id(i)}_${k}`].noul)));
 }
-
-// Results are consumed in chunk order.
-const results = chunks.map(chunk => pooled(() => evaluate(chunk)));
+await Promise.all(chunks.map(chunk => pooled(() => evaluate(chunk))));
 
 const color = opt.color === 'always' || (opt.color === 'auto' && process.stdout.isTTY && !process.env.NO_COLOR);
 if (!['auto', 'always', 'never'].includes(opt.color)) die('--color must be auto, always or never');
 const paint = (code, s) => (color ? `\x1b[${code}m${s}\x1b[0m` : s);
 const paintProb = x => paint(x >= tPos ? 32 : x < tNeg ? 31 : 33, x.toFixed(2));
-
-// Collect matches as file -> (line number -> probabilities), then print in file and line order with context.
-const probOf = new Map(); // line object -> probability per meaning
-for (const [ci, result] of results.entries()) {
-  const probs = await result;
-  chunks[ci].forEach((l, i) => probOf.set(l, probs[i]));
+// -p: one column per literal, in the order it was written. Regex: 1.00/0.00 for whether it matched.
+// Meaning: the answer, or 0 if no surviving term of this unit ever asked it.
+function displayRow(l) {
+  const out = [];
+  for (const term of expr) {
+    const { matches } = regexPart(term, l.text);
+    for (const lit of term) out.push(lit.kind === 'r' ? (execAt(lit, l.text) ? 1 : 0) : (asksByUnit.get(l).get(expandCaptures(lit.text, matches)) ?? 0));
+  }
+  return out;
 }
-const zeros = meanings.map(() => 0);
+// A term holds when its regex literals all hold and every meaning literal cleared its threshold.
+function termHolds(term, l) {
+  const { ok, matches } = regexPart(term, l.text);
+  if (!ok) return false;
+  const asks = asksByUnit.get(l);
+  for (const lit of term) if (lit.kind === 'm') {
+    const p = asks.get(expandCaptures(lit.text, matches)) ?? 0;
+    if (lit.not ? !(p < tNeg) : !(p >= tPos)) return false;
+  }
+  return true;
+}
+// Collect matches as file -> (line number -> matching unit), then print in file and line order with context.
 const hits = new Map();
 let matched = 0;
 for (const l of allLines) {
-  const p = probOf.get(l) ?? zeros;
-  if (!expr.some(term => term.every(([m, not]) => (not ? p[m] < tNeg : p[m] >= tPos)))) continue;
+  if (!expr.some(term => termHolds(term, l))) continue;
   matched++;
   if (!hits.has(l.file)) hits.set(l.file, new Map());
-  hits.get(l.file).set(l.no, p);
+  hits.get(l.file).set(l.no, l);
 }
 // --sentence without -o prints the original lines (or records) a matching sentence touches, like grep prints
 // lines. A unit keeps the probabilities of its first matching sentence; ranges mark the matching text in it.
@@ -480,7 +572,7 @@ for (const file of targets) {
       const p = h.get(k);
       const sep = paint(36, p ? ':' : '-');
       const prefix = (multi ? paint(35, file) + sep : '') + (opt.n ? paint(32, startNo(file, k)) + sep : '');
-      const tail = opt.p && p ? `\t[${p.map(paintProb).join(' ')}]` : '';
+      const tail = opt.p && p ? `\t[${displayRow(p).map(paintProb).join(' ')}]` : '';
       // Only data records carry the NUL terminator, as in grep -z; file names and counts stay on newlines.
       process.stdout.write(prefix + highlight(src[k - 1], ranges.get(file)?.get(k)) + tail + SEP);
     }

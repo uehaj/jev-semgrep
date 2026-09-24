@@ -17,6 +17,12 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   without `。` are not glued together. `rules` uses the rules only, with no extra requests. A line starting
   with closing punctuation (`。、」』）！？`) or following a line that ends in `、` always joins.
 - `-o`: with `--sentence`, print only the matching sentences, one per line, numbered by their first line.
+- `-e`/`-a`/`-v '/pattern/flags'`: a regex term, matched locally with no request at all. It prefilters its
+  AND term, so only the units it holds for ever ask that term's meanings. Its named and numbered groups pass
+  to the term's meanings as `$<name>`, `$1`-`$99`, `$&`, `$$` (ECMAScript's `GetSubstitution`, with one
+  deviation: `$<name>` naming no group, or a negated regex's group, is an error). `-p` prints `1.00`/`0.00`
+  for a regex term. `--dedup`'s interaction with regex terms and captures (#10) is specified but not yet
+  implemented; it lands with whichever of #10 or this merges second (#25).
 
 ### Fixed
 - Docs: `--chunk` changes results, not just speed. Lines in one request are each other's context, so

@@ -115,6 +115,35 @@ queries, where cosine scores need top-k or per-query tuning. And there is no ind
 the files in front of you. The flip side is that every query pays for the whole corpus again, so for
 repeated queries over a large, fixed corpus a vector index is cheaper and faster.
 
+## Regex terms
+
+`-e`/`-a`/`-v '/pattern/flags'` (first and last character `/`, JavaScript flags) is matched locally,
+as a plain regex, with no request at all. It prefilters its AND term: only the lines it holds for
+ever ask that term's meanings, so a cheap regex in front of a meaning cuts the bill and the lines it
+rejects are never sent anywhere. Anything that isn't shaped like `/…/flags` is still a meaning, so
+`-e '/etc 以下のファイルを変更している'` (no closing `/`) is unaffected; a meaning that really starts
+and ends with `/` can be written with a leading space to dodge the regex reading.
+
+```sh
+$ ./semgrep -e '/ERROR|FATAL/' app.log                               # no requests at all
+$ ./semgrep -e '/timeout/i' -a '顧客に影響が出ている' app.log         # only lines with "timeout" go to Jev
+```
+
+A regex's named and numbered groups pass to the other meanings of the *same* AND term as
+`$<name>`, `$1`-`$99`, `$&`, `$$` — ECMAScript's replacement-pattern syntax
+(`String.prototype.replace`'s `GetSubstitution`), with one deviation: `$<name>` naming no group is
+an error rather than an empty string (so is a reference to a negated regex's group). A `$n` naming
+no group stays literal, as in ECMAScript, so `$100 以上の請求` is unaffected.
+
+```sh
+$ ./semgrep -e '/(?<date>\d{4}-\d\d-\d\d) (?<time>\d\d:\d\d)/' \
+            -a '$<time> が深夜（0時〜5時）であり、$<date> が週末である' app.log
+#   2026-09-19 03:12 ... → asks "03:12 が深夜（0時〜5時）であり、2026-09-19 が週末である"
+```
+
+Prefer `$<name>` and single quotes: `$<name>` survives double quotes in sh/bash/zsh; `$1`, `$time`
+and `${time}` don't (the shell expands them itself). `-p` prints `1.00`/`0.00` for a regex term.
+
 ## Install
 
 Two ways to use it: as a command-line tool (this section), or as a Claude Code skill
