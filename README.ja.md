@@ -196,6 +196,23 @@ $ ./semgrep -n -e "customer is angry or frustrated" tests/corpus.txt
 
 どの行にも「angry」「frustrated」という語はありません。英語の意味で日本語の行も拾えています。
 
+### 知りたいことに答えている行を探す (`-k`)
+
+`-e` は「その意味が成り立つか」を聞く。`-k` (`--i-want-to-know`) はそれとは違う質問をする。「知りたいこと
+に答えているか」だ。質問している行は意味としては近いが、答えてはいない。Yes/No の知りたいことなら、
+それを否定する行も答えたことになる:
+
+```sh
+$ ./semgrep -n -k "whether the server is down" tests/intent.txt
+5:The server is down.
+6:The server is healthy and responding normally.
+2/17 lines (17 sent), 1 requests, 1070 input tokens, ~$0.000045
+```
+
+確認する行も否定する行も、どちらもサーバが落ちているかどうかを解消しているので一致する。`Is the server
+down?` は尋ねているだけで答えていないので `-k` には一致しない。`-k` は `-a` / `-v` / `!` を `-e` と同じ
+ように併用でき、他の `-e` / `-k` とは OR で結ばれる。
+
 ### OR で 2 つの意味。`-p` で確率も見る
 
 ```sh
@@ -389,13 +406,15 @@ API キーとエンドポイントの読み方はコマンドラインと同じ�
 ## 使い方
 
 ```
-usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
+usage: semgrep [OPTION]... -e MEANING|-k NEED [-a MEANING] [-v MEANING]... [FILE...]
 
   -e MEANING   この意味に合う行 (複数指定は OR)
-  -a MEANING   直前の -e 項に AND で連結。-e A -a B -e C は (A and B) or C
-  -v MEANING   直前の -e 項に AND NOT で連結。-e A -v B は A and not B
+  -k, --i-want-to-know NEED  この知りたいことに答えている行 (NEED が成り立つ行ではない。上の
+               「知りたいことに答えている行を探す」参照)。-a / -v / ! を -e と同じく併用でき、-e とは OR になる
+  -a MEANING   直前の -e/-k 項に AND で連結。-e A -a B -e C は (A and B) or C
+  -v MEANING   直前の -e/-k 項に AND NOT で連結。-e A -v B は A and not B
                先頭に置けば単独の否定。-v B は not B (grep -v 相当)
-  !MEANING     -e / -a / -v のどこでも、先頭に ! を付けるとその意味だけ否定
+  !MEANING     -e / -k / -a / -v のどこでも、先頭に ! を付けるとその意味だけ否定
                -e A -e '!B' は A or not B。-a '!C' は -v C と同じ
   --level=LEVEL 厳しさ。肯定と否定の閾値をまとめて決める (既定 normal)
                  loose  : -t 0.3 -T 0.7  多少あやしくても拾う

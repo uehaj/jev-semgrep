@@ -59,4 +59,22 @@ z_in | $J -z -e 'the customer is asking for a refund' 2>/dev/null | od -An -c | 
 [ "$($J -n -o --sentence -e 'customer is asking for a refund' prose.txt 2>/dev/null)" = "8:先週買った掃除機が初日から動かないので返金してほしいです。" ]
 # --sentence=jev keeps unpunctuated Japanese entries apart, so the refund requests match as they do per line
 [ "$($J -n --sentence -e 'the customer is asking for a refund' corpus.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "14 18 " ]
+
+# -k / --i-want-to-know: matches lines that answer a need, not lines it holds true of (#22).
+# A fact need matches the line stating it (1), not one asking for it (2) or an on-topic non-answer (3, 4).
+[ "$($J -n -k "the cat's name" intent.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 " ]
+[ "$($J -n --i-want-to-know "the cat's name" intent.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 " ]
+# A yes/no need matches both a confirming (5) and a DENYING (6) line; asking (7) and an on-topic
+# non-answer (8) do not match, even though the asking line is close to the proposition.
+[ "$($J -n -k 'whether the server is down' intent.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "5 6 " ]
+# -k combines with -a / -v like -e: AND NOT the asking line out still leaves only the answer.
+[ "$($J -n -k "the cat's name" -v 'the line is a question, not a statement' intent.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 " ]
+# -e and -k OR together
+out=$($J -n -e 'a security risk or dangerous destructive operation' -k 'why the job failed' intent.txt 2>/dev/null | cut -d: -f1)
+echo "$out" | grep -qx 9
+! echo "$out" | grep -qx 10
+# -k needs its argument
+if $J -k '' intent.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 ]; then exit 1; fi
+# SEMGREP_OPTS rejects -k / --i-want-to-know, like -e / -a / -v
+SEMGREP_OPTS='-k x' $J -e y </dev/null 2>&1 | grep -q '^semgrep: SEMGREP_OPTS: '
 echo OK

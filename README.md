@@ -201,6 +201,24 @@ $ ./semgrep -n -e "customer is angry or frustrated" tests/corpus.txt
 
 None of these lines contain the words "angry" or "frustrated". The Japanese lines were found by an English meaning.
 
+### Intent: lines that answer a need, not lines it is true of (`-k`)
+
+`-e` asks whether a line states a meaning. `-k` (`--i-want-to-know`) asks something different: does the
+line answer this information need. A line that *asks* the question is close to the meaning but answers
+nothing, and for a yes/no need a line that *denies* it still answers it:
+
+```sh
+$ ./semgrep -n -k "whether the server is down" tests/intent.txt
+5:The server is down.
+6:The server is healthy and responding normally.
+2/17 lines (17 sent), 1 requests, 1070 input tokens, ~$0.000045
+```
+
+Both the confirming line and the denying line match: each settles whether the server is down. `Is the
+server down?` does not match `-k`, because asking is not answering; `-e "asking whether the server is
+down"` would match it instead. `-k` combines with `-a` / `-v` / `!` and OR's with other `-e` / `-k` terms
+exactly like `-e`.
+
 ### OR: two meanings, and see the probabilities with `-p`
 
 ```sh
@@ -397,13 +415,15 @@ The API key and endpoint are read the same way as on the command line (`SEMGREP_
 ## Usage
 
 ```
-usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
+usage: semgrep [OPTION]... -e MEANING|-k NEED [-a MEANING] [-v MEANING]... [FILE...]
 
   -e MEANING   lines matching this meaning (several -e are OR'd)
-  -a MEANING   AND onto the preceding -e term.      -e A -a B -e C  =  (A and B) or C
-  -v MEANING   AND NOT onto the preceding -e term.  -e A -v B       =  A and not B
+  -k, --i-want-to-know NEED  lines that answer this information need, not lines it holds true of
+               (see "Intent" above). Combines with -a / -v / ! and OR's with -e exactly like -e
+  -a MEANING   AND onto the preceding -e/-k term.      -e A -a B -e C  =  (A and B) or C
+  -v MEANING   AND NOT onto the preceding -e/-k term.  -e A -v B       =  A and not B
                At the front it is a bare negation.  -v B            =  not B  (like grep -v)
-  !MEANING     a leading ! negates just that meaning, in -e / -a / -v alike
+  !MEANING     a leading ! negates just that meaning, in -e / -k / -a / -v alike
                -e A -e '!B'  =  A or not B.   -a '!C' is the same as -v C
   --level=LEVEL strictness preset, sets both thresholds (default normal)
                  loose  : -t 0.3 -T 0.7  catch more, accept some noise
