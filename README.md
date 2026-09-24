@@ -387,6 +387,10 @@ bytes), `install.log` to 21.1%, a Claude Code transcript (jsonl) only to 56.8%. 
 logs; prose has no shared skeleton, and a meaning that reads a timestamp folds almost nothing. With `-z` or
 `--sentence` the records or sentences fold instead of lines.
 
+To see how far your own logs fold before paying for a search, `node scripts/dedup-measure.mjs FILE...`
+counts lines, templates and the share of bytes sent, offline, with the same masks; `--keep=num,time` shows
+a meaning that keeps those kinds apart.
+
 The request's other lines are each line's context (#9), and `--dedup` changes them, so a line near the
 threshold can be judged differently than in a full pass.
 

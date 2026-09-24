@@ -62,7 +62,7 @@ z_in | $J -z -e 'the customer is asking for a refund' 2>/dev/null | od -An -c | 
 
 # --dedup. The summary line ("… (N sent of M) …") is only printed to a terminal, so run under script(1).
 # util-linux script answers --version and takes the command with -c; BSD script takes it as arguments.
-if script --version >/dev/null 2>&1; then onpty() { script -qec "$1" /dev/null; }; else onpty() { script -q /dev/null sh -c "$1"; }; fi
+if script --version >/dev/null 2>&1; then onpty() { script -qec "$1" /dev/null </dev/null; }; else onpty() { script -q /dev/null sh -c "$1" </dev/null; }; fi
 sent() { onpty "$J --dedup $* 2>&1 >/dev/null" | grep -o '[0-9]* sent of [0-9]*'; }
 ids() { printf 'worker request 3fa9c1e27b failed: connection reset\nworker request 88d0e41a5c failed: connection reset\nworker request 0b7f2a9e13 failed: connection reset\nworker started\n'; }
 disk() { printf 'disk usage 95%%\ndisk usage 12%%\ndisk usage 97%%\n'; }
@@ -115,6 +115,8 @@ check('Thu Sep 10 20:33:51 done', 'Fri Oct 17 21:00:00 done', [], true);   // sy
 check('Thu Sep 10 20:33:51 done', 'Thu Sep 17 20:33:51 done', ['time'], false); // a kept date keeps its day
 check('primary https://a/500 secondary https://a/fixed', 'primary https://a/fixed secondary https://a/500', ['num'], false); // the URL mask kept the mark
 "
+# scripts/dedup-measure.mjs uses the same masks (it slices them out of semgrep.mjs, so this breaks if they move)
+node ../scripts/dedup-measure.mjs "$T/ids" | tail -1 | grep -q " | 4 | 2 | "   # 4 lines, 2 templates
 # empty input asks nothing
 [ "$(printf '' | $J --dedup -c -e 'about cats' 2>/dev/null)" = "0" ]
 # with --sentence the unit is a sentence, and sentences fold like lines
