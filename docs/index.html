@@ -57,6 +57,10 @@ h1 .w{display:inline-block;background:linear-gradient(90deg,var(--accent),#66d9e
 .meter i{display:block;height:100%;width:0;background:var(--red);transition:width .7s cubic-bezier(.2,.8,.2,1)}
 .meter i.ok{background:var(--green)}
 .pv{min-width:3.4em;text-align:right}.pv.ok{color:var(--green)}.pv.ng{color:var(--red)}
+.sents{display:flex;flex-direction:column;gap:4px;margin-top:10px}
+.sen{font:.85rem/1.5 system-ui;padding:3px 10px;border-left:3px solid var(--red);color:#a6adc8;animation:up .4s both}
+.sen.ok{border-color:var(--green);color:#fff}.sen b{color:var(--t-mute);font-weight:400;margin-left:8px}
+@keyframes up{from{opacity:0;transform:translateY(6px)}}
 .note{margin-top:12px;font:.9rem/1.5 system-ui;color:var(--yellow);opacity:0;transition:opacity .6s}
 .note.on{opacity:1}
 .ctrl{display:flex;align-items:center;gap:10px;padding:10px 14px 14px;flex-wrap:wrap}
@@ -110,6 +114,7 @@ footer{padding:32px 0 56px;color:var(--mute);font-size:.9rem;text-align:center;b
       <p class="scene-c" id="sc"></p>
       <div class="cmd" id="cmd"></div>
       <div class="rows" id="rows"></div>
+      <div class="sents" id="sents"></div>
       <div class="note" id="note"></div>
       <noscript><p>The demo needs JavaScript. See the <a href="https://github.com/uehaj/jev-semgrep#examples">examples in the README</a>.</p></noscript>
     </div>
@@ -127,7 +132,7 @@ footer{padding:32px 0 56px;color:var(--mute);font-size:.9rem;text-align:center;b
       <div class="card"><h3>⚖️ Propositions, not topics</h3><p>Jev reads the line and the question together, so negation and “asked for” vs “already done” change the answer. Embeddings can only measure closeness.</p></div>
       <div class="card"><h3>🧮 Real booleans</h3><p>Each meaning yields an independent probability, so AND / OR / NOT are plain boolean operations. One threshold (0.5) works across queries.</p></div>
       <div class="card"><h3>📦 Zero dependencies</h3><p>One file, Node.js 20.12+ and <code>fetch</code>. 30 lines per request, 8 requests in parallel. No index to build.</p></div>
-      <div class="card"><h3>✂️ Lines, sentences, records</h3><p><code>--sentence</code> judges each sentence across wrapped lines; <code>-z</code> judges NUL-terminated records like <code>git log -z</code>.</p></div>
+      <div class="card"><h3>✂️ Lines, sentences, records</h3><p><code>--sentence</code> finds sentences across line breaks and, with <code>--color</code>, colors just the matching sentence inside a line; <code>-z</code> judges NUL-terminated records like <code>git log -z</code>.</p></div>
       <div class="card"><h3>🎯 Intent grep <span class="new card-b">coming</span></h3><p><code>--i-want-to-know</code> finds lines that <em>answer</em> a need — including the denial — and skips lines that merely ask.</p></div>
       <div class="card"><h3>🔣 Regex terms <span class="new card-b">coming</span></h3><p><code>-e '/ERROR|FATAL/'</code> runs locally for free, prefilters what Jev sees, and hands captures to meanings as <code>$&lt;name&gt;</code>: <code>-a '$&lt;time&gt; is at night'</code> asks each line about its own time.</p></div>
       <div class="card"><h3>🗜️ One request per template <span class="new card-b">coming</span></h3><p><code>--dedup</code> folds machine logs by skeleton: a 43,071-line system log becomes 550 templates, 1.2% of the bytes.</p></div>
@@ -212,12 +217,15 @@ const S = [
    [18,"I want my money back. The item arrived broken and customer service ignored me.",null,1],[21,"Your product ruined my weekend. Never buying from you again.",null,1],
    [23,"This is the third time I'm writing. Nobody has replied to my previous emails.",null,1]],
   note:"5/51 lines, 2 requests, 3225 input tokens"},
- {h:"One sentence at a time",
-  c:"--sentence joins wrapped lines, splits them into sentences and judges each one. With --color, only the matching sentence turns grep's match color — not the whole line.",
-  cmd:'semgrep -n --color --sentence -e "the author admits they made a mistake" tests/prose.txt',
+ {h:"Sentences across line breaks",
+  c:"--sentence finds sentences across line breaks — English and Japanese alike — and judges each one. With --color, only the matching sentence inside a line changes color.",
+  cmd:'semgrep -n --color --sentence -e "the author admits they made a mistake" -e "customer is asking for a refund" tests/prose.txt',
   rows:[[1,"<m>I should have checked the input</m>",null,1],[2,"<m>before shipping, and that was my</m>",null,1],[3,"<m>mistake.</m> Next time I will add a test",null,1],
    [4,"first.",null,0],[6,"The weather was lovely all week, and",null,0],[7,"we walked to the lake every morning.",null,0],
-   [8,"先週買った掃除機が初日から動かないので",null,0],[9,"返金してほしいです。よろしくお願いします。",null,0]]},
+   [8,"<m>先週買った掃除機が初日から動かないので</m>",null,1],[9,"<m>返金してほしいです。</m>よろしくお願いします。",null,1]],
+  // [sentence, match, rows it spans]
+  sent:[["I should have checked the input before shipping, and that was my mistake.",1,[0,1,2]],["Next time I will add a test first.",0,[2,3]],
+   ["The weather was lovely all week, and we walked to the lake every morning.",0,[4,5]],["先週買った掃除機が初日から動かないので返金してほしいです。",1,[6,7]],["よろしくお願いします。",0,[7]]]},
  {h:"Pay once per template",pre:"PR #10",
   c:"--dedup masks ids, hashes, numbers, dates, paths and URLs, sends one line per template and reuses the answer. Jev is asked first which values could change a match, so “disk usage is above 90%” keeps 95% and 12% apart.",
   cmd:'semgrep --dedup -n -e "a request failed" app.log',
@@ -240,6 +248,11 @@ function row([n,tx,p,k,ask],bars){
   d.querySelector(".pv")&&(d.querySelector(".pv").style.visibility="hidden");
   return d;
 }
+function chip([tx,k,rs],rows){
+  const d=document.createElement("div");d.className="sen"+(k?" ok":"");
+  const a=rows[rs[0]][0],b=rows[rs.at(-1)][0];
+  d.innerHTML=(k?"✓ ":"✗ ")+esc(tx)+"<b>line"+(a===b?" "+a:"s "+a+"–"+b)+"</b>";$("sents").append(d);
+}
 function reveal(d,[,,p,k],drop){
   d.querySelector(".pv")&&(d.querySelector(".pv").style.visibility="");
   const m=d.querySelector(".meter i"); if(m) m.style.width=(p*100)+"%";
@@ -249,15 +262,16 @@ async function play(i){
   const t=++token, s=S[i];
   [...$("chap").children].forEach((b,j)=>{b.classList.toggle("done",j<i);b.classList.toggle("cur-c",j===i);b.firstChild.style.width=j===i?"0":""});
   $("sh").innerHTML=esc(s.h)+(s.pre?'<span class="new">coming · '+s.pre+"</span>":""); $("sc").textContent=s.c; $("ttl").textContent="semgrep — "+(i+1)+"/"+S.length;
-  $("rows").innerHTML=""; $("note").className="note"; $("note").textContent=s.note||"";
+  $("rows").innerHTML=""; $("sents").innerHTML=""; $("note").className="note"; $("note").textContent=s.note||"";
   const els=s.rows.map(r=>row(r,s.bars)); $("rows").append(...els);
-  if(still){ $("cmd").innerHTML='<span class="ps">$ </span>'+esc(s.cmd); els.forEach((d,j)=>reveal(d,s.rows[j],!s.bars&&!s.rows[j][3])); $("note").className="note on"; return; }
-  const fill=$("chap").children[i].firstChild, t0=performance.now(), total=s.cmd.length*28+s.rows.length*380+5200;
+  if(still){ (s.sent||[]).forEach(x=>chip(x,s.rows)); $("cmd").innerHTML='<span class="ps">$ </span>'+esc(s.cmd); els.forEach((d,j)=>reveal(d,s.rows[j],!s.bars&&!s.rows[j][3])); $("note").className="note on"; return; }
+  const fill=$("chap").children[i].firstChild, t0=performance.now(), total=s.cmd.length*28+s.rows.length*380+(s.sent?s.sent.length*1200:0)+5200;
   (function tick(){ if(t!==token) return; fill.style.width=Math.min(100,(performance.now()-t0)/total*100)+"%"; requestAnimationFrame(tick)})();
   try{
     for(let k=0;k<=s.cmd.length;k++){ $("cmd").innerHTML='<span class="ps">$ </span>'+esc(s.cmd.slice(0,k))+'<span class="cur"></span>'; await wait(k?22:400,t) }
     await wait(350,t); $("cmd").innerHTML='<span class="ps">$ </span>'+esc(s.cmd);
     els.forEach(d=>d.classList.add("in")); await wait(500,t);
+    if(s.sent) for(const x of s.sent){ x[2].forEach(j=>els[j].className="row in scan"); await wait(700,t); chip(x,s.rows); await wait(500,t); x[2].forEach(j=>els[j].className="row in") }
     for(let j=0;j<els.length;j++){ els[j].className="row in scan"; await wait(220,t); reveal(els[j],s.rows[j],false); await wait(120,t) }
     await wait(900,t);
     if(!s.bars&&!s.ask) els.forEach((d,j)=>{ if(!s.rows[j][3]) d.classList.add("gone") });
