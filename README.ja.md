@@ -505,6 +505,48 @@ node --no-warnings tests/judge.mts [--model sonnet] [--rejudge]
 - 429 / 529 は指数バックオフで 6 回まで再試行します。
 - 精度は英語がもっとも高く、日本語も使えますがぶれは大きめです。
 
+## よくある質問
+
+semgrep の前に標準のコマンドを置けば済むので、本体に入れなかったオプションがあります。その組み合わせ方です。
+
+### 段落をまるごと 1 単位として判定したい。`--paragraph` はないのか
+
+先に段落を 1 行にまとめてから渡します。`fmt` は段落の中の行をつなぎ、段落の間の空行は残します。
+
+```sh
+fmt -w 100000 essay.txt | semgrep -n -e "the author admits they made a mistake"
+```
+
+出力の 1 行が 1 段落になり、`-n` は元のファイルではなく `fmt` の出力の行番号になります。`fmt` は日本語の行をつなぐとき
+間に空白を入れますが、Jev の判定には響きません。折り返しをまたぐ文を判定したいだけなら、どちらも要りません。
+`--sentence` が行をつないで文に分けます。
+
+### 会話記録の JSONL を、発言 1 件ずつ判定したい
+
+`jq` で本文を取り出し、発言ごとに NUL で終えてから、`-z` でレコードとして判定します。
+
+```sh
+jq -j '.content + "\u0000"' chat.jsonl | semgrep -z -n --sentence -e "the customer is asking for a refund" | tr '\0' '\n'
+```
+
+`.content` は、本文が入っている場所に合わせて書き換えてください。発言 1 件が 1 レコードになるので、文が次の話者の
+発言とつながらず、JSON の記号も送られません。`-n` は発言の番号です。1 行に 1 つの JSON が並んだファイルは
+そのままでも扱えます。`jq` を通すと単位がきれいになる、というだけです。
+
+### レコードの区切りが NUL ではない。`--record-separator` はないのか
+
+区切りを NUL に置き換えて `-z` を使います。`----` の行で区切られたレコードなら次のとおりです。
+
+```sh
+perl -0777 -pe 's/\n----\n/\0/g' notes.txt | semgrep -z -e "a decision was made" | tr '\0' '\n'
+awk '/^----$/ { printf "%c", 0; next } { print }' notes.txt | semgrep -z -e "a decision was made" | tr '\0' '\n'
+```
+
+`git log -z`、`find -print0`、`xargs -0` はもともと NUL で区切るので、`-z` でそのまま扱えます (#6)。
+任意の区切り文字を受け付けると、エスケープ、マルチバイト、正規表現か文字列か、という問題を抱え込みます。
+`perl` か `awk` の 1 行で済むことのために、それは割に合いません。`awk` の書き方は、複数文字の `RS` を
+受け付けない macOS の BSD awk でも動きます。
+
 ## ライセンス
 
 MIT
