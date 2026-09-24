@@ -11,35 +11,50 @@ import { parseArgs } from 'node:util';
 const die = msg => { console.error(`semgrep: ${msg}\nTry 'semgrep --help' for more information.`); process.exit(2); };
 process.on('uncaughtException', e => die(e.message));
 
-// A bare --color means --color=auto (as in grep). parseArgs cannot express an optional value, so fill it in first.
-const argv = process.argv.slice(2).map(a => (a === '--color' ? '--color=auto' : a === '--sentence' ? '--sentence=jev' : a === '--null-data' ? '-z' : a));
+// Settings come from the environment; the first .env found fills in what the environment lacks.
+const found = ['.env', `${homedir()}/.config/semgrep/.env`].find(existsSync);
+if (found) process.loadEnvFile(found); // never overrides variables already set
+const { SEMGREP_URL, SEMGREP_MODEL, SEMGREP_API_KEY, TYPESAFE_API_KEY, SEMGREP_OPTS = '' } = process.env;
+
+// A bare --color means --color=auto (as in grep); parseArgs cannot express an optional value, so fill it in first.
+const fill = a => (a === '--color' ? '--color=auto' : a === '--sentence' ? '--sentence=jev' : a === '--null-data' ? '-z' : a);
+const OPTIONS = {
+  e: { type: 'string', multiple: true },
+  a: { type: 'string', multiple: true },
+  v: { type: 'string', multiple: true },
+  level: { type: 'string', default: 'normal' }, // strictness preset: loose / normal / strict
+  r: { type: 'boolean', default: false }, // recurse into directories
+  l: { type: 'boolean', default: false }, // print only matching file names
+  t: { type: 'string' }, // positive threshold: match when p >= t (default from preset)
+  T: { type: 'string' }, // negative threshold: "not X" when p < T (default from preset)
+  chunk: { type: 'string', default: '30' }, // lines per request
+  c: { type: 'boolean', default: false }, // count of matching lines per file (grep -c)
+  j: { type: 'string', default: '8' }, // concurrent requests
+  A: { type: 'string' }, // N lines of trailing context
+  B: { type: 'string' }, // N lines of leading context
+  C: { type: 'string' }, // N lines of context on both sides
+  n: { type: 'boolean', default: false }, // line numbers
+  z: { type: 'boolean', default: false }, // records are NUL-terminated, on input and output (grep -z)
+  sentence: { type: 'string' }, // the unit of judgement is a sentence; jev / rules decide where wrapped lines join
+  o: { type: 'boolean', default: false }, // with --sentence, print only the matching sentences (grep -o)
+  p: { type: 'boolean', default: false }, // print each meaning's probability
+  color: { type: 'string', default: 'auto' }, // auto / always / never
+  help: { type: 'boolean', short: 'h', default: false },
+};
+// SEMGREP_OPTS holds default options only: no meanings, no files, no --. It goes in front of the arguments, so the
+// command line wins (a later value counts; --no-X clears a flag).
+const defaults = SEMGREP_OPTS.split(/\s+/).filter(Boolean).map(fill);
+try {
+  const { tokens: t } = parseArgs({ args: defaults, options: OPTIONS, allowPositionals: true, allowNegative: true, tokens: true });
+  const bad = t.find(k => k.kind !== 'option' || ['e', 'a', 'v'].includes(k.name));
+  if (bad) die(`SEMGREP_OPTS: ${bad.kind === 'option' ? `-${bad.name} is not allowed (meanings go on the command line)` : `'${bad.value ?? '--'}' is not an option`}`);
+} catch (e) { die(`SEMGREP_OPTS: ${e.message}`); }
 const { values: opt, positionals: files, tokens } = parseArgs({
-  args: argv,
+  args: [...defaults, ...process.argv.slice(2).map(fill)],
+  options: OPTIONS,
   allowPositionals: true,
+  allowNegative: true,
   tokens: true,
-  options: {
-    e: { type: 'string', multiple: true },
-    a: { type: 'string', multiple: true },
-    v: { type: 'string', multiple: true },
-    level: { type: 'string', default: 'normal' }, // strictness preset: loose / normal / strict
-    r: { type: 'boolean', default: false }, // recurse into directories
-    l: { type: 'boolean', default: false }, // print only matching file names
-    t: { type: 'string' }, // positive threshold: match when p >= t (default from preset)
-    T: { type: 'string' }, // negative threshold: "not X" when p < T (default from preset)
-    chunk: { type: 'string', default: '30' }, // lines per request
-    c: { type: 'boolean', default: false }, // count of matching lines per file (grep -c)
-    j: { type: 'string', default: '8' }, // concurrent requests
-    A: { type: 'string' }, // N lines of trailing context
-    B: { type: 'string' }, // N lines of leading context
-    C: { type: 'string' }, // N lines of context on both sides
-    n: { type: 'boolean', default: false }, // line numbers
-    z: { type: 'boolean', default: false }, // records are NUL-terminated, on input and output (grep -z)
-    sentence: { type: 'string' }, // the unit of judgement is a sentence; jev / rules decide where wrapped lines join
-    o: { type: 'boolean', default: false }, // with --sentence, print only the matching sentences (grep -o)
-    p: { type: 'boolean', default: false }, // print each meaning's probability
-    color: { type: 'string', default: 'auto' }, // auto / always / never
-    help: { type: 'boolean', short: 'h', default: false },
-  },
 });
 // --help: Japanese when the locale starts with ja, English otherwise
 const HELP_EN = `usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
@@ -100,6 +115,9 @@ Environment (read from the environment, else from ./.env, else from ~/.config/se
   SEMGREP_URL        endpoint (default https://api.typesafe.ai/v1/systemone). Any TypeSafe-compatible
                      /v1/systemone works, e.g. https://openrouter.ai/api/v1/systemone
   SEMGREP_MODEL      model id (default jev-latest)
+  SEMGREP_OPTS       default options, split on spaces and put before the command line, which wins;
+                     --no-X turns a boolean flag off (--color takes --color=never). Options only: no
+                     meanings, files or --. e.g. SEMGREP_OPTS='--level strict -n'. Scripts: SEMGREP_OPTS= semgrep
   The key goes to SEMGREP_URL, whatever it is. With SEMGREP_URL set and no key, no auth header is sent.
   e.g.  mkdir -p ~/.config/semgrep && echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env`;
 const HELP_JA = `usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
@@ -160,6 +178,10 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
   SEMGREP_URL        送信先 (既定 https://api.typesafe.ai/v1/systemone)。TypeSafe 互換の
                      /v1/systemone なら可。例 https://openrouter.ai/api/v1/systemone
   SEMGREP_MODEL      モデル名 (既定 jev-latest)
+  SEMGREP_OPTS       既定のオプション。空白で区切ってコマンドラインの前に置くので、コマンドラインが
+                     優先する。--no-X で真偽のフラグを消せる (--color は --color=never)。書けるのは
+                     オプションだけで、意味・ファイル・-- は書けない。例 SEMGREP_OPTS='--level strict -n'。
+                     スクリプトからは SEMGREP_OPTS= semgrep と空にして呼ぶ
   キーは SEMGREP_URL の先へそのまま送られる。SEMGREP_URL 指定時にキーが無ければ認証ヘッダを付けない。
   例:  mkdir -p ~/.config/semgrep && echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env`;
 if (opt.help) {
@@ -168,10 +190,6 @@ if (opt.help) {
   process.exit(0);
 }
 
-// Only these variables configure the API. The first .env found fills in what the environment lacks.
-const found = ['.env', `${homedir()}/.config/semgrep/.env`].find(existsSync);
-if (found) process.loadEnvFile(found); // never overrides variables already set
-const { SEMGREP_URL, SEMGREP_MODEL, SEMGREP_API_KEY, TYPESAFE_API_KEY } = process.env;
 const apiUrl = SEMGREP_URL || 'https://api.typesafe.ai/v1/systemone';
 const apiHost = (() => { try { return new URL(apiUrl).host; } catch { die(`SEMGREP_URL is not a URL: ${apiUrl}`); } })();
 const model = SEMGREP_MODEL || 'jev-latest';

@@ -5,6 +5,14 @@ set -e
 cd "$(dirname "$0")"
 # API key comes from the environment or from .env at the repo root
 J="node --env-file-if-exists=../.env ../semgrep.mjs"
+
+# SEMGREP_OPTS, offline: empty input sends nothing
+SEMGREP_OPTS='--level bogus' $J -e x </dev/null 2>&1 | grep -qx 'semgrep: --level must be one of loose, normal, strict'
+SEMGREP_OPTS='--level bogus' $J --level strict -e x </dev/null 2>/dev/null || [ $? = 1 ]   # the command line wins
+SEMGREP_OPTS='-n' $J --no-n -e x </dev/null 2>/dev/null || [ $? = 1 ]                     # --no-X clears a default
+for bad in '-e refund' 'file.txt' '--' '--nope'; do
+  SEMGREP_OPTS="$bad" $J -e x </dev/null 2>&1 | grep -q '^semgrep: SEMGREP_OPTS: '
+done
 out=$($J -n -e 'ネットワークやリモート接続の障害' -e 'customer is asking for a refund' fixture.txt 2>/dev/null | cut -d: -f1)
 for n in 4 6 7 13 30; do echo "$out" | grep -qx "$n"; done
 for n in 1 8 11 15 26; do ! echo "$out" | grep -qx "$n"; done

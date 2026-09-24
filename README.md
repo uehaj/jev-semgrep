@@ -145,9 +145,23 @@ echo 'SEMGREP_API_KEY=your-key' > .env                # per project, read from t
 Variables already in the environment win; otherwise the first of `./.env` and `~/.config/semgrep/.env` fills them in.
 `TYPESAFE_API_KEY` is accepted too when `SEMGREP_API_KEY` is not set.
 
+### Default options
+
+`SEMGREP_OPTS` holds options to apply on every call, read like the settings above. It is split on spaces and put in
+front of the command line, so the command line wins: a later value counts, and `--no-X` turns a default flag off.
+
+```sh
+export SEMGREP_OPTS='--level strict -j 8 -n'
+semgrep -e "payment failed" app.log                  # strict, 8 at once, line numbers
+semgrep --level loose --no-n -e "payment failed" app.log
+```
+
+A script calling semgrep would pick these up too (grep dropped `GREP_OPTIONS` for that reason). Call it as
+`SEMGREP_OPTS= semgrep ...` in scripts.
+
 ### Other endpoints
 
-semgrep reads exactly three settings: `SEMGREP_API_KEY` (or `TYPESAFE_API_KEY`), `SEMGREP_URL` and `SEMGREP_MODEL`.
+The API is configured by exactly three settings: `SEMGREP_API_KEY` (or `TYPESAFE_API_KEY`), `SEMGREP_URL` and `SEMGREP_MODEL`.
 Any endpoint that speaks TypeSafe's `POST /v1/systemone` works. The key is sent to `SEMGREP_URL` as is, so set the
 two together.
 
