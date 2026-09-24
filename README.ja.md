@@ -191,7 +191,8 @@ semgrep を呼ぶスクリプトもこの既定値を拾います（grep が `GR
 
 API の設定は `SEMGREP_API_KEY`（または `TYPESAFE_API_KEY`）、`SEMGREP_URL`、`SEMGREP_MODEL` の 3 つだけです。
 TypeSafe の `POST /v1/systemone` と同じ形で話すエンドポイントなら使えます。キーは `SEMGREP_URL` の先へそのまま
-送られるので、2 つは組にして設定してください。コマンドラインの `--model=ID` は `SEMGREP_MODEL` より優先します。
+送られるので、2 つは組にして設定してください。コマンドラインの `--sys1-model=ID`、`--sys1-url=URL`、`--sys1-api-key=KEY` は
+この 3 つより優先します。コマンドラインのキーは `ps` やシェル履歴に残るので、キーはなるべく `.env` に書いてください。
 
 ```sh
 # OpenRouter
@@ -505,6 +506,8 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
                否定側の閾値未満を赤、あいだを黄で表示。NO_COLOR にも従う
+  --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
+               API の設定。SEMGREP_MODEL / SEMGREP_URL / SEMGREP_API_KEY より優先
   -h, --help   このヘルプ (LANG / LC_ALL / LC_MESSAGES が ja 以外なら英語)
 ```
 

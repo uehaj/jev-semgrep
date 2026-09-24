@@ -43,7 +43,10 @@ const OPTIONS = {
   p: { type: 'boolean', default: false }, // print each meaning's probability
   dedup: { type: 'boolean', default: false }, // judge one representative per template, reuse its answer
   color: { type: 'string', default: 'auto' }, // auto / always / never
-  model: { type: 'string' }, // model id; overrides SEMGREP_MODEL
+  // the API settings, each overriding its environment variable
+  'sys1-model': { type: 'string' }, // SEMGREP_MODEL
+  'sys1-url': { type: 'string' }, // SEMGREP_URL
+  'sys1-api-key': { type: 'string' }, // SEMGREP_API_KEY / TYPESAFE_API_KEY
   help: { type: 'boolean', short: 'h', default: false },
 };
 // SEMGREP_OPTS holds default options only: no meanings, no files, no --. It goes in front of the arguments, so the
@@ -133,7 +136,9 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are green at or above
                the positive threshold, red below the negative one, yellow in between. NO_COLOR is honored
-  --model=ID   model id, overrides SEMGREP_MODEL (default jev-latest)
+  --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
+               the API settings, overriding SEMGREP_MODEL, SEMGREP_URL, SEMGREP_API_KEY below.
+               A key on the command line shows up in ps and shell history; prefer .env
   -h, --help   this help (Japanese when LANG / LC_ALL / LC_MESSAGES starts with ja)
 
 Exit status: 0 matched / 1 no match / 2 error
@@ -142,7 +147,7 @@ Environment (read from the environment, else from ./.env, else from ~/.config/se
   SEMGREP_API_KEY    API key. Falls back to TYPESAFE_API_KEY. Get one at https://console.typesafe.ai/
   SEMGREP_URL        endpoint (default https://api.typesafe.ai/v1/systemone). Any TypeSafe-compatible
                      /v1/systemone works, e.g. https://openrouter.ai/api/v1/systemone
-  SEMGREP_MODEL      model id (default jev-latest); --model wins
+  SEMGREP_MODEL      model id (default jev-latest)
   SEMGREP_OPTS       default options, split on spaces and put before the command line, which wins;
                      --no-X turns a boolean flag off (--color takes --color=never). Options only: no
                      meanings, files or --. e.g. SEMGREP_OPTS='--level strict -n'. Scripts: SEMGREP_OPTS= semgrep
@@ -218,7 +223,9 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
                否定側の閾値未満を赤、あいだを黄で表示。NO_COLOR にも従う
-  --model=ID   モデル名。SEMGREP_MODEL より優先 (既定 jev-latest)
+  --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
+               API の設定。下の SEMGREP_MODEL / SEMGREP_URL / SEMGREP_API_KEY より優先。
+               コマンドラインのキーは ps やシェル履歴に残るので、なるべく .env に書く
   -h, --help   このヘルプ (LANG / LC_ALL / LC_MESSAGES が ja 以外なら英語)
 
 終了コード: 一致あり 0 / なし 1 / エラー 2 (引数・読めないファイル・API 障害)
@@ -227,7 +234,7 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
   SEMGREP_API_KEY    API キー。無ければ TYPESAFE_API_KEY。取得は https://console.typesafe.ai/
   SEMGREP_URL        送信先 (既定 https://api.typesafe.ai/v1/systemone)。TypeSafe 互換の
                      /v1/systemone なら可。例 https://openrouter.ai/api/v1/systemone
-  SEMGREP_MODEL      モデル名 (既定 jev-latest)。--model が優先
+  SEMGREP_MODEL      モデル名 (既定 jev-latest)
   SEMGREP_OPTS       既定のオプション。空白で区切ってコマンドラインの前に置くので、コマンドラインが
                      優先する。--no-X で真偽のフラグを消せる (--color は --color=never)。書けるのは
                      オプションだけで、意味・ファイル・-- は書けない。例 SEMGREP_OPTS='--level strict -n'。
@@ -240,10 +247,11 @@ if (opt.help) {
   process.exit(0);
 }
 
-const apiUrl = SEMGREP_URL || 'https://api.typesafe.ai/v1/systemone';
-const apiHost = (() => { try { return new URL(apiUrl).host; } catch { die(`SEMGREP_URL is not a URL: ${apiUrl}`); } })();
-const model = opt.model || SEMGREP_MODEL || 'jev-latest';
-const credential = SEMGREP_API_KEY || TYPESAFE_API_KEY;
+const customUrl = opt['sys1-url'] || SEMGREP_URL;
+const apiUrl = customUrl || 'https://api.typesafe.ai/v1/systemone';
+const apiHost = (() => { try { return new URL(apiUrl).host; } catch { die(`not a URL: ${apiUrl} (--sys1-url / SEMGREP_URL)`); } })();
+const model = opt['sys1-model'] || SEMGREP_MODEL || 'jev-latest';
+const credential = opt['sys1-api-key'] || SEMGREP_API_KEY || TYPESAFE_API_KEY;
 
 // Expression: a list of AND terms joined by OR. Each literal is a meaning { kind:'m', text, not } or a
 // regex { kind:'r', re, names, count, not }, matched locally. A leading ! negates just that literal.
@@ -292,7 +300,7 @@ for (const term of expr) {
 }
 const hasMeanings = expr.some(term => term.some(lit => lit.kind === 'm'));
 // A compatible local server may need no key; the TypeSafe default always does. Regex-only queries never call the API.
-if ((hasMeanings || opt.sentence === 'jev') && !credential && !SEMGREP_URL) die('SEMGREP_API_KEY is not set. Put it in ./.env or ~/.config/semgrep/.env');
+if ((hasMeanings || opt.sentence === 'jev') && !credential && !customUrl) die('SEMGREP_API_KEY is not set. Put it in ./.env or ~/.config/semgrep/.env');
 
 const levels = { loose: [0.3, 0.7], normal: [0.5, 0.5], strict: [0.7, 0.3] };
 const level = levels[opt.level];
@@ -677,7 +685,7 @@ for (const file of opt.quiet ? [] : targets) {
 // Summary only when interactive; grep prints nothing to stderr when scripted.
 if (process.stderr.isTTY && !opt.quiet) {
   // The API's own usage.cost when reported (OpenRouter does); else an estimate at Jev's list price, only for TypeSafe itself.
-  const cost = usedCost > 0 ? `, $${usedCost.toFixed(6)}` : SEMGREP_URL ? '' : `, ~$${(usedTokens * 0.042 / 1e6).toFixed(6)}`;
+  const cost = usedCost > 0 ? `, $${usedCost.toFixed(6)}` : customUrl ? '' : `, ~$${(usedTokens * 0.042 / 1e6).toFixed(6)}`;
   console.error(`${matched}/${allLines.length} ${opt.sentence ? 'sentences' : opt.z ? 'records' : 'lines'} (${sent.length} sent${opt.dedup ? ` of ${lines.length}` : ''}), ${requestCount} requests, ${usedTokens} input tokens${cost}`);
 }
 // process.exit() can drop buffered stdout when piped, so set exitCode instead.
