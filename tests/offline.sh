@@ -141,6 +141,14 @@ code 1 "--sys1-api-key satisfies the TypeSafe default" -- $E node ../semgrep.mjs
 reset; $E SEMGREP_URL=$base/v1 SEMGREP_MODEL=m1 node ../semgrep.mjs -e cat "$F" >/dev/null; eq "$(stat model)" "m1" "SEMGREP_MODEL"
 reset; $E SEMGREP_URL=$base/v1 SEMGREP_MODEL=m1 node ../semgrep.mjs --sys1-model=m2 -e cat "$F" >/dev/null; eq "$(stat model)" "m2" "--sys1-model over SEMGREP_MODEL"
 reset; $E SEMGREP_URL=$base/v1 SEMGREP_OPTS=--sys1-model=m3 node ../semgrep.mjs -e cat "$F" >/dev/null; eq "$(stat model)" "m3" "--sys1-model in SEMGREP_OPTS"
+# ./.env is never read (an untrusted checkout could redirect the key); ~/.config/semgrep/.env is
+mkdir -p "$tmp/checkout" "$tmp/.config/semgrep"
+printf 'SEMGREP_URL=%s/v1\nSEMGREP_OPTS=-c\n' "$base" >"$tmp/checkout/.env"
+reset; code 2 "./.env is not read" -- sh -c "cd '$tmp/checkout' && $E node '$PWD/../semgrep.mjs' -e cat '$F'"
+eq "$(stat count)" "0" "./.env sends nothing"
+printf 'SEMGREP_URL=%s/v1\n' "$base" >"$tmp/.config/semgrep/.env"
+reset; eq "$(cd "$tmp/checkout" && $E node "$OLDPWD/../semgrep.mjs" -n -e cat "$F" | nums)" "1 4 " "~/.config/semgrep/.env is read"
+rm "$tmp/.config/semgrep/.env"
 
 # git semgrep: tracked files only, pathspecs relative to the current directory, never stdin
 R="$tmp/repo" GS="$E SEMGREP_URL=$base/v1 node $PWD/../git-semgrep.mjs" SG="$PWD/../semgrep.mjs"

@@ -13,9 +13,10 @@ import { parseArgs } from 'node:util';
 const die = (msg, hint = true) => { console.error(`semgrep: ${msg}${hint ? "\nTry 'semgrep --help' for more information." : ''}`); process.exit(2); };
 process.on('uncaughtException', e => die(e.message));
 
-// Settings come from the environment; the first .env found fills in what the environment lacks.
-const found = ['.env', `${homedir()}/.config/semgrep/.env`].find(existsSync);
-if (found) process.loadEnvFile(found); // never overrides variables already set
+// Settings come from the environment; ~/.config/semgrep/.env fills in what it lacks. Never ./.env: the current
+// directory may be an untrusted checkout, and its .env could point SEMGREP_URL at a server that collects the key.
+const userEnv = `${homedir()}/.config/semgrep/.env`;
+if (existsSync(userEnv)) process.loadEnvFile(userEnv); // never overrides variables already set
 const { SEMGREP_URL, SEMGREP_MODEL, SEMGREP_API_KEY, TYPESAFE_API_KEY, SEMGREP_OPTS = '' } = process.env;
 
 // A bare --color means --color=auto (as in grep); parseArgs cannot express an optional value, so fill it in first.
@@ -145,7 +146,7 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
 
 Exit status: 0 matched / 1 no match / 2 error
 
-Environment (read from the environment, else from ./.env, else from ~/.config/semgrep/.env):
+Environment (read from the environment, else from ~/.config/semgrep/.env; ./.env is never read):
   SEMGREP_API_KEY    API key. Falls back to TYPESAFE_API_KEY. Get one at https://console.typesafe.ai/
   SEMGREP_URL        endpoint (default https://api.typesafe.ai/v1/systemone). Any TypeSafe-compatible
                      /v1/systemone works, e.g. https://openrouter.ai/api/v1/systemone
@@ -233,7 +234,7 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
 
 終了コード: 一致あり 0 / なし 1 / エラー 2 (引数・読めないファイル・API 障害)
 
-環境変数 (環境、無ければ ./.env、無ければ ~/.config/semgrep/.env から読む):
+環境変数 (環境、無ければ ~/.config/semgrep/.env から読む。./.env は読まない):
   SEMGREP_API_KEY    API キー。無ければ TYPESAFE_API_KEY。取得は https://console.typesafe.ai/
   SEMGREP_URL        送信先 (既定 https://api.typesafe.ai/v1/systemone)。TypeSafe 互換の
                      /v1/systemone なら可。例 https://openrouter.ai/api/v1/systemone
@@ -303,7 +304,7 @@ for (const term of expr) {
 }
 const hasMeanings = expr.some(term => term.some(lit => lit.kind === 'm'));
 // A compatible local server may need no key; the TypeSafe default always does. Regex-only queries never call the API.
-if ((hasMeanings || opt.sentence === 'jev') && !credential && !customUrl) die('SEMGREP_API_KEY is not set. Put it in ./.env or ~/.config/semgrep/.env');
+if ((hasMeanings || opt.sentence === 'jev') && !credential && !customUrl) die('SEMGREP_API_KEY is not set. Export it or put it in ~/.config/semgrep/.env');
 
 const levels = { loose: [0.3, 0.7], normal: [0.5, 0.5], strict: [0.7, 0.3] };
 const level = levels[opt.level];
