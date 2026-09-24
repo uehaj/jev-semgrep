@@ -17,6 +17,10 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   without `。` are not glued together. `rules` uses the rules only, with no extra requests. A line starting
   with closing punctuation (`。、」』）！？`) or following a line that ends in `、` always joins.
 - `-o`: with `--sentence`, print only the matching sentences, one per line, numbered by their first line.
+- `--dedup`: judge one line (record, sentence) per template. Ids, hashes, numbers, dates and times, paths
+  and URLs are masked for grouping only; the representative's original text is sent and its answer is
+  reused for the group. Jev is first asked, once per meaning, which of those kinds could change a match,
+  and those are kept apart (#8, #19). The stderr summary reads `N sent of M`.
 
 ### Fixed
 - Docs: `--chunk` changes results, not just speed. Lines in one request are each other's context, so

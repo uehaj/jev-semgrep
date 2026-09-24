@@ -362,6 +362,34 @@ own. Sentences are cut by `Intl.Segmenter` ([Unicode UAX #29](https://unicode.or
 which splits at `.` `!` `?` `。` `！` `？` but also after abbreviations such as `Mr.`. Logs are not prose:
 consecutive log lines that start with a letter, such as `WARN ...` after `ERROR ...`, get joined.
 
+### One line per template (`--dedup`)
+
+Cost is proportional to the text sent, and machine-generated logs are mostly one skeleton with a different
+id or number in it. `--dedup` masks ids, hashes, numbers, dates and times, paths and URLs, groups lines by
+the result, sends one line per group and reuses its answer for the rest. What is sent is that line's
+original text, and every line is printed as itself:
+
+```sh
+$ ./semgrep --dedup -n -e "a request failed" app.log
+1:worker request 3fa9c1e27b failed: connection reset
+2:worker request 88d0e41a5c failed: connection reset
+4:worker request 0b7f2a9e13 failed: connection reset
+3/6 lines (4 sent of 6), 2 requests, 907 input tokens, ~$0.000038
+```
+
+Whether a value may be folded depends on the meaning: a number decides "disk usage is above 90%", a time
+decides "happened at night". So Jev is first asked, one small request per meaning, which kinds of value
+could change a match, and those kinds are kept apart (one of the two requests above). With
+`-e "disk usage is above 90%"` the same file keeps `95%` and `12%` apart and prints only `5:disk usage 95%`.
+
+Measured on real logs, with nothing kept: a 43,071-line system log folds into 550 templates (1.2% of the
+bytes), `install.log` to 21.1%, a Claude Code transcript (jsonl) only to 56.8%. It is for machine-generated
+logs; prose has no shared skeleton, and a meaning that reads a timestamp folds almost nothing. With `-z` or
+`--sentence` the records or sentences fold instead of lines.
+
+The request's other lines are each line's context (#9), and `--dedup` changes them, so a line near the
+threshold can be judged differently than in a full pass.
+
 ## Use it from Claude Code
 
 There is a Claude Code skill that runs semgrep for you: describe what you are looking for in plain words
