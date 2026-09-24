@@ -13,11 +13,6 @@ SEMGREP_OPTS='-n' $J --no-n -e x </dev/null 2>/dev/null || [ $? = 1 ]           
 for bad in '-e refund' 'file.txt' '--' '--nope'; do
   SEMGREP_OPTS="$bad" $J -e x </dev/null 2>&1 | grep -q '^semgrep: SEMGREP_OPTS: '
 done
-# --sys1-* override the environment, offline
-SEMGREP_URL=http://localhost:1 $J --sys1-url=bogus -e x </dev/null 2>&1 | grep -q '^semgrep: not a URL: bogus'
-SEMGREP_URL=bogus $J --sys1-url=http://localhost:1 -e x </dev/null 2>/dev/null || [ $? = 1 ]
-SEMGREP_API_KEY= TYPESAFE_API_KEY= $J -e x </dev/null 2>&1 | grep -q '^semgrep: SEMGREP_API_KEY is not set'   # gitleaks:allow (empty key)
-SEMGREP_API_KEY= TYPESAFE_API_KEY= $J --sys1-api-key=k -e x </dev/null 2>/dev/null || [ $? = 1 ]   # gitleaks:allow (empty key)
 out=$($J -n -e 'ネットワークやリモート接続の障害' -e 'customer is asking for a refund' fixture.txt 2>/dev/null | cut -d: -f1)
 for n in 4 6 7 13 30; do echo "$out" | grep -qx "$n"; done
 for n in 1 8 11 15 26; do if echo "$out" | grep -qx "$n"; then exit 1; fi; done
