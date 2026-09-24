@@ -141,9 +141,23 @@ echo 'SEMGREP_API_KEY=your-key' > .env                # プロジェクト単位
 環境変数が優先で、足りない分は `./.env`、`~/.config/semgrep/.env` のうち最初に見つかった方から補います。
 `SEMGREP_API_KEY` が無ければ `TYPESAFE_API_KEY` も使えます。
 
+### 既定のオプション
+
+`SEMGREP_OPTS` に書いたオプションは毎回の呼び出しに付きます。読み方は上の設定と同じです。空白で区切って
+コマンドラインの前に置くので、コマンドラインが優先します。後に書いた値が効き、`--no-X` で既定のフラグを消せます。
+
+```sh
+export SEMGREP_OPTS='--level strict -j 8 -n'
+semgrep -e "決済の失敗" app.log                    # strict、8 並列、行番号付き
+semgrep --level loose --no-n -e "決済の失敗" app.log
+```
+
+semgrep を呼ぶスクリプトもこの既定値を拾います（grep が `GREP_OPTIONS` を廃止した理由です）。スクリプトからは
+`SEMGREP_OPTS= semgrep ...` と空にして呼んでください。
+
 ### 他のエンドポイント
 
-semgrep が読む設定は `SEMGREP_API_KEY`（または `TYPESAFE_API_KEY`）、`SEMGREP_URL`、`SEMGREP_MODEL` の 3 つだけです。
+API の設定は `SEMGREP_API_KEY`（または `TYPESAFE_API_KEY`）、`SEMGREP_URL`、`SEMGREP_MODEL` の 3 つだけです。
 TypeSafe の `POST /v1/systemone` と同じ形で話すエンドポイントなら使えます。キーは `SEMGREP_URL` の先へそのまま
 送られるので、2 つは組にして設定してください。
 
