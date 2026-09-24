@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-25
+
 ### Security
 - **Breaking:** `./.env` in the current directory is no longer read; only the environment and
   `~/.config/semgrep/.env` are. A `.env` committed to an untrusted repository could set `SEMGREP_URL` and send
