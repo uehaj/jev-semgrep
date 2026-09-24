@@ -15,13 +15,13 @@ for bad in '-e refund' 'file.txt' '--' '--nope'; do
 done
 out=$($J -n -e 'ネットワークやリモート接続の障害' -e 'customer is asking for a refund' fixture.txt 2>/dev/null | cut -d: -f1)
 for n in 4 6 7 13 30; do echo "$out" | grep -qx "$n"; done
-for n in 1 8 11 15 26; do ! echo "$out" | grep -qx "$n"; done
+for n in 1 8 11 15 26; do if echo "$out" | grep -qx "$n"; then exit 1; fi; done
 [ "$($J -n -e 'ネットワークやリモート接続の障害' -a 'a retry is happening or was attempted' fixture.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "5 " ]
 [ "$($J -n -e 'ネットワークやリモート接続の障害' -v 'a retry is happening or was attempted' fixture.txt 2>/dev/null | cut -d: -f1 | grep -cx 5)" = 0 ]
 $J -n -v 'a timestamped server log line' fixture.txt 2>/dev/null | cut -d: -f1 | grep -qx 11
 out=$($J -n -e 'customer is asking for a refund' -e '!a timestamped server log line' fixture.txt 2>/dev/null | cut -d: -f1)
 for n in 7 11 20; do echo "$out" | grep -qx "$n"; done
-! echo "$out" | grep -qx 4
+if echo "$out" | grep -qx 4; then exit 1; fi
 if $J -e 'recipe for cooking pasta' fixture.txt 2>/dev/null; then exit 1; fi
 
 # output shapes of -l / -c / -r / -C
@@ -67,12 +67,12 @@ z_in | $J -z -e 'the customer is asking for a refund' 2>/dev/null | od -An -c | 
 # A yes/no need matches both a confirming (5) and a DENYING (6) line; asking (7) and an on-topic
 # non-answer (8) do not match, even though the asking line is close to the proposition.
 [ "$($J -n -k 'whether the server is down' intent.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "5 6 " ]
-# -k combines with -a / -v like -e: AND NOT the asking line out still leaves only the answer.
-[ "$($J -n -k "the cat's name" -v 'the line is a question, not a statement' intent.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 " ]
-# -e and -k OR together
-out=$($J -n -e 'a security risk or dangerous destructive operation' -k 'why the job failed' intent.txt 2>/dev/null | cut -d: -f1)
-echo "$out" | grep -qx 9
-! echo "$out" | grep -qx 10
+# -k combines with -v like -e: the denial (6) answers the need, and -v takes it out (0.01 against 0.92)
+[ "$($J -n -k 'whether the server is down' -v 'the server is healthy' intent.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "5 " ]
+# -e and -k OR together, each branch bringing a line the other does not: 4 is sunny, 1 names the cat
+[ "$($J -n -e 'the weather is sunny' -k "the cat's name" intent.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 4 " ]
+# an answer split over two lines is one sentence with --sentence
+[ "$(printf '名前は\nタマである\n' | $J --sentence=rules -o -k '猫の名前' 2>/dev/null)" = "名前はタマである" ]
 # -k needs its argument
 if $J -k '' intent.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 ]; then exit 1; fi
 # SEMGREP_OPTS rejects -k / --i-want-to-know, like -e / -a / -v
