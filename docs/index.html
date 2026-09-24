@@ -65,7 +65,7 @@ h1 .w{display:inline-block;background:linear-gradient(90deg,var(--accent),#66d9e
 .side{display:none;flex:0 0 44%;background:#181825;border:1px solid #313244;border-radius:10px;padding:12px 14px;font:.85rem/1.5 system-ui;color:#a6adc8;animation:slide .6s both}
 .side.on{display:block}.side p{margin:0 0 8px}.side table{border-collapse:collapse;width:100%;font:12.5px/1.5 var(--mono)}
 .side td{padding:3px 0;vertical-align:top}.side td+td{text-align:right;white-space:nowrap;padding-left:10px;font-family:system-ui}.side td:nth-child(2){color:var(--yellow)}.side td.ok{color:var(--green)}.side td.ng{color:var(--red)}
-.side code{color:var(--t-fg)}.side .q{color:var(--green)}
+.side code{color:var(--t-fg)}.side small{color:var(--t-mute)}.side .q{color:var(--green)}
 @keyframes slide{from{opacity:0;transform:translateX(24px)}}
 @media (max-width:760px){.body{flex-direction:column}.side{flex-basis:auto;width:100%}}
 .note{margin-top:12px;font:.9rem/1.5 system-ui;color:var(--yellow);opacity:0;transition:opacity .6s}
@@ -142,7 +142,7 @@ footer{padding:32px 0 56px;color:var(--mute);font-size:.9rem;text-align:center;b
       <div class="card"><h3>🧮 Real booleans</h3><p>Each meaning yields an independent probability, so AND / OR / NOT are plain boolean operations. One threshold (0.5) works across queries.</p></div>
       <div class="card"><h3>📦 Zero dependencies</h3><p>One file, Node.js 20.12+ and <code>fetch</code>. 30 lines per request, 8 requests in parallel. No index to build.</p></div>
       <div class="card"><h3>✂️ Lines, sentences, records</h3><p><code>--sentence</code> finds sentences across line breaks and, with <code>--color</code>, colors just the matching sentence inside a line; <code>-z</code> judges NUL-terminated records like <code>git log -z</code>.</p></div>
-      <div class="card"><h3>🎯 Intent grep <span class="new card-b">coming</span></h3><p><code>-Q</code> / <code>--question</code> finds lines that <em>answer</em> a question — including the denial — and skips lines that merely ask. <code>-q</code> stops at the first match, like <code>grep -q</code>.</p></div>
+      <div class="card"><h3>🎯 Answers, not restatements <span class="new card-b">coming</span></h3><p><code>-Q</code> / <code>--question</code> asks whether a line <em>answers</em> X, where <code>-e X</code> asks whether it <em>says</em> X. A denial answers a yes/no question; asking again answers nothing. <code>-q</code> stops at the first match, like <code>grep -q</code>.</p></div>
       <div class="card"><h3>🔣 Regex terms <span class="new card-b">coming</span></h3><p><code>-e '/ERROR|FATAL/'</code> runs locally for free, prefilters what Jev sees, and hands captures to meanings as <code>$&lt;name&gt;</code>: <code>-a '$&lt;time&gt; is at night'</code> asks each line about its own time.</p></div>
       <div class="card"><h3>🗜️ One request per template <span class="new card-b">coming</span></h3><p><code>--dedup</code> folds machine logs by skeleton: a 43,071-line system log becomes 550 templates, 1.2% of the bytes.</p></div>
       <div class="card"><h3>🔑 Any endpoint</h3><p>TypeSafe by default; OpenRouter, Vercel AI Gateway or any server that speaks <code>POST /v1/systemone</code> via <code>SEMGREP_URL</code>.</p></div>
@@ -191,13 +191,19 @@ const S = [
   cmd:'semgrep -n -p -t 0 -e "customer is asking for a refund" tests/contrast.en.txt',bars:1,
   rows:[[1, "I want a refund. The item was broken.", 0.99, 1], [2, "The refund has been processed. Please check your account.", 0.11, 0], [3, "Our refund policy is within 30 days of purchase.", 0.09, 0], [4, "The manager denied the refund request yesterday", 0.17, 0], [5, "I demand a full refund immediately", 0.93, 1], [6, "Refunds are processed within 5 business days", 0.07, 0], [7, "The support agent got angry and hung up the phone.", 0.05, 0], [8, "The customer got angry and hung up the phone.", 0.06, 0]],
   note:"Threshold 0.5 — calibrated probabilities, no per-query tuning."},
- {h:"Answers, not echoes",pre:"main",
-  c:"-Q / --question finds lines that answer a question. Asking the question answers nothing; for a yes/no question, the denial answers it too.",
-  cmd:'semgrep -n --question "whether the server is down" tests/intent.txt',
+ {h:"-e says it, -Q answers it",pre:"main",
+  c:"-e X asks whether the line says X. -Q X asks whether the line answers X: a reason for a why, a yes or a no for a whether. Asking the question again answers nothing. -Q X is shorthand for -e \"the line answers: X\".",
+  cmd:'semgrep -n -Q "whether the server is down" tests/intent.txt',
   rows:[[5,"The server is down.",null,1],[6,"The server is healthy and responding normally.",null,1],[7,"Is the server down?",null,0],[8,"The server room felt warm today.",null,0]],
   note:"2/17 lines (17 sent), 1 requests, 1087 input tokens, ~$0.000046",
-  side:'<p>The question’s grammar already says what kind of answer is wanted. Measured on tests/intent.txt: a line that answers vs a line that asks.</p><table><tr><td></td><td>kind</td><td>answers</td><td>asks</td></tr>'+
-   [["the cat's name", "a fact", 0.83, 0.05], ["whether the server is down", "yes / no", 0.86, 0.1], ["why the job failed", "a reason", 0.93, 0.12], ["how to get a refund", "a method", 0.96, 0.16]]
+  side:'<p><b>Same words, two questions.</b></p><table>'+
+   '<tr><td><code>-e <span class="q">"ジョブはなぜ失敗したか"</span></code></td><td></td></tr>'+
+   '<tr><td>なぜジョブは失敗したのですか <small>(asks the same)</small></td><td class="ok">0.98</td></tr>'+
+   '<tr><td><code>-Q <span class="q">"why the job failed"</span></code></td><td></td></tr>'+
+   '<tr><td>ジョブはディスク容量不足のために失敗した <small>(the reason)</small></td><td class="ok">0.93</td></tr>'+
+   '<tr><td>なぜジョブは失敗したのですか <small>(asks the same)</small></td><td class="ng">0.12</td></tr></table>'+
+   '<p style="margin-top:12px">The question’s grammar says what kind of answer is wanted:</p><table><tr><td></td><td>kind</td><td>answers</td><td>asks</td></tr>'+
+   [["the cat's name","a fact",.83,.05],["whether the server is down","yes / no",.86,.10],["why the job failed","a reason",.93,.12],["how to get a refund","a method",.96,.16]]
    .map(([q,k,a,b])=>'<tr><td><code>-Q <span class="q">"'+q+'"</span></code></td><td>'+k+'</td><td class="ok">'+a.toFixed(2)+'</td><td class="ng">'+b.toFixed(2)+'</td></tr>').join("")+'</table>'},
  {h:"AND / NOT are just booleans",
   c:"Someone is angry AND it is the customer, not the staff. Lines 7 and 8 differ only in who hung up — their embeddings are nearly identical.",
@@ -269,7 +275,7 @@ function reveal(d,[,,p,k],drop){
 async function play(i){
   const t=++token, s=S[i];
   [...$("chap").children].forEach((b,j)=>{b.classList.toggle("done",j<i);b.classList.toggle("cur-c",j===i);b.firstChild.style.width=j===i?"0":""});
-  $("sh").innerHTML=esc(s.h)+(s.pre?'<span class="new">coming · '+(s.pre==="main"?"merged, next release":s.pre)+"</span>":""); $("sc").textContent=s.c; $("ttl").textContent="semgrep — "+(i+1)+"/"+S.length;
+  $("sh").innerHTML=esc(s.h)+(s.pre?'<span class="new">coming · '+(s.pre==="main"?"next release":s.pre)+"</span>":""); $("sc").textContent=s.c; $("ttl").textContent="semgrep — "+(i+1)+"/"+S.length;
   $("rows").innerHTML=""; $("sents").innerHTML=""; $("side").className="side"; $("side").innerHTML=s.side||""; $("note").className="note"; $("note").textContent=s.note||"";
   const els=s.rows.map(r=>row(r,s.bars)); $("rows").append(...els);
   if(still){ (s.sent||[]).forEach(x=>chip(x,s.rows)); $("cmd").innerHTML='<span class="ps">$ </span>'+esc(s.cmd); els.forEach((d,j)=>reveal(d,s.rows[j],!s.bars&&!s.rows[j][3])); $("note").className="note on"; s.side&&($("side").className="side on"); return; }
