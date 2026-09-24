@@ -129,6 +129,11 @@ eq "$(cd "$R" && $GS -l -e cat | tr '\n' ' ')" "a.txt sub/b.txt " "git semgrep: 
 eq "$(cd "$R/sub" && $GS -l -e cat)" "b.txt" "git semgrep: under the current directory"
 eq "$(cd "$R" && $GS -n -e cat a.txt)" "a.txt:1:cat" "git semgrep: pathspec, file name even for one file"
 code 1 "git semgrep: never stdin" -- sh -c "cd '$R' && echo cat | $GS -e cat -- nothing"
+printf 'cat\n' >"$R/-"; (cd "$R" && git add -- -)
+eq "$(cd "$R" && echo dog | $GS -l -e cat -- -)" "./-" "git semgrep: a tracked file named -, not stdin"
+blob=$(cd "$R" && echo cat | git hash-object -w --stdin); printf 'cat\n' >"$R/c.txt"
+(cd "$R" && printf '100644 %s %s\tc.txt\n' "$blob" 1 "$blob" 2 "$blob" 3 | git update-index --index-info)
+eq "$(cd "$R" && $GS -c -e cat -- c.txt)" "c.txt:1" "git semgrep: a conflicted file once, not once per stage"
 code 2 "git semgrep: outside a repository" -- sh -c "cd '$tmp/plain' && $GS -e cat"
 # more than execFileSync's default 1 MiB of paths; empty files send nothing
 mkdir "$R/many"

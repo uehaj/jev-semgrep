@@ -278,9 +278,10 @@ const lsFiles = () => {
   try { return execFileSync('git', ['ls-files', '-z', '--', ...files], { encoding: 'utf8', maxBuffer: Infinity }); }
   catch (e) { if (e.status == null) die(`git ls-files: ${e.message}`); process.exit(2); } // git exited non-zero: it has said why
 };
-const gitFiles = () => lsFiles().split('\0')
+const gitFiles = () => [...new Set(lsFiles().split('\0'))] // a conflicted file is listed once per stage
   .filter(p => p && !p.split('/').some(d => SKIP_DIRS.includes(d)) && !SKIP_FILE.test(p.split('/').at(-1))
-    && lstatSync(p, { throwIfNoEntry: false })?.isFile());
+    && lstatSync(p, { throwIfNoEntry: false })?.isFile())
+  .map(p => (p === '-' ? './-' : p)); // a tracked file named -, not stdin
 const targets = asGit ? gitFiles()
   : (files.length ? files : [opt.r ? '.' : '-']).flatMap(f => (f === '-' ? [f] : expand(f)));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
