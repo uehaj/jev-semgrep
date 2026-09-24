@@ -44,4 +44,42 @@ z_in() { printf 'the package arrived\nand I want my money back for it\0the sky i
 [ -z "$(z_in | $J -c -e 'the customer is asking for a refund' 2>/dev/null)" ]
 # matching records end with NUL
 z_in | $J -z -e 'the customer is asking for a refund' 2>/dev/null | od -An -c | grep -q '\\0'
+
+# --dedup. The summary line ("… (N sent of M) …") is only printed to a terminal, so run under script(1).
+sent() { script -q /dev/null sh -c "$J --dedup $* 2>&1 >/dev/null" | grep -o '[0-9]* sent of [0-9]*'; }
+ids() { printf 'worker request 3fa9c1e27b failed: connection reset\nworker request 88d0e41a5c failed: connection reset\nworker request 0b7f2a9e13 failed: connection reset\nworker started\n'; }
+disk() { printf 'disk usage 95%%\ndisk usage 12%%\ndisk usage 97%%\n'; }
+T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
+ids > "$T/ids"; disk > "$T/disk"
+printf 'backup finished at 09:00\nbackup finished at 23:30\nbackup finished at 10:15\n' > "$T/time"
+printf 'fetch /admin/config via https://example.org\nfetch https://example.org via /admin/config\n' > "$T/swap"
+printf 'GET https://example.com/admin/users\nGET https://example.com/public/index\nGET https://evil.example.net/public/index\n' > "$T/url"
+printf 'the same line\nthe same line\nthe same line\n' > "$T/same"
+# identical lines are one group whatever the meaning
+[ "$(sent -e "'about cats'" "$T/same")" = "1 sent of 3" ]
+# ids carry no meaning for a failure: the three failures fold into one, and each member gets the answer
+[ "$(sent -e "'a request failed'" "$T/ids")" = "2 sent of 4" ]
+[ "$($J --dedup -c -e 'a request failed' "$T/ids" 2>/dev/null)" = "3" ]
+# every line is still printed, with its own original text rather than the representative's or the mask
+[ "$($J --dedup -c -t 0 -e 'anything at all' "$T/ids" 2>/dev/null)" = "4" ]
+$J --dedup -n -e 'a request failed' "$T/ids" 2>/dev/null | grep -qx '2:worker request 88d0e41a5c failed: connection reset'
+! $J --dedup -e 'a request failed' "$T/ids" 2>/dev/null | grep -q '<'
+# a meaning that reads the number keeps numbers apart (#19)
+[ "$(sent -e "'disk usage is above 90%'" "$T/disk")" = "3 sent of 3" ]
+[ "$($J --dedup -n -e 'disk usage is above 90%' "$T/disk" 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 3 " ]
+# a meaning that reads the time keeps times apart
+[ "$(sent -e "'happened at night'" "$T/time")" = "3 sent of 3" ]
+[ "$($J --dedup -n -e 'happened at night' "$T/time" 2>/dev/null | cut -d: -f1)" = "2" ]
+# a kept kind is safe from the folded ones: the host is kept, and the path mask must not reach into the URL
+# (it did, and folded evil.example.net into example.com)
+[ "$(sent -e "'the request is sent to example.com'" "$T/url")" = "3 sent of 3" ]
+[ "$($J --dedup -n -e 'the request is sent to example.com' "$T/url" 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 2 " ]
+# kept values stay tied to their place: a URL and a path in swapped places are two groups
+# (they were one, and the second line took the first one's match)
+[ "$(sent -e "'the line fetches /admin/config from https://example.org'" "$T/swap")" = "2 sent of 2" ]
+[ "$($J --dedup -n -e 'the line fetches /admin/config from https://example.org' "$T/swap" 2>/dev/null | cut -d: -f1)" = "1" ]
+# the per-meaning question runs under -j too, and several meanings still combine
+[ "$($J --dedup -j 1 -c -e 'a request failed' -e 'disk usage is above 90%' "$T/ids" "$T/disk" 2>/dev/null | tr '\n' ' ')" = "$T/ids:3 $T/disk:2 " ]
+# empty input asks nothing
+[ "$(printf '' | $J --dedup -c -e 'about cats' 2>/dev/null)" = "0" ]
 echo OK
