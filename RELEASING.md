@@ -16,7 +16,7 @@ sh scripts/release.sh 0.3.0     # 番号を直接指定
 2. 作業ツリーがきれい（未コミットの変更がない）
 3. `HEAD` が `origin/main` と一致している。PR は先にマージし、`git pull` してから出す
 4. `npm whoami` が通る
-5. `sh tests/check.sh` が OK
+5. `npm test` が OK (`tests/offline.sh` と `tests/check.sh`)
 
 3 を守らないと、npm の版と GitHub のタグの中身がずれる（0.2.0 で実際に起きた。PR #2 のマージ前に publish したため、
 npm の 0.2.0 にはレビュー対応が入っていない）。

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // semgrep: grep by meaning, scored line by line with Jev (TypeSafe System One).
 //   semgrep -e "network failure" -a "already retried" -e "customer wants a refund" FILE...
-//   -e terms are OR'd; -a / -v attach AND / AND NOT to the preceding -e term: (A and B and not C) or D.
+//   semgrep -Q "why the job failed" FILE...   # -Q X is -e "the line answers: X": answering lines, not asking ones
+//   -e / -Q terms are OR'd; -a / -v attach AND / AND NOT to the preceding term: (A and B and not C) or D.
 //   A leading ! negates just that meaning: -e A -e '!B' is A or not B.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -22,6 +23,7 @@ const OPTIONS = {
   e: { type: 'string', multiple: true },
   a: { type: 'string', multiple: true },
   v: { type: 'string', multiple: true },
+  question: { type: 'string', multiple: true, short: 'Q' },
   level: { type: 'string', default: 'normal' }, // strictness preset: loose / normal / strict
   r: { type: 'boolean', default: false }, // recurse into directories
   l: { type: 'boolean', default: false }, // print only matching file names
@@ -29,6 +31,7 @@ const OPTIONS = {
   T: { type: 'string' }, // negative threshold: "not X" when p < T (default from preset)
   chunk: { type: 'string', default: '30' }, // lines per request
   c: { type: 'boolean', default: false }, // count of matching lines per file (grep -c)
+  quiet: { type: 'boolean', short: 'q', default: false }, // print nothing, exit status only (grep -q)
   j: { type: 'string', default: '8' }, // concurrent requests
   A: { type: 'string' }, // N lines of trailing context
   B: { type: 'string' }, // N lines of leading context
@@ -39,6 +42,7 @@ const OPTIONS = {
   o: { type: 'boolean', default: false }, // with --sentence, print only the matching sentences (grep -o)
   p: { type: 'boolean', default: false }, // print each meaning's probability
   color: { type: 'string', default: 'auto' }, // auto / always / never
+  model: { type: 'string' }, // model id; overrides SEMGREP_MODEL
   help: { type: 'boolean', short: 'h', default: false },
 };
 // SEMGREP_OPTS holds default options only: no meanings, no files, no --. It goes in front of the arguments, so the
@@ -46,8 +50,8 @@ const OPTIONS = {
 const defaults = SEMGREP_OPTS.split(/\s+/).filter(Boolean).map(fill);
 try {
   const { tokens: t } = parseArgs({ args: defaults, options: OPTIONS, allowPositionals: true, allowNegative: true, tokens: true });
-  const bad = t.find(k => k.kind !== 'option' || ['e', 'a', 'v'].includes(k.name));
-  if (bad) die(`SEMGREP_OPTS: ${bad.kind === 'option' ? `-${bad.name} is not allowed (meanings go on the command line)` : `'${bad.value ?? '--'}' is not an option`}`);
+  const bad = t.find(k => k.kind !== 'option' || ['e', 'a', 'v', 'question'].includes(k.name));
+  if (bad) die(`SEMGREP_OPTS: ${bad.kind === 'option' ? `${bad.name.length > 1 ? '--' : '-'}${bad.name} is not allowed (meanings go on the command line)` : `'${bad.value ?? '--'}' is not an option`}`);
 } catch (e) { die(`SEMGREP_OPTS: ${e.message}`); }
 const { values: opt, positionals: files, tokens } = parseArgs({
   args: [...defaults, ...process.argv.slice(2).map(fill)],
@@ -57,14 +61,17 @@ const { values: opt, positionals: files, tokens } = parseArgs({
   tokens: true,
 });
 // --help: Japanese when the locale starts with ja, English otherwise
-const HELP_EN = `usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
+const HELP_EN = `usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
 grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is omitted.
 
   -e MEANING   lines matching this meaning (several -e are OR'd)
-  -a MEANING   AND onto the preceding -e term.      -e A -a B -e C  =  (A and B) or C
-  -v MEANING   AND NOT onto the preceding -e term.  -e A -v B       =  A and not B
+  -Q, --question QUESTION  lines that answer QUESTION, not lines asking it; the same as
+               -e "the line answers: QUESTION". "why the job failed" matches "the disk was full",
+               "whether the server is down" matches a denial too. Combines with -e / -a / -v / ! like -e
+  -a MEANING   AND onto the preceding -e/-Q term.      -e A -a B -e C  =  (A and B) or C
+  -v MEANING   AND NOT onto the preceding -e/-Q term.  -e A -v B       =  A and not B
                At the front it is a bare negation.  -v B            =  not B  (like grep -v)
-  !MEANING     a leading ! negates just that meaning, in -e / -a / -v alike
+  !MEANING     a leading ! negates just that meaning, in -e / -Q / -a / -v alike
                -e A -e '!B'  =  A or not B.   -a '!C' is the same as -v C
   /RE/FLAGS    a regex term (first and last char /, JS flags dgimsuvy): matched locally, no
                request. Prefilters its AND term: only units it holds for ask that term's meanings
@@ -89,6 +96,7 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
   -B NUM       print NUM lines of leading context before each match
   -C NUM       print NUM lines of context before and after (-A NUM -B NUM)
   -c           print only a count of matching lines per file (like grep -c)
+  -q, --quiet  print nothing, stop at the first match; exit 0 on a match, even after an error (like grep -q)
   --chunk=LINES lines per request (default 30)
                Lines in one request are each other's context, so a small chunk changes verdicts
                on ambiguous lines, not just speed
@@ -116,6 +124,7 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are green at or above
                the positive threshold, red below the negative one, yellow in between. NO_COLOR is honored
+  --model=ID   model id, overrides SEMGREP_MODEL (default jev-latest)
   -h, --help   this help (Japanese when LANG / LC_ALL / LC_MESSAGES starts with ja)
 
 Exit status: 0 matched / 1 no match / 2 error
@@ -124,20 +133,23 @@ Environment (read from the environment, else from ./.env, else from ~/.config/se
   SEMGREP_API_KEY    API key. Falls back to TYPESAFE_API_KEY. Get one at https://console.typesafe.ai/
   SEMGREP_URL        endpoint (default https://api.typesafe.ai/v1/systemone). Any TypeSafe-compatible
                      /v1/systemone works, e.g. https://openrouter.ai/api/v1/systemone
-  SEMGREP_MODEL      model id (default jev-latest)
+  SEMGREP_MODEL      model id (default jev-latest); --model wins
   SEMGREP_OPTS       default options, split on spaces and put before the command line, which wins;
                      --no-X turns a boolean flag off (--color takes --color=never). Options only: no
                      meanings, files or --. e.g. SEMGREP_OPTS='--level strict -n'. Scripts: SEMGREP_OPTS= semgrep
   The key goes to SEMGREP_URL, whatever it is. With SEMGREP_URL set and no key, no auth header is sent.
   e.g.  mkdir -p ~/.config/semgrep && echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env`;
-const HELP_JA = `usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
+const HELP_JA = `usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
 jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE 省略時は stdin。
 
   -e MEANING   この意味に合う行 (複数指定は OR)
-  -a MEANING   直前の -e 項に AND で連結。-e A -a B -e C は (A and B) or C
-  -v MEANING   直前の -e 項に AND NOT で連結。-e A -v B は A and not B
+  -Q, --question QUESTION  QUESTION に答えている行 (尋ねている行ではない)。-e "the line answers: QUESTION"
+               と同じ。「ジョブはなぜ失敗したか」は「ディスクが満杯だった」に一致し、「サーバが落ちているか」は
+               否定の答えにも一致する。-e / -a / -v / ! とは -e と同じように組み合わせられる
+  -a MEANING   直前の -e/-Q 項に AND で連結。-e A -a B -e C は (A and B) or C
+  -v MEANING   直前の -e/-Q 項に AND NOT で連結。-e A -v B は A and not B
                先頭に置けば単独の否定。-v B は not B (grep -v 相当)
-  !MEANING     -e / -a / -v のどこでも、先頭に ! を付けるとその意味だけ否定
+  !MEANING     -e / -Q / -a / -v のどこでも、先頭に ! を付けるとその意味だけ否定
                -e A -e '!B' は A or not B。-a '!C' は -v C と同じ
   /RE/FLAGS    正規表現項 (先頭と末尾が /、フラグは JS の dgimsuvy)。ローカルで判定しリクエストなし。
                同じ AND 項の絞り込みになり、これが当たった行だけその項の意味を尋ねる
@@ -162,6 +174,7 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
   -B NUM       一致行の前 NUM 行も表示
   -C NUM       前後 NUM 行を表示 (-A NUM -B NUM)
   -c           一致した行数だけをファイルごとに表示 (grep -c 相当)
+  -q, --quiet  何も表示せず、最初の一致で止まる。一致があればエラーがあっても終了コード 0 (grep -q 相当)
   --chunk=LINES 1 リクエストにまとめる行数 (既定 30)
                同じリクエストの行は互いの文脈になるので、小さくすると速さだけでなく曖昧な行の
                判定も変わる
@@ -189,6 +202,7 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
                否定側の閾値未満を赤、あいだを黄で表示。NO_COLOR にも従う
+  --model=ID   モデル名。SEMGREP_MODEL より優先 (既定 jev-latest)
   -h, --help   このヘルプ (LANG / LC_ALL / LC_MESSAGES が ja 以外なら英語)
 
 終了コード: 一致あり 0 / なし 1 / エラー 2 (引数・読めないファイル・API 障害)
@@ -197,7 +211,7 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
   SEMGREP_API_KEY    API キー。無ければ TYPESAFE_API_KEY。取得は https://console.typesafe.ai/
   SEMGREP_URL        送信先 (既定 https://api.typesafe.ai/v1/systemone)。TypeSafe 互換の
                      /v1/systemone なら可。例 https://openrouter.ai/api/v1/systemone
-  SEMGREP_MODEL      モデル名 (既定 jev-latest)
+  SEMGREP_MODEL      モデル名 (既定 jev-latest)。--model が優先
   SEMGREP_OPTS       既定のオプション。空白で区切ってコマンドラインの前に置くので、コマンドラインが
                      優先する。--no-X で真偽のフラグを消せる (--color は --color=never)。書けるのは
                      オプションだけで、意味・ファイル・-- は書けない。例 SEMGREP_OPTS='--level strict -n'。
@@ -212,7 +226,7 @@ if (opt.help) {
 
 const apiUrl = SEMGREP_URL || 'https://api.typesafe.ai/v1/systemone';
 const apiHost = (() => { try { return new URL(apiUrl).host; } catch { die(`SEMGREP_URL is not a URL: ${apiUrl}`); } })();
-const model = SEMGREP_MODEL || 'jev-latest';
+const model = opt.model || SEMGREP_MODEL || 'jev-latest';
 const credential = SEMGREP_API_KEY || TYPESAFE_API_KEY;
 
 // Expression: a list of AND terms joined by OR. Each literal is a meaning { kind:'m', text, not } or a
@@ -227,18 +241,19 @@ function compileRegex(pattern, flags) {
 }
 const expr = [];
 for (const tk of tokens) {
-  if (tk.kind !== 'option' || !['e', 'a', 'v'].includes(tk.name)) continue;
+  if (tk.kind !== 'option' || !['e', 'a', 'v', 'question'].includes(tk.name)) continue;
   if (tk.name === 'a' && expr.length === 0) die('-a needs a preceding -e');
   const bang = tk.value.startsWith('!'); // per-literal negation: "!MEANING" / "!/re/"
-  const text = bang ? tk.value.slice(1) : tk.value;
-  if (!text.trim()) die(`-${tk.name}: MEANING must not be empty`);
+  const bare = bang ? tk.value.slice(1) : tk.value;
+  if (!bare.trim()) die(`${tk.name.length > 1 ? '--' : '-'}${tk.name}: MEANING must not be empty`);
   const not = bang !== (tk.name === 'v');
-  const shape = RE_SHAPE.exec(text);
-  const lit = shape ? { kind: 'r', not, ...compileRegex(shape[1], shape[2]) } : { kind: 'm', not, text };
-  if (tk.name === 'e' || expr.length === 0) expr.push([lit]);
+  const shape = tk.name !== 'question' && RE_SHAPE.exec(bare); // -Q is always a question, never a regex
+  const lit = shape ? { kind: 'r', not, ...compileRegex(shape[1], shape[2]) }
+    : { kind: 'm', not, text: tk.name === 'question' ? `the line answers: ${bare}` : bare };
+  if (tk.name === 'e' || tk.name === 'question' || expr.length === 0) expr.push([lit]);
   else expr.at(-1).push(lit);
 }
-if (!expr.length) die('no -e MEANING given');
+if (!expr.length) die('no -e MEANING or -Q QUESTION given');
 // Captures: $<name>, $1-$99, $&, $$ (ECMAScript's GetSubstitution), scoped to one AND term's non-negated
 // regexes. Deviation from ECMAScript: $<name> naming no group is an error, not an empty string. A group of
 // a negated regex can't be referenced either. $n naming no group stays literal, as in ECMAScript.
@@ -498,7 +513,15 @@ async function evaluate(chunk) {
   const answers = await post(state, questions);
   chunk.forEach((l, i) => keys[i].forEach((text, k) => asksByUnit.get(l).set(text, answers[`${id(i)}_${k}`].noul)));
 }
-await Promise.all(chunks.map(chunk => pooled(() => evaluate(chunk))));
+const isHit = l => expr.some(term => termHolds(term, l));
+// -q stops at the first match, like grep -q. Known before any request: unsent units (blank, or no term's regexes
+// hold; their meanings score 0) and regex-only terms.
+// ponytail: process.exit may drop a warning still buffered for a stderr pipe; the exit status is what -q promises
+const regexOnly = term => term.every(lit => lit.kind === 'r');
+if (opt.quiet && allLines.some(l => expr.some(term => (!asksByUnit.get(l).size || regexOnly(term)) && termHolds(term, l)))) process.exit(0);
+await Promise.all(chunks.map(chunk => pooled(() => evaluate(chunk).then(() => {
+  if (opt.quiet && chunk.some(isHit)) process.exit(0);
+}))));
 
 const color = opt.color === 'always' || (opt.color === 'auto' && process.stdout.isTTY && !process.env.NO_COLOR);
 if (!['auto', 'always', 'never'].includes(opt.color)) die('--color must be auto, always or never');
@@ -529,7 +552,7 @@ function termHolds(term, l) {
 const hits = new Map();
 let matched = 0;
 for (const l of allLines) {
-  if (!expr.some(term => termHolds(term, l))) continue;
+  if (!isHit(l)) continue;
   matched++;
   if (!hits.has(l.file)) hits.set(l.file, new Map());
   hits.get(l.file).set(l.no, l);
@@ -563,7 +586,7 @@ const startNo = (file, k) => (opt.o ? spansOf.get(file)[k - 1][0][0] : k); // -o
 const after = Number(opt.A ?? opt.C ?? 0), before = Number(opt.B ?? opt.C ?? 0);
 const multi = opt.r || targets.length > 1; // grep -r prefixes file names even for a single file
 let lastPrinted = null; // [file, line number]; used to print -- between context groups
-for (const file of targets) {
+for (const file of opt.quiet ? [] : targets) {
   if (!sources.has(file)) continue;
   const h = hits.get(file);
   if (opt.c) { console.log((multi ? paint(35, file) + paint(36, ':') : '') + (h?.size ?? 0)); continue; }
@@ -587,10 +610,10 @@ for (const file of targets) {
   }
 }
 // Summary only when interactive; grep prints nothing to stderr when scripted.
-if (process.stderr.isTTY) {
+if (process.stderr.isTTY && !opt.quiet) {
   // The API's own usage.cost when reported (OpenRouter does); else an estimate at Jev's list price, only for TypeSafe itself.
   const cost = usedCost > 0 ? `, $${usedCost.toFixed(6)}` : SEMGREP_URL ? '' : `, ~$${(usedTokens * 0.042 / 1e6).toFixed(6)}`;
   console.error(`${matched}/${allLines.length} ${opt.sentence ? 'sentences' : opt.z ? 'records' : 'lines'} (${lines.length} sent), ${requestCount} requests, ${usedTokens} input tokens${cost}`);
 }
 // process.exit() can drop buffered stdout when piped, so set exitCode instead.
-process.exitCode = hadError ? 2 : matched ? 0 : 1;
+process.exitCode = hadError ? 2 : matched ? 0 : 1; // -q exited 0 at its first match, even after an error
