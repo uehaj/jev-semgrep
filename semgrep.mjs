@@ -243,11 +243,18 @@ if (!expr.length) die('no -e MEANING given');
 // regexes. Deviation from ECMAScript: $<name> naming no group is an error, not an empty string. A group of
 // a negated regex can't be referenced either. $n naming no group stays literal, as in ECMAScript.
 const SUBST = /\$(?:(\$)|(&)|<([^>]*)>|(\d{1,2}))/g;
+const numRef = (num, count) => (num.length === 2 && +num >= 1 && +num <= count ? +num : +num[0] >= 1 && +num[0] <= count ? +num[0] : 0);
 for (const term of expr) {
   const posNames = new Set(), negNames = new Set();
-  for (const lit of term) if (lit.kind === 'r') for (const n of lit.names) (lit.not ? negNames : posNames).add(n);
+  let posCount = 0, negCount = 0;
+  for (const lit of term) if (lit.kind === 'r') {
+    for (const n of lit.names) (lit.not ? negNames : posNames).add(n);
+    if (lit.not) negCount += lit.count; else posCount += lit.count;
+  }
   for (const lit of term) if (lit.kind === 'm') for (const m of lit.text.matchAll(SUBST)) {
-    const name = m[3];
+    const [all, , , name, num] = m;
+    // $n resolves as in expandCaptures: two digits if in range, else the first digit. Naming only a negated group is an error.
+    if (num) { if (!numRef(num, posCount) && numRef(num, negCount)) die(`${all}: refers to a negated regex's group`); continue; }
     if (name === undefined || posNames.has(name)) continue;
     die(negNames.has(name) ? `$<${name}>: refers to a negated regex's group` : `$<${name}>: no such capture group`);
   }
@@ -452,9 +459,8 @@ function expandCaptures(text, matches) {
     if (dollar) return '$';
     if (amp) return whole;
     if (name !== undefined) return named.get(name) ?? '';
-    if (num.length === 2 && Number(num) >= 1 && Number(num) <= positional.length) return positional[Number(num) - 1];
-    const n1 = Number(num[0]);
-    return n1 >= 1 && n1 <= positional.length ? positional[n1 - 1] + num.slice(1) : `$${num}`;
+    const n = numRef(num, positional.length);
+    return n ? positional[n - 1] + num.slice(String(n).length) : `$${num}`;
   });
 }
 // asksByUnit: unit -> Map(expanded meaning text -> probability, null until answered)
@@ -503,8 +509,8 @@ const paintProb = x => paint(x >= tPos ? 32 : x < tNeg ? 31 : 33, x.toFixed(2));
 function displayRow(l) {
   const out = [];
   for (const term of expr) {
-    const { matches } = regexPart(term, l.text);
-    for (const lit of term) out.push(lit.kind === 'r' ? (execAt(lit, l.text) ? 1 : 0) : (asksByUnit.get(l).get(expandCaptures(lit.text, matches)) ?? 0));
+    const { ok, matches } = regexPart(term, l.text); // a failed term was never asked, and its matches hold nulls
+    for (const lit of term) out.push(lit.kind === 'r' ? (execAt(lit, l.text) ? 1 : 0) : ok ? (asksByUnit.get(l).get(expandCaptures(lit.text, matches)) ?? 0) : 0);
   }
   return out;
 }

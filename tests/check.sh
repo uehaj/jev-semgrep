@@ -77,6 +77,11 @@ if $NOKEY $J -e '/(/' fixture.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 
 # $<name> naming no group, and naming a negated regex's group, are errors -- caught before any request
 if $NOKEY $J -e '/(?<t>\d+)/' -a '$<nope>' fixture.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 ]; then exit 1; fi
 if $NOKEY $J -e A -v '/(?<t>\d+)/' -a '$<t>' fixture.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 ]; then exit 1; fi
+# so is $1 when only a negated regex has a group 1
+if $NOKEY $J -e '!/(x)/' -a '$1 is valid' fixture.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 ]; then exit 1; fi
+# -p over a term whose regex failed: its meaning is 0.00, not a crash (it read the failed match's captures).
+# Nothing is sent: the only line fails /A/. SEMGREP_URL only gets past the missing-key check.
+[ "$(printf 'B\n' | $NOKEY SEMGREP_URL=http://127.0.0.1:1 $J -p -e '/A/' -a 'a meaning' -e '/B/' 2>/dev/null)" = "$(printf 'B\t[0.00 0.00 1.00]')" ]
 # --sentence=rules (no extra Jev calls) and -z apply regex terms per unit
 [ "$($NOKEY $J -n --sentence=rules -e '/mistake/i' prose.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 2 3 " ]
 [ "$(printf 'usage 95%%\0usage 10%%\0' | $NOKEY $J -z -c -e '/usage 9\d%/' 2>/dev/null)" = "1" ]
