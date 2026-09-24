@@ -4,7 +4,8 @@
 //   semgrep -Q "why the job failed" FILE...   # -Q X is -e "the line answers: X": answering lines, not asking ones
 //   -e / -Q terms are OR'd; -a / -v attach AND / AND NOT to the preceding term: (A and B and not C) or D.
 //   A leading ! negates just that meaning: -e A -e '!B' is A or not B.
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, lstatSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { parseArgs } from 'node:util';
 
@@ -63,6 +64,7 @@ const { values: opt, positionals: files, tokens } = parseArgs({
 // --help: Japanese when the locale starts with ja, English otherwise
 const HELP_EN = `usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
 grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is omitted.
+As git semgrep, FILE are pathspecs and every tracked file is searched, like git grep.
 
   -e MEANING   lines matching this meaning (several -e are OR'd)
   -Q, --question QUESTION  lines that answer QUESTION, not lines asking it; the same as
@@ -133,6 +135,7 @@ Environment (read from the environment, else from ./.env, else from ~/.config/se
   e.g.  mkdir -p ~/.config/semgrep && echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env`;
 const HELP_JA = `usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
 jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE 省略時は stdin。
+git semgrep として呼ぶと git grep と同じく FILE は pathspec になり、追跡中のファイルを全部探す。
 
   -e MEANING   この意味に合う行 (複数指定は OR)
   -Q, --question QUESTION  QUESTION に答えている行 (尋ねている行ではない)。-e "the line answers: QUESTION"
@@ -268,7 +271,16 @@ function expand(path) {
     .sort((a, b) => a.name.localeCompare(b.name))
     .flatMap(d => expand(path.endsWith('/') ? path + d.name : `${path}/${d.name}`)); // not path.join(): it would drop the leading ./
 }
-const targets = (files.length ? files : [opt.r ? '.' : '-']).flatMap(f => (f === '-' ? [f] : expand(f)));
+// As git semgrep, FILE arguments are pathspecs and the files are the tracked ones, like git grep. The skip list
+// still applies, since these files were not named one by one. Deleted files, submodules and symlinks are left out.
+const lsFiles = () => {
+  try { return execFileSync('git', ['ls-files', '-z', '--', ...files], { encoding: 'utf8' }); } catch { process.exit(2); } // git has said why
+};
+const gitFiles = () => lsFiles().split('\0')
+  .filter(p => p && !p.split('/').some(d => SKIP_DIRS.includes(d)) && !SKIP_FILE.test(p.split('/').at(-1))
+    && lstatSync(p, { throwIfNoEntry: false })?.isFile());
+const targets = process.env.SEMGREP_GIT ? gitFiles()
+  : (files.length ? files : [opt.r ? '.' : '-']).flatMap(f => (f === '-' ? [f] : expand(f)));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let usedTokens = 0, usedCost = 0, requestCount = 0;
 // One request with retries: 429 / 529 / 5xx, connection errors and timeouts back off exponentially.
@@ -485,7 +497,7 @@ const highlight = (text, rs) => {
 const startNo = (file, k) => (opt.o ? spansOf.get(file)[k - 1][0][0] : k); // -o: the unit where the sentence starts
 
 const after = Number(opt.A ?? opt.C ?? 0), before = Number(opt.B ?? opt.C ?? 0);
-const multi = opt.r || targets.length > 1; // grep -r prefixes file names even for a single file
+const multi = opt.r || process.env.SEMGREP_GIT || targets.length > 1; // grep -r and git grep prefix file names even for a single file
 let lastPrinted = null; // [file, line number]; used to print -- between context groups
 for (const file of opt.quiet ? [] : targets) {
   if (!sources.has(file)) continue;

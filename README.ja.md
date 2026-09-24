@@ -293,6 +293,21 @@ tests/tickets/sub/b.txt
 コマンドラインで明示したファイルは、除外リストに該当しても検索します。
 `-l` は一致したファイルを見つかった順に 1 回ずつ表示し、`-r` の有無にかかわらず使えます。`-c` は行の代わりにファイルごとの一致行数を出します。
 
+### git のサブコマンドとして (`git semgrep`)
+
+`npm install -g` すると `git-semgrep` も入るので、`git semgrep` で呼べます。`git grep` と同じく git が追跡している
+ファイルだけを探し（`.gitignore` 済みのものやビルド成果物は送られない）、FILE はカレントディレクトリからの pathspec です。
+
+```sh
+$ cd tests && git semgrep -l -e "customer is asking for a refund" fixture.txt tickets
+fixture.txt
+tickets/a.txt
+tickets/sub/b.txt
+```
+
+FILE を省くとカレントディレクトリ以下の追跡ファイルを全部探します。`-r` の除外リスト（`.env*`、鍵など）は追跡されていても適用します。
+ヘルプは `git semgrep -h` です（`--help` は git が横取りして man ページを探しに行きます）。
+
 ### 「〜でない」行を全部
 
 ```sh
