@@ -6,10 +6,12 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
-- `-k`, `--i-want-to-know NEED`: matches lines that answer an information need, not lines the need is
-  true of. "the cat's name" matches a line stating it, not a line asking for it; for a yes/no need
-  ("whether the server is down") a line that denies it still answers it and matches. Combines with
-  `-a` / `-v` / `!` and OR's with `-e` exactly like `-e`. Closes #22.
+- `-Q`, `--question QUESTION`: matches lines that answer the question, not lines asking it. Shorthand for
+  `-e "the line answers: QUESTION"`. "the cat's name" matches a line stating it, not a line asking for it;
+  for a yes/no question ("whether the server is down") a line that denies it still answers it and matches.
+  Closes #22.
+- `-q`, `--quiet`: print nothing and report only through the exit status, like `grep -q`. A match exits 0
+  even if another file could not be read.
 - `--sentence`: judge each sentence instead of each line. Output is still the lines a matching sentence
   touches, with the sentence in the match color. Wrapped lines are joined first, except at a blank line,
   next to brackets or `;`, or before a line starting with `-` `*` `+` `#` `>` `"` or a digit, so JSONL,

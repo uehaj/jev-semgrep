@@ -201,23 +201,23 @@ $ ./semgrep -n -e "customer is angry or frustrated" tests/corpus.txt
 
 None of these lines contain the words "angry" or "frustrated". The Japanese lines were found by an English meaning.
 
-### Intent: lines that answer a need, not lines it is true of (`-k`)
+### Lines that answer a question (`-Q`)
 
-`-e` asks whether a line states a meaning. `-k` (`--i-want-to-know`) asks something different: does the
-line answer this information need. A line that *asks* the question is close to the meaning but answers
-nothing, and for a yes/no need a line that *denies* it still answers it:
+`-e` asks whether a line states a meaning. `-Q QUESTION` (`--question`) finds lines that answer it instead.
+A line that *asks* the question is close to it in meaning but answers nothing, and for a yes/no question
+a line that *denies* it still answers it:
 
 ```sh
-$ ./semgrep -n -k "whether the server is down" tests/intent.txt
+$ ./semgrep -n -Q "whether the server is down" tests/intent.txt
 5:The server is down.
 6:The server is healthy and responding normally.
-2/17 lines (17 sent), 1 requests, 1070 input tokens, ~$0.000045
+2/17 lines (17 sent), 1 requests, 1087 input tokens, ~$0.000046
 ```
 
 Both the confirming line and the denying line match: each settles whether the server is down. `Is the
-server down?` does not match `-k`, because asking is not answering; `-e "asking whether the server is
-down"` would match it instead. `-k` combines with `-a` / `-v` / `!` and OR's with other `-e` / `-k` terms
-exactly like `-e`.
+server down?` does not match, because asking is not answering; `-e "asking whether the server is down"`
+would match it instead. `-Q X` is shorthand for `-e "the line answers: X"`, so it combines with `-a` / `-v`
+/ `!` and OR's with other terms exactly like `-e`.
 
 ### OR: two meanings, and see the probabilities with `-p`
 
@@ -415,15 +415,15 @@ The API key and endpoint are read the same way as on the command line (`SEMGREP_
 ## Usage
 
 ```
-usage: semgrep [OPTION]... -e MEANING|-k NEED [-a MEANING] [-v MEANING]... [FILE...]
+usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
 
   -e MEANING   lines matching this meaning (several -e are OR'd)
-  -k, --i-want-to-know NEED  lines that answer this information need, not lines it holds true of
-               (see "Intent" above). Combines with -a / -v / ! and OR's with -e exactly like -e
-  -a MEANING   AND onto the preceding -e/-k term.      -e A -a B -e C  =  (A and B) or C
-  -v MEANING   AND NOT onto the preceding -e/-k term.  -e A -v B       =  A and not B
+  -Q, --question QUESTION  lines that answer QUESTION, not lines asking it; the same as
+               -e "the line answers: QUESTION" (see "Lines that answer a question" above)
+  -a MEANING   AND onto the preceding -e/-Q term.      -e A -a B -e C  =  (A and B) or C
+  -v MEANING   AND NOT onto the preceding -e/-Q term.  -e A -v B       =  A and not B
                At the front it is a bare negation.  -v B            =  not B  (like grep -v)
-  !MEANING     a leading ! negates just that meaning, in -e / -k / -a / -v alike
+  !MEANING     a leading ! negates just that meaning, in -e / -Q / -a / -v alike
                -e A -e '!B'  =  A or not B.   -a '!C' is the same as -v C
   --level=LEVEL strictness preset, sets both thresholds (default normal)
                  loose  : -t 0.3 -T 0.7  catch more, accept some noise
@@ -439,6 +439,7 @@ usage: semgrep [OPTION]... -e MEANING|-k NEED [-a MEANING] [-v MEANING]... [FILE
   -B NUM       print NUM lines of leading context before each match
   -C NUM       print NUM lines of context before and after (-A NUM -B NUM)
   -c           print only a count of matching lines per file (like grep -c)
+  -q, --quiet  print nothing; exit 0 on a match, even if an error occurred (like grep -q)
   --chunk=LINES lines per request (default 30)
                Lines in one request are each other's context, so a small chunk changes verdicts
                on ambiguous lines, not just speed

@@ -60,21 +60,27 @@ z_in | $J -z -e 'the customer is asking for a refund' 2>/dev/null | od -An -c | 
 # --sentence=jev keeps unpunctuated Japanese entries apart, so the refund requests match as they do per line
 [ "$($J -n --sentence -e 'the customer is asking for a refund' corpus.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "14 18 " ]
 
-# -k / --i-want-to-know: matches lines that answer a need, not lines it holds true of (#22).
+# -Q / --question: -e "the line answers: X", lines that answer X, not lines asking it (#22).
 # A fact need matches the line stating it (1), not one asking for it (2) or an on-topic non-answer (3, 4).
-[ "$($J -n -k "the cat's name" intent.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 " ]
-[ "$($J -n --i-want-to-know "the cat's name" intent.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 " ]
+[ "$($J -n -Q "the cat's name" intent.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 " ]
+[ "$($J -n --question "the cat's name" intent.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 " ]
 # A yes/no need matches both a confirming (5) and a DENYING (6) line; asking (7) and an on-topic
 # non-answer (8) do not match, even though the asking line is close to the proposition.
-[ "$($J -n -k 'whether the server is down' intent.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "5 6 " ]
-# -k combines with -v like -e: the denial (6) answers the need, and -v takes it out (0.01 against 0.92)
-[ "$($J -n -k 'whether the server is down' -v 'the server is healthy' intent.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "5 " ]
-# -e and -k OR together, each branch bringing a line the other does not: 4 is sunny, 1 names the cat
-[ "$($J -n -e 'the weather is sunny' -k "the cat's name" intent.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 4 " ]
+[ "$($J -n -Q 'whether the server is down' intent.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "5 6 " ]
+# -Q combines with -v like -e: the denial (6) answers the need, and -v takes it out (-Q 0.88, "the server is healthy" 0.99)
+[ "$($J -n -Q 'whether the server is down' -v 'the server is healthy' intent.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "5 " ]
+# -e and -Q OR together, each branch bringing a line the other does not: 4 is sunny, 1 names the cat
+[ "$($J -n -e 'the weather is sunny' -Q "the cat's name" intent.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 4 " ]
 # an answer split over two lines is one sentence with --sentence
-[ "$(printf '名前は\nタマである\n' | $J --sentence=rules -o -k '猫の名前' 2>/dev/null)" = "名前はタマである" ]
-# -k needs its argument
-if $J -k '' intent.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 ]; then exit 1; fi
-# SEMGREP_OPTS rejects -k / --i-want-to-know, like -e / -a / -v
-SEMGREP_OPTS='-k x' $J -e y </dev/null 2>&1 | grep -q '^semgrep: SEMGREP_OPTS: '
+[ "$(printf '名前は\nタマである\n' | $J --sentence=rules -o -Q '猫の名前' 2>/dev/null)" = "名前はタマである" ]
+# -Q needs its argument
+if $J -Q '' intent.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 ]; then exit 1; fi
+# SEMGREP_OPTS rejects -Q / --question, like -e / -a / -v
+SEMGREP_OPTS='-Q x' $J -e y </dev/null 2>&1 | grep -q '^semgrep: SEMGREP_OPTS: '
+
+# -q / --quiet: nothing on stdout, the answer is the exit status; a match wins over an unreadable file (grep -q)
+[ -z "$($J -q -Q "the cat's name" intent.txt 2>/dev/null)" ]
+$J --quiet -e 'the weather is sunny' intent.txt 2>/dev/null
+if $J -q -e 'a volcano is erupting' intent.txt 2>/dev/null; then exit 1; elif [ $? -ne 1 ]; then exit 1; fi
+$J -q -Q "the cat's name" intent.txt no-such-file 2>/dev/null
 echo OK
