@@ -261,13 +261,13 @@ $ ./semgrep --level loose -n -e "a security risk or dangerous destructive operat
 ### ディレクトリを再帰検索、ファイル名だけ表示
 
 ```sh
-$ ./semgrep -r -n -e "customer is asking for a refund" docs/
-docs/tickets/a.txt:7:ユーザー山田さんからの問い合わせ: 返金してほしい、商品が壊れていた
-docs/tickets/sub/b.txt:1:The customer wants a refund for the broken lamp.
+$ ./semgrep -r -n -e "customer is asking for a refund" tests/tickets/
+tests/tickets/a.txt:7:Ticket #16: I want a refund, the item was broken.
+tests/tickets/sub/b.txt:1:The customer wants a refund for the broken lamp.
 
-$ ./semgrep -rl -e "customer is asking for a refund" docs/
-docs/tickets/a.txt
-docs/tickets/sub/b.txt
+$ ./semgrep -rl -e "customer is asking for a refund" tests/tickets/
+tests/tickets/a.txt
+tests/tickets/sub/b.txt
 ```
 
 `-r` はディレクトリを名前順にたどり、`.git`、`node_modules`、`.ssh`、`.aws`、`.gnupg`、バイナリ（先頭 8 KB に NUL がある）、
