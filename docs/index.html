@@ -126,7 +126,7 @@ footer{padding:32px 0 56px;color:var(--mute);font-size:.9rem;text-align:center;b
       <div class="card"><h3>🧮 Real booleans</h3><p>Each meaning yields an independent probability, so AND / OR / NOT are plain boolean operations. One threshold (0.5) works across queries.</p></div>
       <div class="card"><h3>📦 Zero dependencies</h3><p>One file, Node.js 20.12+ and <code>fetch</code>. 30 lines per request, 8 requests in parallel. No index to build.</p></div>
       <div class="card"><h3>✂️ Lines, sentences, records</h3><p><code>--sentence</code> judges each sentence across wrapped lines; <code>-z</code> judges NUL-terminated records like <code>git log -z</code>.</p></div>
-      <div class="card"><h3>🎯 Intent grep <span class="new card-b">coming</span></h3><p><code>-k</code> finds lines that <em>answer</em> a need — including the denial — and skips lines that merely ask.</p></div>
+      <div class="card"><h3>🎯 Intent grep <span class="new card-b">coming</span></h3><p><code>--i-want-to-know</code> finds lines that <em>answer</em> a need — including the denial — and skips lines that merely ask.</p></div>
       <div class="card"><h3>🔣 Regex terms <span class="new card-b">coming</span></h3><p><code>-e '/ERROR|FATAL/'</code> runs locally for free, prefilters what Jev sees, and hands captures to meanings as <code>$&lt;name&gt;</code>.</p></div>
       <div class="card"><h3>🗜️ One request per template <span class="new card-b">coming</span></h3><p><code>--dedup</code> folds machine logs by skeleton: a 43,071-line system log becomes 550 templates, 1.2% of the bytes.</p></div>
       <div class="card"><h3>🔑 Any provider by key <span class="new card-b">coming</span></h3><p>Vercel AI Gateway, OpenRouter, Cloudflare Workers AI or TypeSafe — picked from the key's prefix. Just set the key.</p></div>
@@ -177,8 +177,8 @@ const S = [
    [4,"The manager denied the refund request yesterday",.17,0],[5,"I demand a full refund immediately",.94,1],[6,"Refunds are processed within 5 business days",.08,0]],
   note:"Threshold 0.5 — calibrated probabilities, no per-query tuning."},
  {h:"Answers, not echoes",pre:"PR #28",
-  c:"-k asks whether a line answers an information need. Asking the question answers nothing; for a yes/no need, the denial answers it too.",
-  cmd:'semgrep -n -k "whether the server is down" tests/intent.txt',
+  c:"--i-want-to-know (-k) asks whether a line answers an information need. Asking the question answers nothing; for a yes/no need, the denial answers it too.",
+  cmd:'semgrep -n --i-want-to-know "whether the server is down" tests/intent.txt',
   rows:[[5,"The server is down.",null,1],[6,"The server is healthy and responding normally.",null,1],[7,"Is the server down?",null,0],[8,"The server room felt warm today.",null,0]],
   note:"2/17 lines (17 sent), 1 requests, 1070 input tokens, ~$0.000045"},
  {h:"AND / NOT are just booleans",
