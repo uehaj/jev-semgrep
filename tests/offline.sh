@@ -133,11 +133,19 @@ reset; $E SEMGREP_URL=$base/v1 SEMGREP_API_KEY=k1 node ../semgrep.mjs -e cat "$F
 reset; $E SEMGREP_URL=$base/v1 TYPESAFE_API_KEY=k2 node ../semgrep.mjs -e cat "$F" >/dev/null; eq "$(stat auth)" "Bearer k2" "TYPESAFE_API_KEY fallback"
 code 2 "SEMGREP_URL not a URL" -- $E SEMGREP_URL=nope node ../semgrep.mjs -e cat "$F"
 code 2 "the TypeSafe default needs a key" -- $E node ../semgrep.mjs -e cat "$F"
+# --sys1-*: each overrides its environment variable
+reset; $E SEMGREP_URL=nope node ../semgrep.mjs --sys1-url=$base/v1 -e cat "$F" >/dev/null; eq "$(stat count)" "1" "--sys1-url over SEMGREP_URL"
+code 2 "--sys1-url not a URL" -- $J --sys1-url=nope -e cat "$F"
+reset; $E SEMGREP_URL=$base/v1 SEMGREP_API_KEY=k1 node ../semgrep.mjs --sys1-api-key=k3 -e cat "$F" >/dev/null; eq "$(stat auth)" "Bearer k3" "--sys1-api-key over SEMGREP_API_KEY"
+code 1 "--sys1-api-key satisfies the TypeSafe default" -- $E node ../semgrep.mjs --sys1-api-key=k3 -e cat </dev/null
+reset; $E SEMGREP_URL=$base/v1 SEMGREP_MODEL=m1 node ../semgrep.mjs -e cat "$F" >/dev/null; eq "$(stat model)" "m1" "SEMGREP_MODEL"
+reset; $E SEMGREP_URL=$base/v1 SEMGREP_MODEL=m1 node ../semgrep.mjs --sys1-model=m2 -e cat "$F" >/dev/null; eq "$(stat model)" "m2" "--sys1-model over SEMGREP_MODEL"
+reset; $E SEMGREP_URL=$base/v1 SEMGREP_OPTS=--sys1-model=m3 node ../semgrep.mjs -e cat "$F" >/dev/null; eq "$(stat model)" "m3" "--sys1-model in SEMGREP_OPTS"
 
 # --help: exit 0, Japanese by locale, lists the options
 code 0 "--help" -- $E LANG=C node ../semgrep.mjs --help
 eq "$($E LANG=C node ../semgrep.mjs -h | head -1 | cut -c1-14)" "usage: semgrep" "-h"
-for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color'; do
+for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key'; do
   $E LANG=C node ../semgrep.mjs --help | grep -q -- "$o" || fail "--help lacks $o"
 done
 $E LANG=C node ../semgrep.mjs --help | grep -q 'grep by meaning' || fail "--help in English"
