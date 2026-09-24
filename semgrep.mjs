@@ -75,11 +75,12 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
                  git log -z --format='%h %s %b' | semgrep -z -e "the change alters user-visible behaviour"
   -p           print each meaning's probability at the end of the line (for tuning thresholds)
   --dedup      judge one line per template instead of every line. Lines that differ only in ids, hashes,
-               numbers, paths and URLs share a template; one of them is sent and its answer is reused for
-               the rest. What is sent is that line's original text, not the masked form, so a meaning that
-               reads a value still sees it. Built for machine-generated logs, where it can cut the cost by
-               a factor of 50 or more; prose has no shared skeleton and barely folds. Lines within one
-               template are assumed to be judged alike, which on a system log held for 99 of 100 groups
+               numbers, dates and times, paths and URLs share a template; one of them is sent and its answer
+               is reused for the rest. Which of those may be folded depends on the meaning: a number decides
+               "disk usage above 90%", a time decides "happened at night". Jev is asked first, one small
+               request per meaning, and the kinds that could change a match are kept apart. Built for
+               machine-generated logs, where it can cut the cost by a factor of 30 or more; prose has no
+               shared skeleton and barely folds, and a meaning that reads a value folds little
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are green at or above
                the positive threshold, red below the negative one, yellow in between. NO_COLOR is honored
@@ -127,12 +128,13 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
                レコードを出すツールとそのまま繋がる: git log -z、find -print0、xargs -0
                  git log -z --format='%h %s %b' | semgrep -z -e "ユーザーに見える振る舞いを変えている"
   -p           各意味の確率を行末に表示 (閾値調整用)
-  --dedup      全行ではなくテンプレートごとに 1 行だけ判定する。ID・ハッシュ・数値・パス・URL だけが
-               違う行は同じテンプレートとみなし、代表 1 行を送ってその答えを残りにも使う。送るのは
-               代表行の原文であってマスク後の文字列ではないので、値を読む意味でも正しく判定できる。
-               機械が吐くログ向けで、費用が 50 分の 1 以下になることもある。散文には共通の骨格が
-               ないのでほとんど縮まない。同じテンプレート内の判定は同じとみなすが、システムログでの
-               実測では 100 グループ中 99 グループで実際に一致した
+  --dedup      全行ではなくテンプレートごとに 1 行だけ判定する。ID・ハッシュ・数値・日付と時刻・パス・
+               URL だけが違う行は同じテンプレートとみなし、代表 1 行を送ってその答えを残りにも使う。
+               どれをまとめてよいかは意味による。「ディスク使用率が 90% を超えている」なら数値が、
+               「夜間に起きた」なら時刻が答えを決める。そこで意味ごとに小さなリクエストを 1 つ送って
+               Jev に聞き、答えを変えうる種類はまとめない。機械が吐くログ向けで、費用が 30 分の 1
+               以下になることもある。散文には共通の骨格がないのでほとんど縮まず、値を読む意味もあまり
+               縮まない
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
                否定側の閾値未満を赤、あいだを黄で表示。NO_COLOR にも従う
@@ -231,24 +233,62 @@ for (const file of targets) {
 // Blank and whitespace-only lines are not sent; they count as probability 0 for every meaning (never match -e, always match -v).
 const lines = allLines.filter(l => l.text.trim());
 
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let usedTokens = 0;
+let usedCost = 0;
+let requestCount = 0;
+// One request with retries: 429 / 529 / 5xx, connection errors and timeouts back off exponentially.
+async function post(state, questions) {
+  for (let attempt = 0; ; attempt++) {
+    let res;
+    try {
+      res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...(credential && { authorization: `Bearer ${credential}` }) },
+        body: JSON.stringify({ model, state, questions }),
+        signal: AbortSignal.timeout(60_000),
+      });
+    } catch (e) {
+      if (attempt < 6) { await sleep(500 * 2 ** attempt); continue; }
+      throw new Error(`${apiHost}: ${e.cause?.message ?? e.message}`);
+    }
+    if ((res.status === 429 || res.status === 529 || res.status >= 500) && attempt < 6) { await sleep(500 * 2 ** attempt); continue; }
+    if (!res.ok) throw new Error(`${apiHost} ${res.status}: ${await res.text()}`);
+    const { answers, usage = {} } = await res.json();
+    requestCount++;
+    usedTokens += usage.input_tokens ?? 0;
+    usedCost += typeof usage.cost === 'number' ? usage.cost : 0;
+    return answers;
+  }
+}
+
 // --dedup: machine-generated logs repeat one skeleton with a different id or number in it. Mask the parts
 // whose value carries no meaning, group by the result, and judge one member per group. The mask is only
-// the grouping key: what gets sent is the representative's ORIGINAL text, so a meaning that reads a number
-// ("an unusually large payload") still sees it. Measured on /var/log/jamf.log, two representatives drawn
-// from each of 100 groups disagreed at the 0.5 threshold once, so the error this trades for the saving is
-// about 1% on that kind of input. Prose has no skeleton to find and barely folds at all.
-const MASK = [
-  [/https?:\/\/\S+/g, '<url>'],
-  [/(?:\/[\w.@+-]+){2,}/g, '<path>'],
-  [/\b(?=[0-9a-f]{7,}\b)[0-9a-f]*\d[0-9a-f]*\b/gi, '<hex>'], // ids and hashes, but not words spelled in a-f
-  [/\b\d[\d.,:_-]*\b/g, '<num>'],
+// the grouping key: what gets sent is the representative's ORIGINAL text. Whether a value carries meaning
+// depends on the meaning: a number decides "disk usage above 90%", a time decides "happened at night". So
+// Jev is asked first, once per run, which kinds of value could change a match, and those are left unmasked.
+// Measured on install.log (#19): reusing answers across different values got 2 of 11, 14 of 60 and 22 of 44
+// right for such meanings; the question named the right kinds for all seven meanings tried, at 0.7.
+const MASK = [ // [kind, pattern, placeholder, what Jev is told the kind is]
+  ['url', /https?:\/\/\S+/g, '<url>', 'a URL'],
+  ['path', /(?:\/[\w.@+-]+){2,}/g, '<path>', 'a file path'],
+  ['time', /\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b|\b\d{4}-\d\d-\d\d(?:[T ]\d\d:\d\d(?::\d\d(?:\.\d+)?)?)?(?:Z|[+-]\d\d(?::?\d\d)?)?|\b\d{1,2}:\d\d(?::\d\d(?:\.\d+)?)?\b/g, '<time>', 'a date or a time of day'],
+  ['hex', /\b(?=[0-9a-f]{7,}\b)(?=[0-9a-f]*[a-f])[0-9a-f]*\d[0-9a-f]*\b/gi, '<hex>', 'a hex id or hash'], // needs a digit and a letter: not words spelled in a-f, not long decimals (sizes, counts)
+  ['num', /\b\d[\d.,:_-]*\b/g, '<num>', 'a number'],
 ];
 const repOf = new Map(); // unit -> the unit actually sent on its behalf
 let sent = lines;
-if (opt.dedup) {
+if (opt.dedup && lines.length) {
+  // One request per meaning, the meaning as the only state: this is the form measured in #19. Keeping a kind that
+  // could be folded only costs savings; folding one that matters gives wrong answers, so the threshold leans to keeping.
+  const keep = await Promise.all(meanings.map(text => post({ meaning: text }, Object.fromEntries(MASK.map(([kind, , , what]) => [kind, {
+    type: 'noul',
+    instructions: `Log lines are grouped when they differ only in ${what}. Could the value of ${what} in a log line change whether that line matches the meaning "${text}"?`,
+  }]))).then(a => MASK.filter(([kind]) => a[kind].noul >= 0.7).map(([kind]) => kind))));
+  const fold = MASK.filter(([kind]) => !keep.flat().includes(kind));
   const rep = new Map();
   for (const l of lines) {
-    const key = MASK.reduce((s, [re, to]) => s.replace(re, to), l.text);
+    const key = fold.reduce((s, [, re, to]) => s.replace(re, to), l.text);
     if (!rep.has(key)) rep.set(key, l);
     repOf.set(l, rep.get(key));
   }
@@ -267,10 +307,6 @@ for (let i = 0; i < sent.length; ) {
   chunks.push(chunk);
 }
 
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-let usedTokens = 0;
-let usedCost = 0;
-
 async function evaluate(chunk) {
   const id = i => `L${String(i).padStart(3, '0')}`;
   const state = Object.fromEntries(chunk.map((l, i) => [id(i), l.text.slice(0, MAX_UNIT_CHARS)]));
@@ -278,29 +314,8 @@ async function evaluate(chunk) {
   chunk.forEach((_, i) => meanings.forEach((text, m) => {
     questions[`${id(i)}_${m}`] = { type: 'noul', instructions: `Does line ${id(i)} match the meaning: "${text}"?` };
   }));
-  for (let attempt = 0; ; attempt++) {
-    let res;
-    try {
-      res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', ...(credential && { authorization: `Bearer ${credential}` }) },
-        body: JSON.stringify({ model, state, questions }),
-        signal: AbortSignal.timeout(60_000),
-      });
-    } catch (e) {
-      if (attempt < 6) { await sleep(500 * 2 ** attempt); continue; } // retry on connection errors and timeouts too
-      throw new Error(`${apiHost}: ${e.cause?.message ?? e.message}`);
-    }
-    if ((res.status === 429 || res.status === 529 || res.status >= 500) && attempt < 6) {
-      await sleep(500 * 2 ** attempt);
-      continue;
-    }
-    if (!res.ok) throw new Error(`${apiHost} ${res.status}: ${await res.text()}`);
-    const { answers, usage = {} } = await res.json();
-    usedTokens += usage.input_tokens ?? 0;
-    usedCost += typeof usage.cost === 'number' ? usage.cost : 0;
-    return chunk.map((_, i) => meanings.map((_, m) => answers[`${id(i)}_${m}`].noul));
-  }
+  const answers = await post(state, questions);
+  return chunk.map((_, i) => meanings.map((_, m) => answers[`${id(i)}_${m}`].noul));
 }
 
 // Run up to -j requests at once; results are consumed in chunk order.
@@ -365,7 +380,7 @@ for (const file of targets) {
 if (process.stderr.isTTY) {
   // The API's own usage.cost when reported (OpenRouter does); else an estimate at Jev's list price, only for TypeSafe itself.
   const cost = usedCost > 0 ? `, $${usedCost.toFixed(6)}` : SEMGREP_URL ? '' : `, ~$${(usedTokens * 0.042 / 1e6).toFixed(6)}`;
-  console.error(`${matched}/${allLines.length} ${opt.z ? 'records' : 'lines'} (${sent.length} sent${opt.dedup ? ` of ${lines.length}` : ''}), ${chunks.length} requests, ${usedTokens} input tokens${cost}`);
+  console.error(`${matched}/${allLines.length} ${opt.z ? 'records' : 'lines'} (${sent.length} sent${opt.dedup ? ` of ${lines.length}` : ''}), ${requestCount} requests, ${usedTokens} input tokens${cost}`);
 }
 // process.exit() can drop buffered stdout when piped, so set exitCode instead.
 process.exitCode = hadError ? 2 : matched ? 0 : 1;
