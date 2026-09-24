@@ -5,6 +5,14 @@ set -e
 cd "$(dirname "$0")"
 # API key comes from the environment or from .env at the repo root
 J="node --env-file-if-exists=../.env ../semgrep.mjs"
+
+# SEMGREP_OPTS, offline: empty input sends nothing
+SEMGREP_OPTS='--level bogus' $J -e x </dev/null 2>&1 | grep -qx 'semgrep: --level must be one of loose, normal, strict'
+SEMGREP_OPTS='--level bogus' $J --level strict -e x </dev/null 2>/dev/null || [ $? = 1 ]   # the command line wins
+SEMGREP_OPTS='-n' $J --no-n -e x </dev/null 2>/dev/null || [ $? = 1 ]                     # --no-X clears a default
+for bad in '-e refund' 'file.txt' '--' '--nope'; do
+  SEMGREP_OPTS="$bad" $J -e x </dev/null 2>&1 | grep -q '^semgrep: SEMGREP_OPTS: '
+done
 out=$($J -n -e 'ネットワークやリモート接続の障害' -e 'customer is asking for a refund' fixture.txt 2>/dev/null | cut -d: -f1)
 for n in 4 6 7 13 30; do echo "$out" | grep -qx "$n"; done
 for n in 1 8 11 15 26; do ! echo "$out" | grep -qx "$n"; done
@@ -44,6 +52,13 @@ z_in() { printf 'the package arrived\nand I want my money back for it\0the sky i
 [ -z "$(z_in | $J -c -e 'the customer is asking for a refund' 2>/dev/null)" ]
 # matching records end with NUL
 z_in | $J -z -e 'the customer is asking for a refund' 2>/dev/null | od -An -c | grep -q '\\0'
+# --sentence judges sentences but prints the original lines they touch
+[ "$($J -n --sentence -e 'the author admits they made a mistake' prose.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 2 3 " ]
+# -o prints the sentence itself, joined, numbered by its first line; Japanese joins without a space
+[ "$($J -n -o --sentence -e 'the author admits they made a mistake' prose.txt 2>/dev/null)" = "1:I should have checked the input before shipping, and that was my mistake." ]
+[ "$($J -n -o --sentence -e 'customer is asking for a refund' prose.txt 2>/dev/null)" = "8:先週買った掃除機が初日から動かないので返金してほしいです。" ]
+# --sentence=jev keeps unpunctuated Japanese entries apart, so the refund requests match as they do per line
+[ "$($J -n --sentence -e 'the customer is asking for a refund' corpus.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "14 18 " ]
 
 # --dedup. The summary line ("… (N sent of M) …") is only printed to a terminal, so run under script(1).
 # util-linux script answers --version and takes the command with -c; BSD script takes it as arguments.
@@ -88,4 +103,7 @@ $J --dedup -n -e 'a request failed' "$T/ids" 2>/dev/null | grep -qx '2:worker re
 [ "$($J --dedup -j 1 -c -e 'a request failed' -e 'disk usage is above 90%' "$T/ids" "$T/disk" 2>/dev/null | tr '\n' ' ')" = "$T/ids:3 $T/disk:2 " ]
 # empty input asks nothing
 [ "$(printf '' | $J --dedup -c -e 'about cats' 2>/dev/null)" = "0" ]
+# with --sentence the unit is a sentence, and sentences fold like lines
+printf 'The job 3fa9c1e27b failed. The job 88d0e41a5c failed.\n' > "$T/sent"
+[ "$(sent --sentence=rules -e "'a job failed'" "$T/sent")" = "1 sent of 2" ]
 echo OK

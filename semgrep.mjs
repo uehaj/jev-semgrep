@@ -11,34 +11,51 @@ import { parseArgs } from 'node:util';
 const die = msg => { console.error(`semgrep: ${msg}\nTry 'semgrep --help' for more information.`); process.exit(2); };
 process.on('uncaughtException', e => die(e.message));
 
-// A bare --color means --color=auto (as in grep). parseArgs cannot express an optional value, so fill it in first.
-const argv = process.argv.slice(2).map(a => (a === '--color' ? '--color=auto' : a === '--null-data' ? '-z' : a));
+// Settings come from the environment; the first .env found fills in what the environment lacks.
+const found = ['.env', `${homedir()}/.config/semgrep/.env`].find(existsSync);
+if (found) process.loadEnvFile(found); // never overrides variables already set
+const { SEMGREP_URL, SEMGREP_MODEL, SEMGREP_API_KEY, TYPESAFE_API_KEY, SEMGREP_OPTS = '' } = process.env;
+
+// A bare --color means --color=auto (as in grep); parseArgs cannot express an optional value, so fill it in first.
+const fill = a => (a === '--color' ? '--color=auto' : a === '--sentence' ? '--sentence=jev' : a === '--null-data' ? '-z' : a);
+const OPTIONS = {
+  e: { type: 'string', multiple: true },
+  a: { type: 'string', multiple: true },
+  v: { type: 'string', multiple: true },
+  level: { type: 'string', default: 'normal' }, // strictness preset: loose / normal / strict
+  r: { type: 'boolean', default: false }, // recurse into directories
+  l: { type: 'boolean', default: false }, // print only matching file names
+  t: { type: 'string' }, // positive threshold: match when p >= t (default from preset)
+  T: { type: 'string' }, // negative threshold: "not X" when p < T (default from preset)
+  chunk: { type: 'string', default: '30' }, // lines per request
+  c: { type: 'boolean', default: false }, // count of matching lines per file (grep -c)
+  j: { type: 'string', default: '8' }, // concurrent requests
+  A: { type: 'string' }, // N lines of trailing context
+  B: { type: 'string' }, // N lines of leading context
+  C: { type: 'string' }, // N lines of context on both sides
+  n: { type: 'boolean', default: false }, // line numbers
+  z: { type: 'boolean', default: false }, // records are NUL-terminated, on input and output (grep -z)
+  sentence: { type: 'string' }, // the unit of judgement is a sentence; jev / rules decide where wrapped lines join
+  o: { type: 'boolean', default: false }, // with --sentence, print only the matching sentences (grep -o)
+  p: { type: 'boolean', default: false }, // print each meaning's probability
+  dedup: { type: 'boolean', default: false }, // judge one representative per template, reuse its answer
+  color: { type: 'string', default: 'auto' }, // auto / always / never
+  help: { type: 'boolean', short: 'h', default: false },
+};
+// SEMGREP_OPTS holds default options only: no meanings, no files, no --. It goes in front of the arguments, so the
+// command line wins (a later value counts; --no-X clears a flag).
+const defaults = SEMGREP_OPTS.split(/\s+/).filter(Boolean).map(fill);
+try {
+  const { tokens: t } = parseArgs({ args: defaults, options: OPTIONS, allowPositionals: true, allowNegative: true, tokens: true });
+  const bad = t.find(k => k.kind !== 'option' || ['e', 'a', 'v'].includes(k.name));
+  if (bad) die(`SEMGREP_OPTS: ${bad.kind === 'option' ? `-${bad.name} is not allowed (meanings go on the command line)` : `'${bad.value ?? '--'}' is not an option`}`);
+} catch (e) { die(`SEMGREP_OPTS: ${e.message}`); }
 const { values: opt, positionals: files, tokens } = parseArgs({
-  args: argv,
+  args: [...defaults, ...process.argv.slice(2).map(fill)],
+  options: OPTIONS,
   allowPositionals: true,
+  allowNegative: true,
   tokens: true,
-  options: {
-    e: { type: 'string', multiple: true },
-    a: { type: 'string', multiple: true },
-    v: { type: 'string', multiple: true },
-    level: { type: 'string', default: 'normal' }, // strictness preset: loose / normal / strict
-    r: { type: 'boolean', default: false }, // recurse into directories
-    l: { type: 'boolean', default: false }, // print only matching file names
-    t: { type: 'string' }, // positive threshold: match when p >= t (default from preset)
-    T: { type: 'string' }, // negative threshold: "not X" when p < T (default from preset)
-    chunk: { type: 'string', default: '30' }, // lines per request
-    c: { type: 'boolean', default: false }, // count of matching lines per file (grep -c)
-    j: { type: 'string', default: '8' }, // concurrent requests
-    A: { type: 'string' }, // N lines of trailing context
-    B: { type: 'string' }, // N lines of leading context
-    C: { type: 'string' }, // N lines of context on both sides
-    n: { type: 'boolean', default: false }, // line numbers
-    z: { type: 'boolean', default: false }, // records are NUL-terminated, on input and output (grep -z)
-    p: { type: 'boolean', default: false }, // print each meaning's probability
-    dedup: { type: 'boolean', default: false }, // judge one representative per template, reuse its answer
-    color: { type: 'string', default: 'auto' }, // auto / always / never
-    help: { type: 'boolean', short: 'h', default: false },
-  },
 });
 // --help: Japanese when the locale starts with ja, English otherwise
 const HELP_EN = `usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
@@ -66,6 +83,8 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
   -C NUM       print NUM lines of context before and after (-A NUM -B NUM)
   -c           print only a count of matching lines per file (like grep -c)
   --chunk=LINES lines per request (default 30)
+               Lines in one request are each other's context, so a small chunk changes verdicts
+               on ambiguous lines, not just speed
   -j N         concurrent requests (default 8)
   -n           print line numbers
   -z, --null-data  the unit of judgement is a NUL-terminated record, not a line, so a record may span
@@ -73,6 +92,19 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
                and counts stay on newlines. -n numbers records, -A/-B/-C count records, --chunk counts
                records. Pairs with tools that already emit records: git log -z, find -print0, xargs -0
                  git log -z --format='%h %s %b' | semgrep -z -e "the change alters user-visible behaviour"
+  --sentence[=HOW] judge each sentence instead of each line. Output is still the lines a matching sentence
+               touches, with the sentence in the match color. Wrapped lines are joined before splitting,
+               except at a blank line, next to brackets or ; (JSON, code), or before a line starting with
+               - * + # > " or a digit (list, heading, quote, number). Scripts without spaces between words
+               (Japanese, Chinese, Thai, Lao, Khmer, Myanmar, Tibetan) join without one. HOW:
+                 jev (default): also ask Jev about unpunctuated breaks next to those scripts, where entries
+                   often end without 。. One extra request per 30 lines that have such breaks
+                 rules: the rules only, no extra requests
+               The expression is evaluated per sentence. With -z each record is split on its own
+               Sentences sent together (--chunk) read each other as context, so a verdict can shift with
+               where the chunks fall, and a sentence next to a match can match too
+  -o           with --sentence, print only the matching sentences, one per line; -n gives the line where the
+               sentence starts, -c and -A/-B/-C count sentences
   -p           print each meaning's probability at the end of the line (for tuning thresholds)
   --dedup      judge one line per template instead of every line. Lines that differ only in ids, hashes,
                numbers, dates and times, paths and URLs share a template; one of them is sent and its answer
@@ -80,7 +112,8 @@ grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is 
                "disk usage above 90%", a time decides "happened at night". Jev is asked first, one small
                request per meaning, and the kinds that could change a match are kept apart. Built for
                machine-generated logs, where it can cut the cost by a factor of 30 or more; prose has no
-               shared skeleton and barely folds, and a meaning that reads a value folds little
+               shared skeleton and barely folds, and a meaning that reads a value folds little.
+               With -z or --sentence the unit that folds is the record or the sentence
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are green at or above
                the positive threshold, red below the negative one, yellow in between. NO_COLOR is honored
@@ -93,6 +126,9 @@ Environment (read from the environment, else from ./.env, else from ~/.config/se
   SEMGREP_URL        endpoint (default https://api.typesafe.ai/v1/systemone). Any TypeSafe-compatible
                      /v1/systemone works, e.g. https://openrouter.ai/api/v1/systemone
   SEMGREP_MODEL      model id (default jev-latest)
+  SEMGREP_OPTS       default options, split on spaces and put before the command line, which wins;
+                     --no-X turns a boolean flag off (--color takes --color=never). Options only: no
+                     meanings, files or --. e.g. SEMGREP_OPTS='--level strict -n'. Scripts: SEMGREP_OPTS= semgrep
   The key goes to SEMGREP_URL, whatever it is. With SEMGREP_URL set and no key, no auth header is sent.
   e.g.  mkdir -p ~/.config/semgrep && echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env`;
 const HELP_JA = `usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
@@ -120,6 +156,8 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
   -C NUM       前後 NUM 行を表示 (-A NUM -B NUM)
   -c           一致した行数だけをファイルごとに表示 (grep -c 相当)
   --chunk=LINES 1 リクエストにまとめる行数 (既定 30)
+               同じリクエストの行は互いの文脈になるので、小さくすると速さだけでなく曖昧な行の
+               判定も変わる
   -j N         同時リクエスト数 (既定 8)
   -n           行番号を付ける
   -z, --null-data  判定の単位を行ではなく NUL 終端のレコードにする。1 レコードが複数行でもよい。
@@ -127,6 +165,19 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
                -n はレコード番号、-A/-B/-C は前後のレコード数、--chunk はレコード数を数える。
                レコードを出すツールとそのまま繋がる: git log -z、find -print0、xargs -0
                  git log -z --format='%h %s %b' | semgrep -z -e "ユーザーに見える振る舞いを変えている"
+  --sentence[=HOW] 行ではなく文ごとに判定する。出力は当たった文がかかる元の行のままで、文の部分を色で
+               強調する。文に分ける前に折り返した行をつなぐ。ただし空行、括弧や ; (JSON やコード)、
+               - * + # > " や数字で始まる行 (箇条書き・見出し・引用・番号) の前ではつながない。単語の間に
+               空白を置かない文字 (日本語・中国語・タイ語・ラオ語・クメール語・ミャンマー語・チベット語)
+               は空白なしでつなぐ。HOW:
+                 jev (既定): 上の文字に接する句点の無い改行を Jev にも聞く。句点で終わらない 1 行 1 件の
+                   データをつながないため。そうした改行がある 30 行ごとにリクエストが 1 つ増える
+                 rules: 規則だけで決める。追加のリクエストなし
+               式は文ごとに評価する。-z ではレコードごとに文に分け、当たったレコードを出す
+               一緒に送る文 (--chunk) は互いを文脈として読むので、区切りの位置で判定が変わることがあり、
+               当たった文の隣の文もつられて当たることがある
+  -o           --sentence と併用し、当たった文だけを 1 行ずつ出す。-n は文が始まる行、-c と
+               -A/-B/-C は文の数で数える
   -p           各意味の確率を行末に表示 (閾値調整用)
   --dedup      全行ではなくテンプレートごとに 1 行だけ判定する。ID・ハッシュ・数値・日付と時刻・パス・
                URL だけが違う行は同じテンプレートとみなし、代表 1 行を送ってその答えを残りにも使う。
@@ -134,7 +185,7 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
                「夜間に起きた」なら時刻が答えを決める。そこで意味ごとに小さなリクエストを 1 つ送って
                Jev に聞き、答えを変えうる種類はまとめない。機械が吐くログ向けで、費用が 30 分の 1
                以下になることもある。散文には共通の骨格がないのでほとんど縮まず、値を読む意味もあまり
-               縮まない
+               縮まない。-z や --sentence ではレコードや文を単位にまとめる
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
                否定側の閾値未満を赤、あいだを黄で表示。NO_COLOR にも従う
@@ -147,6 +198,10 @@ jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE
   SEMGREP_URL        送信先 (既定 https://api.typesafe.ai/v1/systemone)。TypeSafe 互換の
                      /v1/systemone なら可。例 https://openrouter.ai/api/v1/systemone
   SEMGREP_MODEL      モデル名 (既定 jev-latest)
+  SEMGREP_OPTS       既定のオプション。空白で区切ってコマンドラインの前に置くので、コマンドラインが
+                     優先する。--no-X で真偽のフラグを消せる (--color は --color=never)。書けるのは
+                     オプションだけで、意味・ファイル・-- は書けない。例 SEMGREP_OPTS='--level strict -n'。
+                     スクリプトからは SEMGREP_OPTS= semgrep と空にして呼ぶ
   キーは SEMGREP_URL の先へそのまま送られる。SEMGREP_URL 指定時にキーが無ければ認証ヘッダを付けない。
   例:  mkdir -p ~/.config/semgrep && echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env`;
 if (opt.help) {
@@ -155,10 +210,6 @@ if (opt.help) {
   process.exit(0);
 }
 
-// Only these variables configure the API. The first .env found fills in what the environment lacks.
-const found = ['.env', `${homedir()}/.config/semgrep/.env`].find(existsSync);
-if (found) process.loadEnvFile(found); // never overrides variables already set
-const { SEMGREP_URL, SEMGREP_MODEL, SEMGREP_API_KEY, TYPESAFE_API_KEY } = process.env;
 const apiUrl = SEMGREP_URL || 'https://api.typesafe.ai/v1/systemone';
 const apiHost = (() => { try { return new URL(apiUrl).host; } catch { die(`SEMGREP_URL is not a URL: ${apiUrl}`); } })();
 const model = SEMGREP_MODEL || 'jev-latest';
@@ -194,6 +245,7 @@ for (const [k, label] of [['t', '-t'], ['T', '-T'], ['chunk', '--chunk'], ['j', 
 if (chunkLines < 1) die('--chunk must be at least 1');
 if (tPos < 0 || tPos > 1 || tNeg < 0 || tNeg > 1) die('-t / -T must be between 0 and 1');
 if (Number(opt.j) < 1) die('-j must be at least 1');
+if (opt.sentence !== undefined && !['jev', 'rules'].includes(opt.sentence)) die('--sentence must be jev or rules');
 
 // The unit of judgement. Without -z it is a line; with -z it is a NUL-terminated record, which may
 // span several lines. Everything downstream works on an array of units, so only the terminator changes.
@@ -218,25 +270,8 @@ function expand(path) {
     .flatMap(d => expand(path.endsWith('/') ? path + d.name : `${path}/${d.name}`)); // not path.join(): it would drop the leading ./
 }
 const targets = (files.length ? files : [opt.r ? '.' : '-']).flatMap(f => (f === '-' ? [f] : expand(f)));
-const sources = new Map(); // file -> all lines (for context output; includes blank lines)
-const allLines = []; // { file, no, text }; includes blank lines; what the expression is evaluated over
-for (const file of targets) {
-  let buf;
-  try { buf = readFileSync(file === '-' ? 0 : file); } catch (e) { warn(file, e); continue; }
-  // With -z a NUL is the record terminator, so the binary sniff would reject exactly the input we want.
-  if (!opt.z && buf.subarray(0, 8192).includes(0)) continue;
-  const src = buf.toString('utf8').split(SEP);
-  if (src.at(-1) === '') src.pop();
-  sources.set(file, src);
-  src.forEach((text, i) => allLines.push({ file, no: i + 1, text }));
-}
-// Blank and whitespace-only lines are not sent; they count as probability 0 for every meaning (never match -e, always match -v).
-const lines = allLines.filter(l => l.text.trim());
-
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-let usedTokens = 0;
-let usedCost = 0;
-let requestCount = 0;
+let usedTokens = 0, usedCost = 0, requestCount = 0;
 // One request with retries: 429 / 529 / 5xx, connection errors and timeouts back off exponentially.
 async function post(state, questions) {
   for (let attempt = 0; ; attempt++) {
@@ -261,6 +296,114 @@ async function post(state, questions) {
     return answers;
   }
 }
+// Run up to -j requests at once.
+let running = 0;
+const waiters = [];
+const acquire = () => (running++ < Number(opt.j) ? Promise.resolve() : new Promise(r => waiters.push(r)));
+const release = () => (running--, waiters.shift()?.());
+const pooled = async fn => { await acquire(); try { return await fn(); } finally { release(); } };
+
+// --sentence: the unit is a sentence. Lines are joined as wrapped prose, except where a newline cannot be inside
+// a sentence: at a blank line, next to structure characters (JSON, code), or before a list item, heading, quote or
+// number. Each joined piece is then split by Intl.Segmenter (Unicode UAX #29 sentence boundaries).
+const SENTENCES = new Intl.Segmenter(undefined, { granularity: 'sentence' });
+// Scripts written without spaces between words: joining their wrapped lines must not add one
+const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}\p{Script=Tibetan}ー、。]/u;
+const hardBreak = (prev, next) => !prev || !next || /[{}\[\]<>|;]$/.test(prev) || /^[{}\[\]<>|"\-*+#>\d]/.test(next)
+  || /[{}\[\];]$/.test(next); // a line ending like code is not a continuation of prose either
+// lines -> [{ text, spans }]. A span [unit, from, to] is where the sentence lies in the original units: the unit
+// is the 1-based line (or record) number from unitOf, from/to are character offsets inside it (baseOf shifts a
+// line's offset inside its record with -z). Output maps matching sentences back to these units.
+function toSentences(lines, unitOf, baseOf, split = new Set()) { // split: breaks Jev judged to end an entry
+  const out = [];
+  let text = '', marks = []; // marks: { o: offset in text, unit, base: offset in the unit, len }
+  const flush = () => {
+    for (const seg of SENTENCES.segment(text)) {
+      const t = seg.segment.trim();
+      if (!t) continue;
+      const start = seg.index + seg.segment.length - seg.segment.trimStart().length, end = start + t.length;
+      const spans = [];
+      for (const m of marks) {
+        const a = Math.max(start, m.o), b = Math.min(end, m.o + m.len);
+        if (a < b) spans.push([m.unit, m.base + a - m.o, m.base + b - m.o]);
+      }
+      out.push({ text: t, spans });
+    }
+    text = ''; marks = [];
+  };
+  lines.forEach((line, i) => {
+    const prev = text.trimEnd(), next = line.trim();
+    const mark = { unit: unitOf(i), base: baseOf(i) + line.length - line.trimStart().length, len: next.length };
+    if (hardBreak(prev, next) || split.has(i)) { flush(); if (next) { text = next; marks.push({ ...mark, o: 0 }); } return; }
+    text = prev + (CJK.test(prev.at(-1)) && CJK.test(next[0]) ? '' : ' '); // no space for scripts without word spaces
+    marks.push({ ...mark, o: text.length });
+    text += next;
+  });
+  flush();
+  return out;
+}
+
+// Where the rules would join, a break still needs judging if a script without word spaces touches it and the line
+// does not end a sentence: in Japanese or Chinese, entries often end without 。, and joining leaves no trace of the
+// break. A line starting with closing punctuation continues the previous one (kinsoku), and so does a line
+// ending in 、. With --sentence=jev such breaks are asked, 30 lines per request, a yes/no per break. A break needs
+// p >= 0.7: real breaks measured 0.81 and up, while wraps a person made at a phrase boundary reach 0.5 to 0.6.
+const CLOSING = /^[。、，．」』）】〕！？]/;
+const needsJudging = (prev, next) => prev && next && !hardBreak(prev, next) && !/[。！？!?、，]$/.test(prev) && !CLOSING.test(next)
+  && (CJK.test(prev.at(-1)) || CJK.test(next[0]));
+const BREAK_ABOUT = 'A line break either ends a sentence or a separate entry (a new message, item or sentence starts on the next line), or it is only a wrap in the middle of a sentence (the sentence continues on the next line).';
+async function judgeBreaks(lines) { // -> Set of i where the break before lines[i] ends a sentence or entry
+  const ask = [];
+  for (let i = 1; i < lines.length; i++) if (needsJudging(lines[i - 1].trim(), lines[i].trim())) ask.push(i);
+  const split = new Set();
+  const id = k => `L${String(k).padStart(3, '0')}`;
+  const jobs = [];
+  for (let s = 0; s < lines.length - 1; s += 29) { // windows of 30 lines sharing one line, so every break is inside one
+    const qs = ask.filter(i => i > s && i < s + 30);
+    if (!qs.length) continue;
+    const state = Object.fromEntries(lines.slice(s, s + 30).map((l, k) => [id(k), l.slice(0, MAX_UNIT_CHARS)]));
+    const questions = Object.fromEntries(qs.map(i => [`b${i}`, { type: 'noul', instructions: `${BREAK_ABOUT} Does the line break between ${id(i - 1 - s)} and ${id(i - s)} end a sentence or entry (rather than being a wrap inside a sentence)?` }]));
+    jobs.push(pooled(() => post(state, questions)).then(a => qs.forEach(i => { if (a[`b${i}`].noul >= 0.7) split.add(i); })));
+  }
+  await Promise.all(jobs);
+  return split;
+}
+
+const sources = new Map(); // file -> the units printed (lines or records; sentences with -o); includes blank lines
+const spansOf = new Map(); // file -> spans of each sentence (--sentence only)
+const allLines = []; // { file, no, text }; includes blank lines; what the expression is evaluated over
+const read = new Map(); // file -> units as read (lines, or records with -z)
+for (const file of targets) {
+  let buf;
+  try { buf = readFileSync(file === '-' ? 0 : file); } catch (e) { warn(file, e); continue; }
+  // With -z a NUL is the record terminator, so the binary sniff would reject exactly the input we want.
+  if (!opt.z && buf.subarray(0, 8192).includes(0)) continue;
+  const src = buf.toString('utf8').split(SEP);
+  if (src.at(-1) === '') src.pop();
+  read.set(file, src);
+}
+// Each run of lines that may join: the whole file, or each record with -z. starts: offset of each line in its unit.
+const runsOf = src => (opt.z
+  ? src.map((rec, r) => { const ls = rec.split('\n'), starts = [0]; for (const l of ls) starts.push(starts.at(-1) + l.length + 1); return { lines: ls, unitOf: () => r + 1, baseOf: i => starts[i] }; })
+  : [{ lines: src, unitOf: i => i + 1, baseOf: () => 0 }]);
+const runsByFile = new Map([...read].map(([file, src]) => [file, opt.sentence ? runsOf(src) : []]));
+const splits = new Map(); // run -> Set of breaks Jev judged to end an entry
+if (opt.sentence === 'jev')
+  await Promise.all([...runsByFile.values()].flat().map(run => judgeBreaks(run.lines).then(sp => splits.set(run, sp))));
+for (const [file, src] of read) {
+  sources.set(file, src);
+  let units = src;
+  if (opt.sentence) {
+    // With -z a record is a hard boundary, and lines inside it are joined like any wrapped prose.
+    const sentences = runsByFile.get(file).flatMap(run => toSentences(run.lines, run.unitOf, run.baseOf, splits.get(run)));
+    spansOf.set(file, sentences.map(u => u.spans));
+    if (opt.o) sources.set(file, sentences.map(u => u.text));
+    units = sentences.map(u => u.text);
+  }
+  units.forEach((text, i) => allLines.push({ file, no: i + 1, text }));
+}
+// Blank and whitespace-only lines are not sent; they count as probability 0 for every meaning (never match -e, always match -v).
+const lines = allLines.filter(l => l.text.trim());
 
 // --dedup: machine-generated logs repeat one skeleton with a different id or number in it. Mask the parts
 // whose value carries no meaning, group by the result, and judge one member per group. The mask is only
@@ -276,13 +419,6 @@ const MASK = [ // [kind, pattern, placeholder, what Jev is told the kind is]
   ['hex', /\b(?=[0-9a-f]{7,}\b)(?=[0-9a-f]*[a-f])[0-9a-f]*\d[0-9a-f]*\b/gi, '<hex>', 'a hex id or hash'], // needs a digit and a letter: not words spelled in a-f, not long decimals (sizes, counts)
   ['num', /\b\d[\d.,:_-]*\b/g, '<num>', 'a number'],
 ];
-// Run up to -j requests at once.
-let running = 0;
-const waiters = [];
-const acquire = () => (running++ < Number(opt.j) ? Promise.resolve() : new Promise(r => waiters.push(r)));
-const release = () => (running--, waiters.shift()?.());
-const pooled = async f => { await acquire(); try { return await f(); } finally { release(); } };
-
 const repOf = new Map(); // unit -> the unit actually sent on its behalf
 let sent = lines;
 if (opt.dedup && lines.length) {
@@ -354,6 +490,31 @@ for (const l of allLines) {
   if (!hits.has(l.file)) hits.set(l.file, new Map());
   hits.get(l.file).set(l.no, p);
 }
+// --sentence without -o prints the original lines (or records) a matching sentence touches, like grep prints
+// lines. A unit keeps the probabilities of its first matching sentence; ranges mark the matching text in it.
+const ranges = new Map(); // file -> (unit -> [[from, to]])
+if (opt.sentence && !opt.o) for (const [file, h] of hits) {
+  const spans = spansOf.get(file), units = new Map(), marked = new Map();
+  for (const [k, p] of [...h].sort((a, b) => a[0] - b[0])) for (const [u, a, b] of spans[k - 1]) {
+    if (!units.has(u)) units.set(u, p);
+    marked.set(u, [...(marked.get(u) ?? []), [a, b]]);
+  }
+  hits.set(file, units);
+  ranges.set(file, marked);
+}
+// Wrap the matching ranges in grep's match color (bold red), merging overlaps.
+const highlight = (text, rs) => {
+  if (!color || !rs) return text;
+  let out = '', at = 0;
+  for (const [a, b] of rs.sort((x, y) => x[0] - y[0])) {
+    if (b <= at) continue;
+    const from = Math.max(a, at);
+    out += text.slice(at, from) + paint('01;31', text.slice(from, b));
+    at = b;
+  }
+  return out + text.slice(at);
+};
+const startNo = (file, k) => (opt.o ? spansOf.get(file)[k - 1][0][0] : k); // -o: the unit where the sentence starts
 
 const after = Number(opt.A ?? opt.C ?? 0), before = Number(opt.B ?? opt.C ?? 0);
 const multi = opt.r || targets.length > 1; // grep -r prefixes file names even for a single file
@@ -372,10 +533,10 @@ for (const file of targets) {
     for (let k = from; k <= to; k++) {
       const p = h.get(k);
       const sep = paint(36, p ? ':' : '-');
-      const prefix = (multi ? paint(35, file) + sep : '') + (opt.n ? paint(32, k) + sep : '');
+      const prefix = (multi ? paint(35, file) + sep : '') + (opt.n ? paint(32, startNo(file, k)) + sep : '');
       const tail = opt.p && p ? `\t[${p.map(paintProb).join(' ')}]` : '';
       // Only data records carry the NUL terminator, as in grep -z; file names and counts stay on newlines.
-      process.stdout.write(prefix + src[k - 1] + tail + SEP);
+      process.stdout.write(prefix + highlight(src[k - 1], ranges.get(file)?.get(k)) + tail + SEP);
     }
     last = Math.max(last, to);
     lastPrinted = [file, to];
@@ -385,7 +546,7 @@ for (const file of targets) {
 if (process.stderr.isTTY) {
   // The API's own usage.cost when reported (OpenRouter does); else an estimate at Jev's list price, only for TypeSafe itself.
   const cost = usedCost > 0 ? `, $${usedCost.toFixed(6)}` : SEMGREP_URL ? '' : `, ~$${(usedTokens * 0.042 / 1e6).toFixed(6)}`;
-  console.error(`${matched}/${allLines.length} ${opt.z ? 'records' : 'lines'} (${sent.length} sent${opt.dedup ? ` of ${lines.length}` : ''}), ${requestCount} requests, ${usedTokens} input tokens${cost}`);
+  console.error(`${matched}/${allLines.length} ${opt.sentence ? 'sentences' : opt.z ? 'records' : 'lines'} (${sent.length} sent${opt.dedup ? ` of ${lines.length}` : ''}), ${requestCount} requests, ${usedTokens} input tokens${cost}`);
 }
 // process.exit() can drop buffered stdout when piped, so set exitCode instead.
 process.exitCode = hadError ? 2 : matched ? 0 : 1;

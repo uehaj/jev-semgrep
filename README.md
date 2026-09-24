@@ -145,9 +145,23 @@ echo 'SEMGREP_API_KEY=your-key' > .env                # per project, read from t
 Variables already in the environment win; otherwise the first of `./.env` and `~/.config/semgrep/.env` fills them in.
 `TYPESAFE_API_KEY` is accepted too when `SEMGREP_API_KEY` is not set.
 
+### Default options
+
+`SEMGREP_OPTS` holds options to apply on every call, read like the settings above. It is split on spaces and put in
+front of the command line, so the command line wins: a later value counts, and `--no-X` turns a default flag off.
+
+```sh
+export SEMGREP_OPTS='--level strict -j 8 -n'
+semgrep -e "payment failed" app.log                  # strict, 8 at once, line numbers
+semgrep --level loose --no-n -e "payment failed" app.log
+```
+
+A script calling semgrep would pick these up too (grep dropped `GREP_OPTIONS` for that reason). Call it as
+`SEMGREP_OPTS= semgrep ...` in scripts.
+
 ### Other endpoints
 
-semgrep reads exactly three settings: `SEMGREP_API_KEY` (or `TYPESAFE_API_KEY`), `SEMGREP_URL` and `SEMGREP_MODEL`.
+The API is configured by exactly three settings: `SEMGREP_API_KEY` (or `TYPESAFE_API_KEY`), `SEMGREP_URL` and `SEMGREP_MODEL`.
 Any endpoint that speaks TypeSafe's `POST /v1/systemone` works. The key is sent to `SEMGREP_URL` as is, so set the
 two together.
 
@@ -295,6 +309,59 @@ Matching records are printed NUL-terminated too, so pipe them through `tr '\0' '
 File names (`-l`) and counts (`-c`) stay on newlines, as they do in grep. With `-z`, `-n` numbers records,
 `-A` / `-B` / `-C` count neighbouring records, and `--chunk` counts records per request.
 
+### One sentence at a time (`--sentence`)
+
+`--sentence` judges each sentence instead of each line. The output is still lines, as in grep: every line a
+matching sentence touches is printed, and on a terminal the sentence itself is in grep's match color.
+Wrapped lines are joined before splitting, so a sentence that runs over several lines is judged as one.
+[`tests/prose.txt`](tests/prose.txt) wraps an English paragraph and a Japanese one:
+
+```sh
+$ ./semgrep -n --sentence -e "the author admits they made a mistake" tests/prose.txt
+1:I should have checked the input
+2:before shipping, and that was my
+3:mistake. Next time I will add a test
+```
+
+The sentence starts on line 1 and ends at `mistake.` on line 3; only that part is colored, not
+`Next time I will add a test`, which is judged separately and does not match.
+
+`-o` prints only the matching sentences, one per line, as `grep -o` prints only the matching part.
+`-n` then gives the line where the sentence starts. Japanese is joined without a space, as are Chinese,
+Thai, Lao, Khmer, Myanmar and Tibetan, which do not put spaces between words:
+
+```sh
+$ ./semgrep -n -o --sentence -e "the author admits they made a mistake" -e "customer is asking for a refund" tests/prose.txt
+1:I should have checked the input before shipping, and that was my mistake.
+8:先週買った掃除機が初日から動かないので返金してほしいです。
+```
+
+Without `-o`, `-c` counts lines and `-A` / `-B` / `-C` count lines, as usual. With `-o` they count sentences.
+With `-z`, each record is split on its own and matching records are printed whole.
+
+Jev finds a matching sentence inside a long line on its own, so `--sentence` is not needed for accuracy.
+Use it to see which sentence matched, to get the sentences with `-o`, and when AND should hold within one
+sentence: the expression is evaluated per sentence. For the same reason `-v X` alone prints every line
+with at least one sentence that is not X; to find lines that are not X as a whole, leave `--sentence` off.
+
+Japanese and Chinese entries often end without `。`: a chat message, a support ticket, a memo line. Joining
+them would glue separate entries into one "sentence". So by default (`--sentence`, the same as
+`--sentence=jev`) semgrep asks Jev about each unpunctuated break next to a script written without word
+spaces: "does this line break end a sentence or entry, or is it a wrap inside a sentence?" It sends 30 lines
+per request with one yes/no per break, and keeps the lines apart when the answer is 0.7 or more. On
+[`tests/corpus.txt`](tests/corpus.txt) this keeps the four one-line Japanese tickets apart, so
+`--sentence` finds the same refund requests (lines 14 and 18) as a line-by-line search, where the rules alone
+merged the tickets and missed line 18. The extra requests cost about as much as one more meaning; use
+`--sentence=rules` to skip them. Breaks between English lines are never asked: joining them keeps a space,
+and the full stop still ends the sentence.
+
+Where a newline cannot be inside a sentence, lines are not joined: at a blank line, next to brackets or
+`;` (JSON, code), and before a line starting with `-` `*` `+` `#` `>` `"` or a digit (list items,
+headings, quotes, numbers, timestamps). So JSONL keeps one line per record and each line is split on its
+own. Sentences are cut by `Intl.Segmenter` ([Unicode UAX #29](https://unicode.org/reports/tr29/)),
+which splits at `.` `!` `?` `。` `！` `？` but also after abbreviations such as `Mr.`. Logs are not prose:
+consecutive log lines that start with a letter, such as `WARN ...` after `ERROR ...`, get joined.
+
 ## Use it from Claude Code
 
 There is a Claude Code skill that runs semgrep for you: describe what you are looking for in plain words
@@ -353,8 +420,12 @@ usage: semgrep [OPTION]... -e MEANING [-a MEANING] [-v MEANING]... [FILE...]
   -C NUM       print NUM lines of context before and after (-A NUM -B NUM)
   -c           print only a count of matching lines per file (like grep -c)
   --chunk=LINES lines per request (default 30)
+               Lines in one request are each other's context, so a small chunk changes verdicts
+               on ambiguous lines, not just speed
   -j N         concurrent requests (default 8)
   -n           print line numbers
+  --sentence[=HOW] judge each sentence instead of each line; HOW is jev (default) or rules (see "One sentence at a time" above)
+  -o           with --sentence, print only the matching sentences
   -p           print each meaning's probability at the end of the line
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are
@@ -388,7 +459,12 @@ A leading `!` on a meaning negates just that meaning (quote it, `!` is history e
 3. Up to 8 requests run concurrently. Output is printed in file order.
 4. Per line, each meaning's probability is thresholded to a boolean and the AND / OR / NOT expression is evaluated.
 
-Batching does not change the probabilities compared with one line per request
+Lines sent together are each other's context: Jev judges a line against what the rest of the chunk shows
+is normal in the file. Clear matches and non-matches hold, but ambiguous lines can move. Where the chunk
+boundaries fall barely matters (moving them by 15 lines at `--chunk 30` flipped 1 line in 200 of a log), but
+judging a line with little of its file around it does: `--chunk 1` flipped 18 of the same 200, and those
+solitary verdicts were the less reliable ones (#9). So `--chunk` changes results, not just speed, and a
+very short input is judged with little context whatever `--chunk` says. One line at a time is also slow
 (30 lines in one request take about 0.2 s, one line at a time about 7 s).
 Very large chunks start losing lines near the threshold, hence the default of 30.
 Probabilities drift by about ±0.05 between runs. Use `-p` when tuning thresholds.

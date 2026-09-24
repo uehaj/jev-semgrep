@@ -28,7 +28,7 @@
     "docs/"
   ],
   "engines": {
-    "node": ">=20.12"
+    "node": ">=20.16"
   },
   "scripts": {
     "test": "sh tests/check.sh",
