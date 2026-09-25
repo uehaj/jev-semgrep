@@ -42,18 +42,21 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ### Added
 - `--dry-run`: send nothing; print to stdout the endpoint, each file searched (its units and how many would be
   sent) and each request with its questions, grouped by wording. The `--dedup` and `--sentence` questions are
-  answered no, so those counts are an estimate. `-q` is ignored, so the list is complete.
+  answered no, so those counts are an estimate. `-q` is ignored, so the list is complete. Control characters in file names
+  and contents show as `\xNN`, so a crafted name cannot redraw the terminal.
 - `--verbose`: the same lines on stderr while searching, and the summary line even when stderr is not a terminal.
 - `-V`, `--version`: print `semgrep X.Y.Z` and exit, like `grep -V`.
 - `-i`, `--interactive`: first run the same command as `--dry-run`, show its files and totals on the terminal, and
   search only when the answer is `y`. Nothing is sent before the answer; any other answer exits 1. The answer is
   read from `/dev/tty`, so data can still come on stdin; without a terminal it is an error (exit 2), which names
-  `SEMGREP_OPTS` when `-i` came from there.
+  `SEMGREP_OPTS` when `-i` came from there. A file the dry run could not read is listed next to the question.
 - `--include=GLOB`, `--exclude=GLOB`: with `-r` and `git semgrep`, only files whose name matches (or does not match)
-  a shell glob; both can be repeated, as in grep. A glob with a `/` warns, since it is matched against the name only.
+  a shell glob; both can be repeated, as in grep. A glob with a `/` warns, since it is matched against the name only;
+  an unclosed `[` is an error naming the option. `*` also matches a leading dot, as in `rg --glob`.
   `--changed-within=WHEN`: only files modified within `30m`, `2h`, `7d`, `2w`; since a date (`2026-09-01`, local
-  midnight) or an ISO date-time; or `today`, `this-week` (from Monday) or `this-month`, in local time. By mtime, not
-  git history: after a clone or checkout every file it wrote counts as just changed. With `-r` a file named on the
+  midnight) or an ISO date-time; or `today`, `this-week` (from Monday) or `this-month`, in local time. A day its
+  month lacks (`2026-02-30`) is an error; a future time warns. By mtime, not git history: after a clone or
+  checkout every file it wrote counts as just changed. With `-r` a file named on the
   command line is always searched; `git semgrep`'s pathspecs are filtered like the rest.
 - `SEMGREP_OPTS`: default options from the environment, split on spaces and put before the command line, which
   wins. `--no-X` turns a boolean flag off (`--color` takes `--color=never`). Options only: no meanings, files or

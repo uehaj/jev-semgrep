@@ -250,6 +250,9 @@ eq "$($JI -r -l --include='*.md' --changed-within=7d -e cat "$P" | tr '\n' ' ')"
 eq "$($JI -r -l --include='*.md' --changed-within=2019-12-31 -e cat "$P" | grep -c .)" "3" "--changed-within a date"
 eq "$($JI -l --include='*.txt' --changed-within=1d -e cat "$P/old.md")" "$P/old.md" "a named file is searched whatever the filters"
 code 2 "--changed-within, not a duration or a date" -- $JI -r --changed-within=soon -e cat "$P"
+code 2 "--changed-within, a day its month lacks (Date() would roll 02-30 over to 03-02)" -- $JI -r --changed-within=2026-02-30 -e cat "$P"
+$JI -r -l --changed-within=2999-01-01 -e cat "$P" 2>&1 >/dev/null | grep -q "is in the future" || fail "--changed-within in the future warns"
+$JI -r --include="[abc" -e cat "$P" 2>&1 | grep -q "^semgrep: --include: .\[abc. is not a valid glob" || fail "a malformed glob names the option"
 code 2 "--changed-within, a bare number is not a year" -- $JI -r --changed-within=7 -e cat "$P"
 eq "$($JI -r -l --include='*.md' --changed-within=today -e cat "$P" | tr '\n' ' ')" "$P/a.md $P/sub/e.md " "--changed-within=today"
 eq "$($JI -r -l --include='*.md' --changed-within=this-week -e cat "$P" | grep -c .)" "2" "--changed-within=this-week"
@@ -266,17 +269,36 @@ code 2 "-i without a terminal" -- notty $JI -i -e cat "$P/a.md"
 notty $E SEMGREP_OPTS=-i SEMGREP_URL=$base/v1 node ../semgrep.mjs -e cat "$P/a.md" 2>&1 | grep -q 'SEMGREP_OPTS= semgrep' || fail "-i from SEMGREP_OPTS names it"
 # -i: shows the dry run on the terminal and sends nothing before the answer; y searches, anything else exits 1
 if script --version >/dev/null 2>&1; then onpty() { script -qec "$1" /dev/null; }; else onpty() { script -q /dev/null sh -c "$1"; }; fi
-# the answer is typed after the prompt is up: script(1) forwards input at once and then sends EOF, which would come first
-answer() { sleep 2; printf "%s\n" "$1"; sleep 1; }
-reset; out=$(answer n | onpty "$JI -i -l -e cat '$P/a.md'; echo rc=\$?")
+# The answer is typed once the prompt is on the terminal (script(1) forwards input at once, then sends EOF, which
+# would come first). asking CMD ANSWER: run CMD on a pty, answer when "[y/N]" shows (10 s at most), print what showed.
+asking() {
+  : >"$tmp/pty"
+  { i=0; until grep -q 'y/N' "$tmp/pty" || [ $i -ge 100 ]; do sleep 0.1; i=$((i + 1)); done; printf '%s\n' "$2"; sleep 1; } \
+    | onpty "$1; echo rc=\$?" >"$tmp/pty"
+  cat "$tmp/pty"
+}
+reset; out=$(asking "$JI -i -l -e cat '$P/a.md'" n)
 eq "$(stat count)" "0" "-i, n: nothing sent"
 echo "$out" | grep -q "semgrep: file $P/a.md: 1 lines, 1 to send" || fail "-i shows the files: $out"
 echo "$out" | grep -q 'rc=1' || fail "-i, n: exit 1: $out"
-reset; out=$(answer y | onpty "$JI -i -l -e cat '$P/a.md'; echo rc=\$?")
+reset; out=$(asking "$JI -i -l -e cat '$P/a.md'" y)
 eq "$(stat count)" "1" "-i, y: searched: $out"
 echo "$out" | grep -q 'rc=0' || fail "-i, y: exit 0: $out"
-reset; out=$(answer y | onpty "printf 'cat\\\\n' | $JI -i -c -e cat; echo rc=\$?")
+reset; out=$(asking "printf 'cat\\\\n' | $JI -i -c -e cat" y)
 echo "$out" | grep -q '^1' || fail "-i with stdin: the data still reaches the search: $out"
+# a file name cannot redraw the question: control characters show as \xNN
+X="$tmp/esc"; mkdir -p "$X"; printf 'cat\n' >"$X/$(printf 'evil\033[2Kx.txt')"
+reset; out=$(asking "$JI -i -r -l -e cat '$X'" n)
+case "$out" in *"$(printf '\033')"*) fail "-i shows an escape sequence from a file name";; esac
+printf '%s\n' "$out" | grep -q 'evil\\x1b\[2Kx.txt' || fail "-i shows the file name with a backslash-x1b"
+$JI --dry-run -r -e cat "$X" | grep -q 'evil\\x1b\[2Kx.txt' || fail "--dry-run shows control characters as \\xNN"
+# a file that cannot be read shows up next to the question, not only after y
+if [ "$(id -u)" != 0 ]; then
+  printf 'cat\n' >"$P/locked.md"; chmod 000 "$P/locked.md"
+  reset; out=$(asking "$JI -i -e cat '$P/a.md' '$P/locked.md'" n)
+  chmod 644 "$P/locked.md"; rm "$P/locked.md"
+  echo "$out" | grep -q "locked.md: EACCES" || fail "-i shows a read error before asking: $out"
+fi
 
 # --help: exit 0, Japanese by locale, lists the options
 code 0 "--help" -- $E LANG=C node ../semgrep.mjs --help
