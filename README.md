@@ -167,6 +167,8 @@ to the narrowest:
 - **Which files.** `-r` skips `.git`, `node_modules`, binary files, likely secrets and what git ignores;
   [`git semgrep`](#as-a-git-subcommand-git-semgrep) searches tracked files only. `--include` / `--exclude`
   (file-name globs) and `--changed-within` (`30m`, `7d`, `today`, `this-week`, a date) narrow them further.
+  A meaning that names a language or a time of change narrows them by itself: see
+  [Scope from the meaning](#scope-from-the-meaning).
 - **Which lines.** A [regex term](#regex-terms) is matched locally, and only the lines it holds for are asked
   its AND term's meanings. Blank lines are never sent.
 - **How many times.** [`--dedup`](#one-line-per-template---dedup) judges one line per template: lines that
@@ -381,6 +383,33 @@ so is a directory that git ignores, when you name it (`semgrep -r -e ... dist`).
 matching file once, in the order matches are found, and works with or without `-r`. `-c` prints the number of
 matching lines per file instead.
 
+### Scope from the meaning
+
+A meaning that names a language or format, or says when the code changed, can only match in such files. With
+`-r` and `git semgrep` those are the only files searched; the rest is never read or sent. Each scope is reported
+on stderr, so a wrong one is visible:
+
+```sh
+$ semgrep -r -e 'Python でリトライ処理を書いている箇所' .
+semgrep: scope: *.py *.pyi *.pyw (from "Python")
+semgrep: scope: 12 of 340 files
+$ semgrep -r -e 'auth code changed yesterday' src/
+semgrep: scope: modified since 2026-09-25 00:00 (from "yesterday")
+semgrep: scope: 3 of 120 files
+```
+
+- **Language or format**: "in Python", "Python code", "Python で", "Go 言語のコード", ".py ファイル", "YAML files",
+  "Rust or Kotlin implementations". Not "Python のような書き方", "port this to Go", "a Go-style error" or
+  "not in Python": those say nothing about the file. SQL, HTML, CSS, JSON and XML often sit inside other code, so
+  only "SQL files" / "SQL ファイル" scopes them, not "SQL のクエリ".
+- **Time of change**: a date or span next to a verb of change: "changed yesterday", "last week's commits",
+  "added since Sep 20", "昨日変えた", "ここ 3 日で修正した". A file changed then was modified at or after that time;
+  the modification time cannot say more, since a later change moves it. A date the line talks about ("the Sep
+  20 release", "logs from yesterday"), "before" / "until" and vague words ("recently", 「最近」) give no scope.
+- **Per term.** `-e A -e B` still searches B in the files A's scope leaves out; within an AND term the scopes
+  intersect. Negated meanings (`-v`, `!`) give none. The meaning is sent unchanged.
+- Files named on the command line and stdin are never narrowed, as with `--include`. `--no-scope` turns it off.
+
 ### As a git subcommand (`git semgrep`)
 
 `npm install -g` also installs `git-semgrep`, so git runs it as `git semgrep`. Like `git grep`, it searches only
@@ -574,6 +603,7 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                (with -r a file named on the command line is always searched; git semgrep's pathspecs are filtered)
   --changed-within=WHEN  with -r and git semgrep, only files modified within 30m / 2h / 7d / 2w, since a date
                or date-time, today, this-week or this-month
+  --no-scope   do not narrow those files by what a meaning says about them (see Scope from the meaning)
   -l           print only the names of files with a match, not the lines
   -H, --with-filename  prefix file names even for a single file; --no-filename never prefixes them
   -A NUM       print NUM lines of trailing context after each match (context lines use - as separator)

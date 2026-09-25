@@ -273,6 +273,21 @@ $JI -r --include="[abc" -e cat "$P" 2>&1 | grep -q "^semgrep: --include: .\[abc.
 code 2 "--changed-within, a bare number is not a year" -- $JI -r --changed-within=7 -e cat "$P"
 eq "$($JI -r -l --include='*.md' --changed-within=today -e cat "$P" | tr '\n' ' ')" "$P/a.md $P/sub/e.md " "--changed-within=today"
 eq "$($JI -r -l --include='*.md' --changed-within=this-week -e cat "$P" | grep -c .)" "2" "--changed-within=this-week"
+# auto-scope: a meaning that names a language or a time of change narrows what -r finds, per term; named files never
+S="$tmp/scope"; mkdir -p "$S/sub"
+for f in a.py old.py sub/c.py; do printf 'Python で cat\n昨日変えた cat\n' >"$S/$f"; done
+printf 'Python で cat\ndog\n昨日変えた cat\n' >"$S/b.js"; touch -t 202001010000 "$S/old.py"
+eq "$($JI -r -l -e 'Python で cat' "$S" 2>/dev/null | tr '\n' ' ')" "$S/a.py $S/old.py $S/sub/c.py " "scope: a language"
+eq "$($JI -r -l -e 'Python で cat' "$S" 2>&1 >/dev/null | tr '\n' '|')" 'semgrep: scope: *.py *.pyi *.pyw (from "Python")|semgrep: scope: 3 of 4 files|' "scope: reported on stderr"
+eq "$($JI -r -l --no-scope -e 'Python で cat' "$S" 2>&1 | grep -c .)" "4" "--no-scope"
+eq "$($JI -r -l -e '昨日変えた cat' "$S" 2>/dev/null | tr '\n' ' ')" "$S/a.py $S/b.js $S/sub/c.py " "scope: a time of change, by mtime"
+eq "$($JI -r -l -e 'Python のような cat' "$S" 2>&1 | grep -c scope || true)" "0" "no scope from a likeness"
+eq "$($JI -r -n -e 'Python で cat' -e dog "$S" 2>/dev/null | grep -c "^$S/b.js:2:dog")" "1" "scope: another term still searches the file"
+eq "$($JI -r -n -e 'Python で cat' -e dog "$S" 2>/dev/null | grep -c "^$S/b.js:1:")" "0" "scope: the scoped term does not hold in it"
+eq "$($JI -r -n -e 'Python で cat' -a '!昨日変えた cat' "$S" 2>/dev/null | grep -c "^$S/b.js:1:")" "0" "scope: within an AND term"
+eq "$($JI -l -e 'Python で cat' "$S/b.js")" "$S/b.js" "scope: a named file is searched"
+eq "$($JI -r -q -e 'Python で cat' "$S" 2>&1)" "" "scope: -q prints nothing"
+eq "$($JI -p --color=never -e 'Python で cat' "$S/a.py" | head -1)" "$(printf 'Python で cat\t[0.90]')" "scope: no column in -p"
 eq "$($JI -r -l --include='*.md' --changed-within=this-month -e cat "$P" | grep -c .)" "2" "--changed-within=this-month"
 eq "$($JI -r -l --include='*.md' --changed-within=2019-12-31T12:00Z -e cat "$P" | grep -c .)" "3" "--changed-within an ISO date-time"
 (cd "$P" && git init -q && git add .)
@@ -298,6 +313,8 @@ reset; out=$(asking "$JI -i -l -e cat '$P/a.md'" n)
 eq "$(stat count)" "0" "-i, n: nothing sent"
 echo "$out" | grep -q "semgrep: file $P/a.md: 1 lines, 1 to send" || fail "-i shows the files: $out"
 echo "$out" | grep -q 'rc=1' || fail "-i, n: exit 1: $out"
+reset; out=$(asking "$JI -i -r -l -e 'Python で cat' '$S'" n)
+eq "$(echo "$out" | grep -c 'scope: \*.py')" "1" "-i: the scope line once, not again from its dry run"
 reset; out=$(asking "$JI -i -l -e cat '$P/a.md'" y)
 eq "$(stat count)" "1" "-i, y: searched: $out"
 echo "$out" | grep -q 'rc=0' || fail "-i, y: exit 0: $out"

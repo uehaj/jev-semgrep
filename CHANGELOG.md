@@ -5,6 +5,13 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 
 ## [Unreleased]
 
+### Added
+- Auto-scope (#43): with `-r` and `git semgrep`, a meaning that names a language or format ("in Python",
+  "Python で", "YAML files") searches only those files, and one that says when the code changed ("changed
+  yesterday", "先週追加した") only files modified since then. Only wording that makes it a necessary condition
+  counts. Per term, reported on stderr as `semgrep: scope: …`, silent with `-q`; named files are never narrowed.
+  `--no-scope` turns it off.
+
 ## [0.4.0] - 2026-09-26
 
 ### Security

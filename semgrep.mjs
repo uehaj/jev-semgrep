@@ -53,6 +53,7 @@ const OPTIONS = {
   include: { type: 'string', multiple: true }, // only names matching one of these globs
   exclude: { type: 'string', multiple: true }, // not names matching one of these globs
   'changed-within': { type: 'string' }, // only files modified within 30m / 2h / 7d / 2w, since a date, today, ...
+  scope: { type: 'boolean', default: true }, // narrow those files by what a meaning says about them; --no-scope: don't
   color: { type: 'string', default: 'auto' }, // auto / always / never
   // the API settings, each overriding its environment variable
   'sys1-model': { type: 'string' }, // SEMGREP_MODEL
@@ -119,6 +120,14 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
   --changed-within=WHEN  with -r and git semgrep, only files modified within WHEN: 30m, 2h, 7d, 2w;
                since a date or time (2026-09-01 is local midnight, 2026-09-01T09:00, ...Z); or today,
                this-week (from Monday) or this-month, in local time. By mtime, not git history
+  --no-scope   do not narrow the files -r and git semgrep find by what a meaning says about them. By default
+               a meaning that names a language or format ("in Python", "Python で", "YAML files") searches
+               only those files (*.py *.pyi *.pyw), and one that says when the code changed ("changed
+               yesterday", "先週追加した") only files modified since then. Only wording that makes it a
+               necessary condition counts: not "Python のような書き方", "port it to Go" or "SQL のクエリ" (SQL
+               sits inside other code). Per term: -e A -e B still searches B in the files A leaves out.
+               Each scope goes to stderr as semgrep: scope: ...; files named on the command line are never
+               narrowed
   -l           print only the names of files with a match, not the lines
   -H, --with-filename  prefix each line (and -c count) with its file name, even for a single file
   --no-filename  never prefix file names, even with several files, -r or git semgrep
@@ -226,6 +235,13 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
   --changed-within=WHEN  -r と git semgrep で、WHEN 以内に更新したファイルだけを探す。30m / 2h / 7d / 2w、
                日付か日時以降 (2026-09-01 はその日のローカル時刻 0 時、2026-09-01T09:00、...Z)、
                または today / this-week (月曜から) / this-month (ローカル時刻)。git の履歴ではなく mtime で見る
+  --no-scope   意味の文面からファイルを絞り込まない。既定では -r と git semgrep で見つけたファイルを、
+               言語・形式を指定する意味 (「Python で」「in Python」「YAML ファイル」) ならそのファイル
+               (*.py *.pyi *.pyw) に、変更時期を指定する意味 (「昨日変えた」「changed last week」) ならそれ以降に
+               更新したファイルに絞る。必要条件になる言い方だけが対象で、「Python のような書き方」「Go に移植」
+               「SQL のクエリ」(SQL は他の言語のコードの中にもある) は絞らない。項ごとに効くので、-e A -e B は
+               A が除いたファイルでも B を探す。絞り込みは semgrep: scope: ... として stderr に出す。
+               コマンドラインで指定したファイルは絞らない
   -l           一致した行ではなくファイル名だけを表示
   -H, --with-filename  1 ファイルだけでも、各行 (と -c の件数) の前にファイル名を付ける
   --no-filename  複数ファイル・-r・git semgrep でもファイル名を付けない
@@ -418,6 +434,128 @@ const wanted = (path, st) => {
   return (!includes.length || includes.some(re => re.test(name))) && !excludes.some(re => re.test(name)) && (since === null || st.mtimeMs >= since);
 };
 
+// Auto-scope (#43): a meaning that says when its file changed, or what language or format the file is in, can only
+// match in such files, so the files -r and git semgrep find are narrowed before anything is sent. Only wording that
+// makes it a necessary condition counts ("in Python", "Python で", "Python files"; not "Python のような書き方" or "port
+// it to Python"): a wrong scope loses matches without a trace. Each scope is a literal of its meaning's AND term, so
+// -e A -e B still searches B in the files A's scope leaves out. Files named on the command line and stdin are never
+// narrowed, as with --include. --no-scope turns it off.
+// Extensions and file names after GitHub Linguist's languages.yml (MIT), cut down to common languages and formats.
+const LANGS = [ // [name pattern, globs, embedded]; a name that already says file or script needs no anchor around it.
+  // An embedded format often sits inside another language's code (SQL in strings, HTML in templates and JSX), so it
+  // scopes only when it names the file: "SQL ファイル", "HTML files", not "SQL のクエリ".
+  ['python|パイソン', '*.py *.pyi *.pyw'],
+  ['javascript|js|node\\.?js|ジャバスクリプト', '*.js *.mjs *.cjs *.jsx'],
+  ['typescript|ts|タイプスクリプト', '*.ts *.mts *.cts *.tsx'],
+  ['go|golang|ゴー', '*.go'],
+  ['rust', '*.rs'],
+  ['java|ジャバ', '*.java'],
+  ['kotlin|コトリン', '*.kt *.kts'],
+  ['ruby|ルビー', '*.rb *.rake Gemfile Rakefile'],
+  ['php', '*.php'],
+  ['c', '*.c *.h'],
+  ['c\\+\\+|cpp', '*.cpp *.cc *.cxx *.hpp *.hh *.hxx *.h'],
+  ['c#|csharp', '*.cs'],
+  ['swift', '*.swift'],
+  ['scala', '*.scala *.sc'],
+  ['r', '*.r *.R *.Rmd'],
+  ['(?:shell|bash|sh|zsh) ?scripts?|(?:シェル|bash|sh|zsh) ?スクリプト', '*.sh *.bash *.zsh'], // not "シェルで実行": code that runs a shell
+  ['sql', '*.sql', true],
+  ['html', '*.html *.htm', true],
+  ['css', '*.css *.scss *.sass *.less', true],
+  ['markdown|md|マークダウン', '*.md *.markdown *.mdx'],
+  ['yaml|yml', '*.yaml *.yml'],
+  ['json', '*.json *.jsonc *.json5 *.jsonl *.ndjson', true],
+  ['toml', '*.toml'],
+  ['xml', '*.xml', true],
+  ['dockerfiles?', 'Dockerfile Dockerfile.* *.dockerfile Containerfile'],
+  ['makefiles?', 'Makefile makefile GNUmakefile *.mk'],
+];
+// Around the name: "in [the|our|my] X" before it, or after it (言語 allowed in between) で (not でも / でない), の plus a
+// word for a file or its code, or a word for a file. The name is not part of a word, a hyphenated one ("non-Python",
+// "Go-style") included, and not after not / except / other than or like / as.
+const LANG_BEFORE = String.raw`(?<!(?:not|except|than|like|as|besides|of)\s+)\b(?:in|written in)\s+(?:the\s+|our\s+|my\s+|a\s+)?`;
+const LANG_AFTER = String.raw`(?:\s*言語)?\s*(?:で(?![もな]|はな)|の(?:コード|ファイル|スクリプト|ソース|実装|プログラム|中|なか|記述|設定|文書|ドキュメント|定義|クラス|メソッド)|(?:コード|ファイル|スクリプト|ソース|プログラム)|\s(?:source\s+)?(?:code|files?|scripts?|sources?|programs?|codebase|services?|projects?|configs?|configuration|documents?|docs|implementations?)\b)`;
+const FILE_AFTER = String.raw`\s*(?:の?ファイル|\sfiles?\b)`;
+// "Rust or Kotlin implementations", "JavaScript か TypeScript で", "in Go and Rust": the anchor covers every name in the list.
+const ANY = String.raw`(?<![\w+#.-])(?:${LANGS.map(([name]) => name).join('|')})(?![\w+#-]|'s)(?:\s*言語)?`;
+const AND = String.raw`\s*(?:,|、|/|・|\bor\b|\band\b|か|や|と)\s*`;
+const langRes = LANGS.map(([name, globs, embedded]) => {
+  const n = String.raw`(?<![\w+#.-])(?:${name})(?![\w+#-]|'s)`;
+  const re = /scripts?|スクリプト|files\?/.test(name) ? n : embedded ? `${n}(?:${AND}${ANY})*(?=${FILE_AFTER})`
+    : `${LANG_BEFORE}(?:${ANY}${AND})*${n}|${n}(?:${AND}${ANY})*(?=${LANG_AFTER})`;
+  return [new RegExp(re, 'i'), globs.split(' ')];
+});
+const EXT_RE = /(?<![\w.])\*?\.([a-z0-9]{1,10})(?=\s*(?:ファイル|files?\b|で|の中))/gi; // ".py ファイル", "*.go files"
+function langScope(text) {
+  const words = [], globs = new Set();
+  for (const [re, gs] of langRes) { const m = re.exec(text); if (m) { words.push(m[0].trim()); gs.forEach(g => globs.add(g)); } }
+  for (const [w, ext] of text.matchAll(EXT_RE)) {
+    words.push(w);
+    (langRes.find(([, gs]) => gs.includes(`*.${ext}`))?.[1] ?? [`*.${ext}`]).forEach(g => globs.add(g));
+  }
+  if (!globs.size) return null;
+  const res = [...globs].map(globRe('scope'));
+  return { label: [...globs].join(' '), words, test: f => res.some(re => re.test(f.split('/').at(-1))) };
+}
+// Time: a date or span next to a verb of change ("昨日変えた", "先週追加した", "changed yesterday", "last week's
+// commits"), so a date the line itself talks about ("9月20日のリリース", "logs from yesterday") is not taken. Resolved
+// in local time to [from, to). A file changed in it was modified at or after from; the mtime cannot say more, since
+// a later change moves it. "Before" / "until" and vague words (最近, recently) give no scope.
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const NUMS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+const UNIT_MS = { 分: 6e4, minute: 6e4, 時間: 36e5, hour: 36e5, 日: 864e5, day: 864e5, 週: 6048e5, 週間: 6048e5, week: 6048e5, か月: 2592e6, month: 2592e6 };
+const TIME_WORDS = [ // [pattern, (match, midnight today) -> [from, to]]; the first pattern that matches wins
+  [/一昨日|おととい|the day before yesterday/i, (m, d) => [d - 2 * 864e5, d - 864e5]],
+  [/昨日|きのう|yesterday/i, (m, d) => [d - 864e5, d]],
+  [/今日|本日|きょう|今朝|today|this morning/i, (m, d) => [d, d + 864e5]],
+  [/(先々週|先週|今週|last week|this week)/i, (m, d) => {
+    const mon = d - ((new Date(d).getDay() + 6) % 7) * 864e5, back = { 先々週: 2, 先週: 1, 'last week': 1 }[m[1].toLowerCase()] ?? 0;
+    return [mon - back * 6048e5, mon - (back - 1) * 6048e5];
+  }],
+  [/(先月|今月|last month|this month)/i, (m, d) => { const t = new Date(d), back = /先|last/i.test(m[1]) ? 1 : 0; return [new Date(t.getFullYear(), t.getMonth() - back, 1).getTime(), new Date(t.getFullYear(), t.getMonth() - back + 1, 1).getTime()]; }],
+  [/(去年|昨年|今年|last year|this year)/i, (m, d) => { const y = new Date(d).getFullYear() - (/今|this/i.test(m[1]) ? 0 : 1); return [new Date(y, 0, 1).getTime(), new Date(y + 1, 0, 1).getTime()]; }],
+  [/(?:ここ|過去|直近)\s*(\d+)\s*(分|時間|日|週間?|か月|ヶ月|カ月|ヵ月)|(\d+)\s*(分|時間|日|週間?|か月|ヶ月|カ月|ヵ月)\s*(?:以内|の間)|(?:last|past|within)\s+(?:the\s+)?(\d+|an?|one|two|three|four|five|six|seven|eight|nine|ten)\s+(minute|hour|day|week|month)s?/i,
+    m => { const n = m[1] ?? m[3] ?? m[5], u = (m[2] ?? m[4] ?? m[6]).replace(/[ヶカヵ]月/, 'か月').toLowerCase(); return [Date.now() - (NUMS[n.toLowerCase()] ?? +n) * UNIT_MS[u], Infinity]; }],
+  [/(\d+)\s*日前|(\d+|an?|one|two|three|four|five|six|seven|eight|nine|ten)\s+days?\s+ago/i, (m, d) => { const n = m[1] ?? m[2]; return [d - (NUMS[n.toLowerCase()] ?? +n) * 864e5, Infinity]; }],
+  // A date, or a month; with 以降 / から / since / after it opens to now. Without a year it is the latest one not in the future.
+  [new RegExp(String.raw`(?:(?:since|after|from)\s+)?(?:(\d{4})[-/](\d{1,2})(?:[-/](\d{1,2}))?(?![-/\d])|(?:(\d{4})\s*年\s*)?(\d{1,2})\s*月(?:\s*(\d{1,2})\s*日)?|(?:in\s+)?\b(${MONTHS.join('|')})[a-z]*\.?(?:\s+(\d{1,2})(?:st|nd|rd|th)?\b)?(?:,?\s+(\d{4}))?)(\s*(?:以降|から|より後))?`, 'i'),
+    (m, d) => {
+      const y = +(m[1] ?? m[4] ?? m[9] ?? 0), mo = +(m[2] ?? m[5] ?? MONTHS.indexOf(m[7]?.slice(0, 3).toLowerCase()) + 1) - 1, day = +(m[3] ?? m[6] ?? m[8] ?? 0);
+      const at = yy => day ? [new Date(yy, mo, day).getTime(), new Date(yy, mo, day + 1).getTime()] : [new Date(yy, mo, 1).getTime(), new Date(yy, mo + 1, 1).getTime()];
+      let r = at(y || new Date(d).getFullYear());
+      if (!y && r[0] > Date.now()) r = at(new Date(d).getFullYear() - 1);
+      return /^(since|after|from)/i.test(m[0]) || m[10] ? [r[0], Infinity] : r;
+    }],
+];
+const CHANGE_JA = '(?:変え|変わ|変更|修正|直し|直さ|追加|足し|足さ|書い|書か|書き(?:直|換|替|足|加)|編集|更新|コミット|入れ|入っ|いじ|触っ|改修|リファクタ|削除|消し|消さ|作っ|作ら|作成|マージ|プッシュ)';
+const CHANGE_EN = String.raw`\b(?:chang|modif|edit|add|touch|commit|writ|wrote|updat|fix|refactor|introduc|remov|delet|creat|merg|push)\w*`;
+function timeScope(text) {
+  for (const [re, span] of TIME_WORDS) {
+    const m = re.exec(text);
+    if (!m) continue;
+    const t = m[0].trim(), before = text.slice(0, m.index), after = text.slice(m.index + m[0].length);
+    // before / until: the mtime is the last change, so a file changed before a date may have changed since
+    if (/(以前|まで|より前)/.test(after.slice(0, 4)) || /\b(before|until|prior to)\s*$/i.test(before)) return null;
+    const near = new RegExp(`^[^、。,.!?]{0,8}?${CHANGE_JA}`).test(after) || new RegExp(`^(?:'s)?\\s+(?:changes|commits|edits)\\b`, 'i').test(after)
+      || new RegExp(`${CHANGE_EN}(?:\\s+\\S+){0,3}?\\s+$`, 'i').test(before);
+    if (!near) return null;
+    const [from] = span(m, new Date().setHours(0, 0, 0, 0));
+    const fmt = ms => new Date(ms - new Date(ms).getTimezoneOffset() * 6e4).toISOString().slice(0, 16).replace('T', ' ');
+    return { label: `modified since ${fmt(from)}`, words: [t], test: (f, st) => st.mtimeMs >= from };
+  }
+  return null;
+}
+// Each scope goes into its meaning's AND term as { kind: 's', label, words, test(file, stat) }; negated meanings say
+// what a line is not, which says nothing about its file.
+const named = f => f === '-' || (!asGit && files.includes(f)); // stdin, or named on the command line: never narrowed
+if (opt.scope) for (const term of expr) for (const lit of term.filter(l => l.kind === 'm' && !l.not))
+  for (const sc of [langScope(lit.text), timeScope(lit.text)]) if (sc) {
+    const seen = new Map(); // file -> admitted
+    term.push({ kind: 's', ...sc, admits: f => named(f) || (seen.has(f) ? seen.get(f) : seen.set(f, sc.test(f, statSync(f))).get(f)) });
+  }
+const admitted = (term, file) => term.every(lit => lit.kind !== 's' || lit.admits(file));
+
 // The unit of judgement. Without -z it is a line; with -z it is a NUL-terminated record, which may
 // span several lines. Everything downstream works on an array of units, so only the terminator changes.
 const SEP = opt.z ? '\0' : '\n';
@@ -469,8 +607,16 @@ const gitFiles = () => [...new Set(lsFiles().split('\0'))] // a conflicted file 
     return st?.isFile() && wanted(p, st);
   })
   .map(p => (p === '-' ? './-' : p)); // a tracked file named -, not stdin
-const targets = asGit ? gitFiles()
+const found = asGit ? gitFiles()
   : (files.length ? files : [opt.r ? '.' : '-']).flatMap(f => (f === '-' ? [f] : expand(f)));
+// A file no term admits is not read. Each scope is reported when it can narrow something (not with named files only),
+// with -q silent; the -i dry run does not repeat it.
+const targets = found.filter(f => expr.some(term => admitted(term, f)));
+if (!opt.quiet && found.some(f => !named(f))) {
+  const scoped = [...new Set(expr.flat().filter(lit => lit.kind === 's').map(lit => `semgrep: scope: ${safe(lit.label)} (from ${lit.words.map(w => `"${safe(w)}"`).join(', ')})`))];
+  if (scoped.length) scoped.push(`semgrep: scope: ${targets.length} of ${found.length} files`);
+  for (const m of scoped) { console.error(m); warned.push(m); }
+}
 // Standard input is read once: -i hands it to its dry run, and the search reads it again from here.
 const stdinBuf = targets.includes('-') ? readFileSync(0) : null;
 // -i: run this same command once with --dry-run, show its files and totals on the terminal, and search only on a yes.
@@ -656,8 +802,8 @@ for (const [file, src] of read) {
 // into the meaning text (ECMAScript's GetSubstitution, see SUBST above). A unit no term can hold for, and
 // blank/whitespace-only units, are never sent (blank units count as probability 0 for every meaning).
 const execAt = (lit, text) => { lit.re.lastIndex = 0; return lit.re.exec(text); }; // reset: /re/g or /re/y would else carry state across units
-function regexPart(term, text) { // -> { ok, matches }: matches are the non-negated regexes' exec results
-  let ok = true;
+function regexPart(term, { text, file }) { // -> { ok, matches }: matches are the non-negated regexes' exec results
+  let ok = admitted(term, file); // a scope left this file out: the term cannot hold in it
   const matches = [];
   for (const lit of term) {
     if (lit.kind !== 'r') continue;
@@ -689,7 +835,7 @@ const asksByUnit = new Map();
 for (const l of allLines) {
   const asks = new Map();
   if (l.text.trim()) for (const term of expr) {
-    const { ok, matches } = regexPart(term, l.text);
+    const { ok, matches } = regexPart(term, l);
     if (ok) for (const lit of term) if (lit.kind === 'm') asks.set(expandCaptures(lit.text, matches), null);
   }
   asksByUnit.set(l, asks);
@@ -793,14 +939,14 @@ const paintProb = x => paint(x >= tPos ? 32 : x < tNeg ? 31 : 33, x.toFixed(2));
 function displayRow(l) {
   const out = [];
   for (const term of expr) {
-    const { ok, matches } = regexPart(term, l.text); // a failed term was never asked, and its matches hold nulls
-    for (const lit of term) out.push(lit.kind === 'r' ? (execAt(lit, l.text) ? 1 : 0) : ok ? (asksByUnit.get(l).get(expandCaptures(lit.text, matches)) ?? 0) : 0);
+    const { ok, matches } = regexPart(term, l); // a failed term was never asked, and its matches hold nulls
+    for (const lit of term) if (lit.kind !== 's') out.push(lit.kind === 'r' ? (execAt(lit, l.text) ? 1 : 0) : ok ? (asksByUnit.get(l).get(expandCaptures(lit.text, matches)) ?? 0) : 0);
   }
   return out;
 }
 // A term holds when its regex literals all hold and every meaning literal cleared its threshold.
 function termHolds(term, l) {
-  const { ok, matches } = regexPart(term, l.text);
+  const { ok, matches } = regexPart(term, l);
   if (!ok) return false;
   const asks = asksByUnit.get(l);
   for (const lit of term) if (lit.kind === 'm') {
