@@ -532,7 +532,9 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
   -r           recurse into directories (current directory when FILE is omitted);
                skips .git, node_modules, binary files, likely secrets and what git ignores
   --include=GLOB, --exclude=GLOB  with -r and git semgrep, only files whose name matches GLOB, or not
-  --changed-within=WHEN  with -r and git semgrep, only files modified within 30m / 2h / 7d / 2w, or since a date
+               (with -r a file named on the command line is always searched; git semgrep's pathspecs are filtered)
+  --changed-within=WHEN  with -r and git semgrep, only files modified within 30m / 2h / 7d / 2w, since a date
+               or date-time, today, this-week or this-month
   -l           print only the names of files with a match, not the lines
   -A NUM       print NUM lines of trailing context after each match (context lines use - as separator)
   -B NUM       print NUM lines of leading context before each match

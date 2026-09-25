@@ -510,7 +510,9 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
   -r           ディレクトリを再帰的に探す (FILE 省略時はカレント)。.git、node_modules、
                バイナリ、秘密情報らしいファイル、git が無視するものは飛ばす
   --include=GLOB, --exclude=GLOB  -r と git semgrep で、名前が GLOB に合うファイルだけ (または合わないものだけ) を探す
-  --changed-within=WHEN  -r と git semgrep で、30m / 2h / 7d / 2w 以内、または日付以降に更新したファイルだけを探す
+               (-r ではコマンドラインで指定したファイルは必ず探す。git semgrep の pathspec は絞り込む)
+  --changed-within=WHEN  -r と git semgrep で、30m / 2h / 7d / 2w 以内、日付か日時以降、today / this-week /
+               this-month に更新したファイルだけを探す
   -l           一致した行ではなくファイル名だけを表示
   -A NUM       一致行の後ろ NUM 行も表示 (grep と同じ。文脈行の区切りは - )
   -B NUM       一致行の前 NUM 行も表示

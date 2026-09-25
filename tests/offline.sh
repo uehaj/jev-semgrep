@@ -250,8 +250,14 @@ eq "$($JI -r -l --include='*.md' --changed-within=7d -e cat "$P" | tr '\n' ' ')"
 eq "$($JI -r -l --include='*.md' --changed-within=2019-12-31 -e cat "$P" | grep -c .)" "3" "--changed-within a date"
 eq "$($JI -l --include='*.txt' --changed-within=1d -e cat "$P/old.md")" "$P/old.md" "a named file is searched whatever the filters"
 code 2 "--changed-within, not a duration or a date" -- $JI -r --changed-within=soon -e cat "$P"
+code 2 "--changed-within, a bare number is not a year" -- $JI -r --changed-within=7 -e cat "$P"
+eq "$($JI -r -l --include='*.md' --changed-within=today -e cat "$P" | tr '\n' ' ')" "$P/a.md $P/sub/e.md " "--changed-within=today"
+eq "$($JI -r -l --include='*.md' --changed-within=this-week -e cat "$P" | grep -c .)" "2" "--changed-within=this-week"
+eq "$($JI -r -l --include='*.md' --changed-within=this-month -e cat "$P" | grep -c .)" "2" "--changed-within=this-month"
+eq "$($JI -r -l --include='*.md' --changed-within=2019-12-31T12:00Z -e cat "$P" | grep -c .)" "3" "--changed-within an ISO date-time"
 (cd "$P" && git init -q && git add .)
 eq "$(cd "$P" && $GS -l --include='*.md' --changed-within=7d -e cat | tr '\n' ' ')" "a.md sub/e.md " "git semgrep with --include and --changed-within"
+eq "$(cd "$P" && $GS -l --include='*.md' -e cat b.txt a.md | tr '\n' ' ')" "a.md " "git semgrep: pathspecs are filtered too"
 
 # -i: shows the dry run on the terminal and sends nothing before the answer; y searches, anything else exits 1
 if script --version >/dev/null 2>&1; then onpty() { script -qec "$1" /dev/null; }; else onpty() { script -q /dev/null sh -c "$1"; }; fi

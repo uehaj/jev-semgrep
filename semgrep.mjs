@@ -47,10 +47,10 @@ const OPTIONS = {
   'dry-run': { type: 'boolean', default: false }, // print the files and requests, send nothing
   verbose: { type: 'boolean', default: false }, // print the files and requests to stderr while searching
   interactive: { type: 'boolean', short: 'i', default: false }, // show what --dry-run would send, search on a yes
-  // which files -r finds and git semgrep lists; a file named on the command line is always searched
+  // which files -r finds and git semgrep lists; with -r a file named on the command line is always searched
   include: { type: 'string', multiple: true }, // only names matching one of these globs
   exclude: { type: 'string', multiple: true }, // not names matching one of these globs
-  'changed-within': { type: 'string' }, // only files modified within 30m / 2h / 7d / 2w, or since a date
+  'changed-within': { type: 'string' }, // only files modified within 30m / 2h / 7d / 2w, since a date, today, ...
   color: { type: 'string', default: 'auto' }, // auto / always / never
   // the API settings, each overriding its environment variable
   'sys1-model': { type: 'string' }, // SEMGREP_MODEL
@@ -109,9 +109,11 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                to the TypeSafe API. Inside a git repository, what git ignores (.gitignore) is skipped
                too; a file or directory named on the command line is searched even so
   --include=GLOB, --exclude=GLOB  with -r and git semgrep, only files whose name matches GLOB (* ? [...]),
-               or not; both can be repeated. A file named on the command line is always searched
-  --changed-within=WHEN  with -r and git semgrep, only files modified within WHEN: 30m, 2h, 7d, 2w, or
-               since a date (2026-09-01, local midnight)
+               or not; both can be repeated. With -r a file named on the command line is always
+               searched; git semgrep's pathspecs are filtered like the rest
+  --changed-within=WHEN  with -r and git semgrep, only files modified within WHEN: 30m, 2h, 7d, 2w;
+               since a date or time (2026-09-01 is local midnight, 2026-09-01T09:00, ...Z); or today,
+               this-week (from Monday) or this-month, in local time. By mtime, not git history
   -l           print only the names of files with a match, not the lines
   -A NUM       print NUM lines of trailing context after each match (context lines use - as separator)
   -B NUM       print NUM lines of leading context before each match
@@ -211,9 +213,11 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                git が無視するもの (.gitignore) も飛ばす。コマンドラインで指定したファイル・ディレクトリは
                それでも探す。検索した行はすべて TypeSafe の API に送られる
   --include=GLOB, --exclude=GLOB  -r と git semgrep で、名前が GLOB (* ? [...]) に合うファイルだけ
-               (または合わないものだけ) を探す。複数指定可。コマンドラインで指定したファイルは必ず探す
+               (または合わないものだけ) を探す。複数指定可。-r ではコマンドラインで指定したファイルは
+               必ず探す。git semgrep の pathspec は他と同じく絞り込む
   --changed-within=WHEN  -r と git semgrep で、WHEN 以内に更新したファイルだけを探す。30m / 2h / 7d / 2w、
-               または日付 (2026-09-01、その日のローカル時刻 0 時以降)
+               日付か日時以降 (2026-09-01 はその日のローカル時刻 0 時、2026-09-01T09:00、...Z)、
+               または today / this-week (月曜から) / this-month (ローカル時刻)。git の履歴ではなく mtime で見る
   -l           一致した行ではなくファイル名だけを表示
   -A NUM       一致行の後ろ NUM 行も表示 (grep と同じ。文脈行の区切りは - )
   -B NUM       一致行の前 NUM 行も表示
@@ -371,13 +375,19 @@ if (!['auto', 'always', 'never'].includes(opt.color)) die('--color must be auto,
 // --include / --exclude: shell globs (* ? [...] [!...]) matched against the file name, as in grep.
 const globRe = g => new RegExp(`^${g.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.').replace(/\[!/g, '[^')}$`);
 const includes = (opt.include ?? []).map(globRe), excludes = (opt.exclude ?? []).map(globRe);
-// --changed-within: a duration back from now, or a date (a bare date is local midnight; JS would read it as UTC).
+// --changed-within: a duration back from now, a date or ISO date-time, or today / this-week / this-month (local).
+// Only these forms: Date() alone reads '7' as the year 2001, which would select every file. A bare date is local
+// midnight (Date() would read it as UTC).
 const since = (w => {
   if (w === undefined) return null;
   const d = w.match(/^(\d+)([mhdw])$/);
   if (d) return Date.now() - d[1] * { m: 6e4, h: 36e5, d: 864e5, w: 6048e5 }[d[2]];
-  const t = new Date(/^\d{4}-\d\d-\d\d$/.test(w) ? `${w}T00:00` : w).getTime();
-  if (isNaN(t)) die(`--changed-within: '${w}' is not a duration (30m, 2h, 7d, 2w) or a date (2026-09-01)`);
+  const now = new Date(), day = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (w === 'today') return day.getTime();
+  if (w === 'this-week') return day.setDate(day.getDate() - (day.getDay() + 6) % 7); // back to Monday
+  if (w === 'this-month') return day.setDate(1);
+  const t = /^\d{4}-\d\d-\d\d(T\d\d:\d\d(:\d\d(\.\d+)?)?(Z|[+-]\d\d:\d\d)?)?$/.test(w) ? new Date(w.length === 10 ? `${w}T00:00` : w).getTime() : NaN;
+  if (isNaN(t)) die(`--changed-within: '${w}' is not a duration (30m, 2h, 7d, 2w), a date (2026-09-01, 2026-09-01T09:00), today, this-week or this-month`);
   return t;
 })(opt['changed-within']);
 const wanted = (path, st) => {

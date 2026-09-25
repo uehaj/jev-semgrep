@@ -16,7 +16,9 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   read from `/dev/tty`, so data can still come on stdin; without a terminal it is an error (exit 2).
 - `--include=GLOB`, `--exclude=GLOB`: with `-r` and `git semgrep`, only files whose name matches (or does not match)
   a shell glob; both can be repeated, as in grep. `--changed-within=WHEN`: only files modified within `30m`, `2h`,
-  `7d`, `2w`, or since a date (`2026-09-01`, local midnight). A file named on the command line is always searched.
+  `7d`, `2w`; since a date (`2026-09-01`, local midnight) or an ISO date-time; or `today`, `this-week` (from Monday)
+  or `this-month`, in local time. By mtime, not git history. With `-r` a file named on the command line is always
+  searched; `git semgrep`'s pathspecs are filtered like the rest.
 
 ### Security
 - The `-r` / `git semgrep` skip list matched only `.env` and `.env.<x>`, though the help promised `.env*`: `.envrc`,
