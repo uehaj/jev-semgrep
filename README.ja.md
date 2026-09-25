@@ -193,7 +193,7 @@ semgrep を呼ぶスクリプトもこの既定値を拾います（grep が `GR
 API の設定は `SEMGREP_API_KEY`（または `TYPESAFE_API_KEY`）、`SEMGREP_URL`、`SEMGREP_MODEL` の 3 つだけです。
 TypeSafe の `POST /v1/systemone` と同じ形で話すエンドポイントなら使えます。キーは `SEMGREP_URL` の先へそのまま
 送られるので、2 つは組にして設定してください。コマンドラインの `--sys1-model=ID`、`--sys1-url=URL`、`--sys1-api-key=KEY` は
-この 3 つより優先します。コマンドラインのキーは `ps` やシェル履歴に残るので、キーはなるべく `.env` に書いてください。
+この 3 つより優先します。コマンドラインのキーは `ps` やシェル履歴に残るので、キーはなるべく `~/.config/semgrep/.env` に書いてください。
 
 ```sh
 # OpenRouter
@@ -527,12 +527,14 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                判定も変わる
   -j N         同時リクエスト数 (既定 8)
   -n           行番号を付ける
+  -z, --null-data  行ではなく NUL 終端のレコードごとに判定し、NUL 終端で出力する (前述の「複数行にまたがるレコード」を参照)
   --sentence[=HOW] 行ではなく文ごとに判定する。HOW は jev (既定) か rules (前述の「1 文ずつ判定する」を参照)
   -o           --sentence と併用し、当たった文だけを出す
   -p           各意味の確率を行末に表示 (閾値調整用)
   --dry-run    何も送らず、送信先・検索するファイル・各リクエストとその質問を表示
   --verbose    同じ表示を検索しながら stderr に出す
   -i, --interactive  --dry-run と同じ内容を見せ、端末で y と答えたときだけ検索する
+  --dedup      テンプレートごとに 1 行だけ判定し、その答えを残りにも使う (前述の「テンプレートごとに 1 行だけ判定する」を参照)
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
                否定側の閾値未満を赤、あいだを黄で表示。NO_COLOR にも従う

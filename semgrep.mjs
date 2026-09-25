@@ -165,7 +165,7 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                the positive threshold, red below the negative one, yellow in between. NO_COLOR is honored
   --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
                the API settings, overriding SEMGREP_MODEL, SEMGREP_URL, SEMGREP_API_KEY below.
-               A key on the command line shows up in ps and shell history; prefer .env
+               A key on the command line shows up in ps and shell history; prefer ~/.config/semgrep/.env
   -h, --help   this help (Japanese when LANG / LC_ALL / LC_MESSAGES starts with ja)
   -V, --version  print the version and exit
 
@@ -268,7 +268,7 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                否定側の閾値未満を赤、あいだを黄で表示。NO_COLOR にも従う
   --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
                API の設定。下の SEMGREP_MODEL / SEMGREP_URL / SEMGREP_API_KEY より優先。
-               コマンドラインのキーは ps やシェル履歴に残るので、なるべく .env に書く
+               コマンドラインのキーは ps やシェル履歴に残るので、なるべく ~/.config/semgrep/.env に書く
   -h, --help   このヘルプ (LANG / LC_ALL / LC_MESSAGES が ja 以外なら英語)
   -V, --version  バージョンを表示して終了
 

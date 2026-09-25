@@ -5,6 +5,40 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-25
+
+### Security
+- The `-r` / `git semgrep` skip list matched only `.env` and `.env.<x>`, though the help promised `.env*`: `.envrc`,
+  `.env-local` and `.env_prod` were sent, and so were `.netrc`, `.npmrc`, `.pypirc`, `.pgpass`, `.git-credentials`,
+  `id_rsa_work` and `.kube` / `.docker`. It now skips them all, comparing names without case.
+- `-r` inside a git repository skips what git ignores (`.gitignore`, `.git/info/exclude`, the global excludes
+  file), so build output and local files are not sent. Tracked files are searched even if they match. A file or
+  directory named on the command line is searched even if git ignores it.
+- **Breaking:** `./.env` in the current directory is no longer read, as in 0.3.1 (see there).
+
+### Fixed
+- A malformed API response (an answer without a probability) is an error (exit 2). It used to count as 0, so
+  `-v X` and `!X` matched. An error body from the server is cut to 300 characters, without control characters.
+- `-q` exits 0 on a match even when another request failed, and decides a regex match before `--dedup` asks anything.
+- A directory without `-r`, or one `-r` cannot read, is reported and skipped; the rest is still searched (exit 2).
+- `-o -n` without `--sentence` no longer crashes. `-A`/`-B`/`-C`/`--chunk`/`-j` take whole numbers only.
+  `--color` is checked before any request.
+- With `-z`, a binary file (other control bytes than NUL) is skipped; a binary named on the command line is reported.
+- Regex captures placed in a question are cut to 200 characters and their quotes escaped.
+- `--sentence=jev` with regex terms only joins lines by the rules and sends nothing.
+- A warning when the API key goes to a non-local `http://` endpoint.
+- Docs: `--chunk` changes results, not just speed. Lines in one request are each other's context, so
+  ambiguous lines can flip with a small chunk (`--chunk 1` flipped 18 of 200 log lines). The README said
+  batching did not change the probabilities (#9).
+
+### Changed
+- **Requires Node.js 20.16 or later** (was 20.12), for `parseArgs`' `--no-X`, which `SEMGREP_OPTS` needs.
+- Docs: examples outside the cross-language section are in English; a FAQ on the combinations that replace
+  `--paragraph`, on jsonl and on `--record-separator`; a landing page on GitHub Pages.
+- Tests: an offline suite against a fake Jev (`tests/offline.sh`, no key, no network); `npm test` runs it first.
+  `npm run judge` passes `./.env` explicitly; `scripts/release.sh` checks `gh auth` before publishing and runs
+  `npm test`.
+
 ### Added
 - `--dry-run`: send nothing; print to stdout the endpoint, each file searched (its units and how many would be
   sent) and each request with its questions, grouped by wording. The `--dedup` and `--sentence` questions are
@@ -21,33 +55,9 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   midnight) or an ISO date-time; or `today`, `this-week` (from Monday) or `this-month`, in local time. By mtime, not
   git history: after a clone or checkout every file it wrote counts as just changed. With `-r` a file named on the
   command line is always searched; `git semgrep`'s pathspecs are filtered like the rest.
-
-### Security
-- The `-r` / `git semgrep` skip list matched only `.env` and `.env.<x>`, though the help promised `.env*`: `.envrc`,
-  `.env-local` and `.env_prod` were sent, and so were `.netrc`, `.npmrc`, `.pypirc`, `.pgpass`, `.git-credentials`,
-  `id_rsa_work` and `.kube` / `.docker`. It now skips them all, comparing names without case.
-- `-r` inside a git repository skips what git ignores (`.gitignore`, `.git/info/exclude`, the global excludes
-  file), so build output and local files are not sent. Tracked files are searched even if they match. A file or
-  directory named on the command line is searched even if git ignores it.
-- **Breaking:** `./.env` in the current directory is no longer read; only the environment and
-  `~/.config/semgrep/.env` are. A `.env` committed to an untrusted repository could set `SEMGREP_URL` and send
-  the API key and the searched text to another server. Load a per-project file explicitly with `node --env-file`.
-
-### Fixed
-- A malformed API response (an answer without a probability) is an error (exit 2). It used to count as 0, so
-  `-v X` and `!X` matched. An error body from the server is cut to 300 characters, without control characters.
-- `-q` exits 0 on a match even when another request failed, and decides a regex match before `--dedup` asks anything.
-- A directory without `-r`, or one `-r` cannot read, is reported and skipped; the rest is still searched (exit 2).
-- `-o -n` without `--sentence` no longer crashes. `-A`/`-B`/`-C`/`--chunk`/`-j` take whole numbers only.
-  `--color` is checked before any request.
-- With `-z`, a binary file (other control bytes than NUL) is skipped; a binary named on the command line is reported.
-- Regex captures placed in a question are cut to 200 characters and their quotes escaped.
-- `--sentence=jev` with regex terms only joins lines by the rules and sends nothing.
-- A warning when the API key goes to a non-local `http://` endpoint.
-- Docs: Node.js 20.16 or later (for `parseArgs`' `--no-X`), as `package.json` says. `npm run judge` passes
-  `./.env` explicitly; `scripts/release.sh` checks `gh auth` before publishing and runs `npm test`.
-
-### Added
+- `SEMGREP_OPTS`: default options from the environment, split on spaces and put before the command line, which
+  wins. `--no-X` turns a boolean flag off (`--color` takes `--color=never`). Options only: no meanings, files or
+  `--`. A script can run `SEMGREP_OPTS= semgrep` to ignore it (#23).
 - `git semgrep`: a `git-semgrep` command, so git runs it as a subcommand. Like `git grep`, it searches the tracked
   files, and FILE arguments are pathspecs. The `-r` skip list (`.env*`, keys, ...) still applies.
 - `--sys1-model=ID`, `--sys1-url=URL`, `--sys1-api-key=KEY`: the API settings on the command line, overriding
@@ -81,10 +91,12 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   deviation: `$<name>` naming no group, or a negated regex's group, is an error). `-p` prints `1.00`/`0.00`
   for a regex term.
 
-### Fixed
-- Docs: `--chunk` changes results, not just speed. Lines in one request are each other's context, so
-  ambiguous lines can flip with a small chunk (`--chunk 1` flipped 18 of 200 log lines). The README said
-  batching did not change the probabilities (#9).
+## [0.3.1] - 2026-09-25
+
+### Security
+- **Breaking:** `./.env` in the current directory is no longer read; only the environment and
+  `~/.config/semgrep/.env` are. A `.env` committed to an untrusted repository could set `SEMGREP_URL` and send
+  the API key and the searched text to another server. Load a per-project file explicitly with `node --env-file`.
 
 ## [0.3.0] - 2026-09-24
 
@@ -177,7 +189,9 @@ First release as `@uehaj/semgrep`.
 - Errors are one line plus exit code 2, no stack traces.
 - LLM-as-judge test (`tests/judge.mts`) with threshold sweep; self-check (`tests/check.sh`).
 
-[Unreleased]: https://github.com/uehaj/jev-semgrep/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/uehaj/jev-semgrep/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/uehaj/jev-semgrep/compare/v0.3.0...v0.4.0
+[0.3.1]: https://github.com/uehaj/jev-semgrep/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/uehaj/jev-semgrep/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/uehaj/jev-semgrep/compare/v0.2.0...v0.2.2
 [0.2.0]: https://github.com/uehaj/jev-semgrep/compare/v0.1.1...v0.2.0

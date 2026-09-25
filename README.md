@@ -205,7 +205,7 @@ A script calling semgrep would pick these up too (grep dropped `GREP_OPTIONS` fo
 The API is configured by exactly three settings: `SEMGREP_API_KEY` (or `TYPESAFE_API_KEY`), `SEMGREP_URL` and `SEMGREP_MODEL`.
 Any endpoint that speaks TypeSafe's `POST /v1/systemone` works. The key is sent to `SEMGREP_URL` as is, so set the
 two together. On the command line, `--sys1-model=ID`, `--sys1-url=URL` and `--sys1-api-key=KEY` override
-the three. A key given this way shows up in `ps` and shell history, so prefer `.env` for it.
+the three. A key given this way shows up in `ps` and shell history, so prefer `~/.config/semgrep/.env` for it.
 
 ```sh
 # OpenRouter
@@ -548,12 +548,14 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                on ambiguous lines, not just speed
   -j N         concurrent requests (default 8)
   -n           print line numbers
+  -z, --null-data  judge NUL-terminated records instead of lines, and print them NUL-terminated (see "Records that span several lines" above)
   --sentence[=HOW] judge each sentence instead of each line; HOW is jev (default) or rules (see "One sentence at a time" above)
   -o           with --sentence, print only the matching sentences
   -p           print each meaning's probability at the end of the line
   --dry-run    send nothing; print the endpoint, each file searched and each request with its questions
   --verbose    print the same to stderr while searching
   -i, --interactive  show what --dry-run would send, and search only after y on the terminal
+  --dedup      judge one line per template and reuse its answer for the rest (see "One line per template" above)
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are
                green at or above the positive threshold, red below the negative one,
