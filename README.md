@@ -205,7 +205,7 @@ A script calling semgrep would pick these up too (grep dropped `GREP_OPTIONS` fo
 The API is configured by exactly three settings: `SEMGREP_API_KEY` (or `TYPESAFE_API_KEY`), `SEMGREP_URL` and `SEMGREP_MODEL`.
 Any endpoint that speaks TypeSafe's `POST /v1/systemone` works. The key is sent to `SEMGREP_URL` as is, so set the
 two together. On the command line, `--sys1-model=ID`, `--sys1-url=URL` and `--sys1-api-key=KEY` override
-the three. A key given this way shows up in `ps` and shell history, so prefer `.env` for it.
+the three. A key given this way shows up in `ps` and shell history, so prefer `~/.config/semgrep/.env` for it.
 
 ```sh
 # OpenRouter
@@ -363,7 +363,9 @@ tickets/sub/b.txt
 ```
 
 Without FILE it searches every tracked file under the current directory. The `-r` skip list (`.env*`, keys, ...)
-applies even to tracked files. For help use `git semgrep -h`: git takes `--help` itself and looks for a man page.
+applies even to tracked files. `--include`, `--exclude` and `--changed-within` filter the tracked files, those named
+by a pathspec included. `--changed-within` reads the working tree's modification times, not git history: right after
+a clone or a checkout, every file it wrote counts as just changed. For help use `git semgrep -h`: git takes `--help` itself and looks for a man page.
 
 ### Everything that is *not* something
 
@@ -531,6 +533,10 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                with -t 0.6 -T 0.3 a line at 0.3..0.6 matches neither X nor not-X
   -r           recurse into directories (current directory when FILE is omitted);
                skips .git, node_modules, binary files, likely secrets and what git ignores
+  --include=GLOB, --exclude=GLOB  with -r and git semgrep, only files whose name matches GLOB, or not
+               (with -r a file named on the command line is always searched; git semgrep's pathspecs are filtered)
+  --changed-within=WHEN  with -r and git semgrep, only files modified within 30m / 2h / 7d / 2w, since a date
+               or date-time, today, this-week or this-month
   -l           print only the names of files with a match, not the lines
   -A NUM       print NUM lines of trailing context after each match (context lines use - as separator)
   -B NUM       print NUM lines of leading context before each match
@@ -542,11 +548,14 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                on ambiguous lines, not just speed
   -j N         concurrent requests (default 8)
   -n           print line numbers
+  -z, --null-data  judge NUL-terminated records instead of lines, and print them NUL-terminated (see "Records that span several lines" above)
   --sentence[=HOW] judge each sentence instead of each line; HOW is jev (default) or rules (see "One sentence at a time" above)
   -o           with --sentence, print only the matching sentences
   -p           print each meaning's probability at the end of the line
   --dry-run    send nothing; print the endpoint, each file searched and each request with its questions
   --verbose    print the same to stderr while searching
+  -i, --interactive  show what --dry-run would send, and search only after y on the terminal
+  --dedup      judge one line per template and reuse its answer for the rest (see "One line per template" above)
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are
                green at or above the positive threshold, red below the negative one,
