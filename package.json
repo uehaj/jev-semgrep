@@ -28,7 +28,8 @@
     "README.md",
     "README.ja.md",
     "docs/color.svg",
-    "docs/demo.svg"
+    "docs/demo.svg",
+    "docs/sentence.svg"
   ],
   "engines": {
     "node": ">=20.16"
