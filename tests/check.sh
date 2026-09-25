@@ -171,7 +171,7 @@ DEAD="$NOKEY SEMGREP_URL=http://127.0.0.1:1 $NJ"
 node --input-type=module -e "
 const src = (await import('node:fs')).readFileSync('../semgrep.mjs', 'utf8');
 const cut = (a, b) => src.slice(src.indexOf(a), src.indexOf(b));
-const expandCaptures = new Function(cut('const SUBST =', 'for (const term of expr)') + cut('function expandCaptures', '// asksByUnit') + 'return expandCaptures;')();
+const expandCaptures = new Function(cut('const SUBST =', 'for (const term of expr)') + cut('// A capture is text from the searched file', '// asksByUnit') + 'return expandCaptures;')();
 const m = /(?<t>\d\d:\d\d) (\w+)/.exec('at 03:12 alert fired');
 const eq = (text, want) => { const got = expandCaptures(text, [m]); if (got !== want) { console.error('expand:', text, '->', got); process.exit(1); } };
 eq('\$<t> が深夜である', '03:12 が深夜である');

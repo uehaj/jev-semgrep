@@ -12,8 +12,9 @@ bump=${1:?usage: release.sh patch|minor|major|x.y.z}
 git fetch -q origin
 [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] || { echo "release: HEAD differs from origin/main (pull or push first)" >&2; exit 1; }
 npm whoami >/dev/null 2>&1 || { echo "release: not logged in to npm (npm login)" >&2; exit 1; }
+gh auth status >/dev/null 2>&1 || { echo "release: not logged in to GitHub (gh auth login)" >&2; exit 1; }
 
-sh tests/offline.sh && sh tests/check.sh
+npm test
 
 npm version "$bump" -m "v%s" >/dev/null
 ver=$(node -p "require('./package.json').version")

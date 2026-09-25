@@ -8,7 +8,7 @@ tmp=$(mktemp -d)
 node fake-jev.mjs >"$tmp/port" &
 fake=$!
 trap 'kill $fake 2>/dev/null; wait $fake 2>/dev/null || true; rm -rf "$tmp"' EXIT
-while [ ! -s "$tmp/port" ]; do sleep 0.05; done
+i=0; while [ ! -s "$tmp/port" ]; do i=$((i + 1)); [ $i -lt 200 ] || { echo "FAIL: fake-jev did not start" >&2; exit 1; }; sleep 0.05; done
 base="http://127.0.0.1:$(cat "$tmp/port")"
 # No key from the environment, and a HOME and cwd without .env, so nothing real is read or sent
 E="env -u SEMGREP_API_KEY -u TYPESAFE_API_KEY -u SEMGREP_MODEL -u NO_COLOR -u LC_ALL -u LC_MESSAGES HOME=$tmp SEMGREP_OPTS="
@@ -153,6 +153,39 @@ rm "$tmp/.config/semgrep/.env"
 mkdir -p "$tmp/sec/.kube" "$tmp/sec/.docker"
 for f in .envrc .env-local .env_prod .ENV .netrc .npmrc .pypirc .pgpass .git-credentials id_rsa_work x.JKS .kube/config .docker/config.json ok.txt; do printf 'cat\n' >"$tmp/sec/$f"; done
 eq "$($J -r -l -e cat "$tmp/sec")" "$tmp/sec/ok.txt" "-r skips credential files"
+
+# the response and the error body come from whatever server SEMGREP_URL names
+printf 'cat @drop\n' >"$tmp/drop"
+code 2 "a missing answer is an error, not 0 (which would make -v match)" -- $J -v cat "$tmp/drop"
+printf 'cat @err\n' >"$tmp/err"
+err=$($J -e cat "$tmp/err" 2>&1 >/dev/null || true)
+eq "$(printf '%s' "$err" | grep -c "$(printf '\033')")" "0" "an error body loses its escape sequences"
+[ ${#err} -lt 500 ] || fail "an error body is cut short (got ${#err} chars)"
+printf 'x @err\ncat\n' >"$tmp/errthen"
+code 0 "-q: a later match wins over a failed request" -- $J -q --chunk 1 -j 1 -e cat "$tmp/errthen"
+code 2 "without -q a failed request is still an error" -- $J --chunk 1 -j 1 -e cat "$tmp/errthen"
+reset; $J -q --dedup -e '/cat/' -e zebra "$F"; eq "$(stat count)" "0" "-q decides a regex match before --dedup's pre-question"
+# a directory without -r, or one that can't be read, is reported and the rest is still searched (grep)
+mkdir -p "$tmp/d" "$tmp/r/sub"; printf 'cat\n' >"$tmp/r/a.txt"; chmod 000 "$tmp/r/sub"
+code 2 "a directory without -r" -- $J -e cat "$tmp/d" "$F"
+eq "$($J -e cat "$tmp/d" "$F" 2>/dev/null | wc -l | tr -d ' ')" "2" "a directory without -r skips only itself"
+eq "$($J -r -c -e cat "$tmp/r" 2>/dev/null)" "$tmp/r/a.txt:1" "-r skips an unreadable directory"
+code 2 "-r with an unreadable directory" -- $J -r -e cat "$tmp/r"
+chmod 755 "$tmp/r/sub"
+# option values: checked before anything is sent
+code 0 "-o -n without --sentence" -- $J -o -n -e cat "$F"
+code 2 "-A takes a whole number" -- $J -A 1.5 -e cat "$F"
+reset; code 2 "--color=bogus" -- $J --color=bogus -e cat "$F"; eq "$(stat count)" "0" "--color is checked before any request"
+# a key over plain http gets a warning, except to this machine
+$E SEMGREP_URL=http://example.invalid/v1 SEMGREP_API_KEY=k node ../semgrep.mjs -e cat /dev/null 2>&1 | grep -q 'over plain http' || fail "plain http warning"
+eq "$($E SEMGREP_URL=$base/v1 SEMGREP_API_KEY=k node ../semgrep.mjs -e cat "$F" 2>&1 >/dev/null)" "" "no warning for 127.0.0.1"
+# -z: NUL ends a record, so a binary is told by its other control bytes; a named binary is reported
+printf '\177ELF\001\002\003cat\000' >"$tmp/bin.dat"
+reset; eq "$($J -z -e cat "$tmp/bin.dat" 2>&1)" "semgrep: $tmp/bin.dat: binary file skipped" "-z skips a binary"
+eq "$(stat count)" "0" "-z sends nothing from a binary"
+# --sentence=jev with regex terms only asks nothing: the rules join the lines
+printf '猫がいる\n犬もいる\n' >"$tmp/ja"   # unpunctuated Japanese: the breaks --sentence=jev would ask about
+reset; $J --sentence -c -e '/猫/' "$tmp/ja" >/dev/null; eq "$(stat count)" "0" "--sentence with regex terms only sends nothing"
 
 # git semgrep: tracked files only, pathspecs relative to the current directory, never stdin
 R="$tmp/repo" GS="$E SEMGREP_URL=$base/v1 node $PWD/../git-semgrep.mjs" SG="$PWD/../semgrep.mjs"
