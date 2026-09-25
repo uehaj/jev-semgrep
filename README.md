@@ -131,7 +131,7 @@ repeated queries over a large, fixed corpus a vector index is cheaper and faster
 
 `-e`/`-a`/`-v '/pattern/flags'` (first and last character `/`, JavaScript flags) is matched locally,
 as a plain regex, with no request at all. It prefilters its AND term: only the lines it holds for
-ever ask that term's meanings, so a cheap regex in front of a meaning cuts the bill. A line is sent
+ever ask that term's meanings, so a cheap regex in front of a meaning cuts both the bill and the wait. A line is sent
 only if some term's regexes all hold for it (a term with no regex holds for every line), so with
 `-e '/re/' -a A -e B` a line without `re` is still sent, asked `B` only. A query of regex terms alone
 sends nothing, except that `--sentence` (`=jev`, the default) still asks Jev where wrapped lines
@@ -158,6 +158,25 @@ $ ./semgrep -e '/(?<date>\d{4}-\d\d-\d\d) (?<time>\d\d:\d\d)/' \
 
 Prefer `$<name>` and single quotes: `$<name>` survives double quotes in sh/bash/zsh; `$1`, `$time`
 and `${time}` don't (the shell expands them itself). `-p` prints `1.00`/`0.00` for a regex term.
+
+## Sending less
+
+Every line sent to Jev costs money and time, so the cheapest line is the one never sent. From the widest cut
+to the narrowest:
+
+- **Which files.** `-r` skips `.git`, `node_modules`, binary files, likely secrets and what git ignores;
+  [`git semgrep`](#as-a-git-subcommand-git-semgrep) searches tracked files only. `--include` / `--exclude`
+  (file-name globs) and `--changed-within` (`30m`, `7d`, `today`, `this-week`, a date) narrow them further.
+- **Which lines.** A [regex term](#regex-terms) is matched locally, and only the lines it holds for are asked
+  its AND term's meanings. Blank lines are never sent.
+- **How many times.** [`--dedup`](#one-line-per-template---dedup) judges one line per template: lines that
+  differ only in ids, numbers, times or paths share one answer.
+- **Check before paying.** `--dry-run` sends nothing and prints the files, how many lines each would send and
+  every request with its questions. `-i` shows the same totals on the terminal and sends only after `y`.
+
+```sh
+$ semgrep --dry-run -r --include='*.log' --changed-within=today -e '/ERROR|FATAL/' -a 'a customer is affected' logs/
+```
 
 ## Install
 
