@@ -98,6 +98,17 @@ reset; $J --chunk 1 -e cat "$F" >/dev/null; eq "$(stat count)" "7" "--chunk 1: 7
 reset; $J --chunk 1 -e cat -e dog -Q owl "$F" >/dev/null; eq "$(stat count)" "7" "meanings share a request"
 code 2 "--chunk 0" -- $J --chunk 0 -e cat "$F"
 
+# --dry-run: the files and requests on stdout, nothing sent, exit 0 even with no match; --verbose: the same on stderr
+reset; out=$($J --dry-run --chunk 4 -e cat -v '!dog' "$F"); eq "$(stat count)" "0" "--dry-run sends nothing"
+eq "$(echo "$out" | grep -c '^semgrep: request .* \[judge\]')" "2" "--dry-run lists each request"
+echo "$out" | grep -q "^semgrep: file $F: 8 lines, 7 to send" || fail "--dry-run lists the file"
+echo "$out" | grep -q '4× Does line Lnnn match the meaning: "cat"?' || fail "--dry-run groups questions"
+code 0 "--dry-run, no match" -- $J --dry-run -e nothing "$F"
+reset; eq "$($J --dry-run -q -v cat "$F" | tail -1 | cut -d, -f1)" "semgrep: dry run: 1 request" "--dry-run ignores -q"
+reset; eq "$($J --verbose -n -e cat "$F" 2>/dev/null | nums)" "1 4 " "--verbose keeps stdout"
+eq "$(stat count)" "1" "--verbose sends"
+eq "$($J --verbose -e cat "$F" 2>&1 >/dev/null | grep -c '^semgrep: request 1 \[judge\]')" "1" "--verbose on stderr"
+
 # -j: requests in flight at once (each takes 30ms at the fake)
 reset; $J --chunk 1 -j 1 -e cat "$F" >/dev/null; eq "$(stat max)" "1" "-j 1"
 reset; $J --chunk 1 -j 3 -e cat "$F" >/dev/null; eq "$(stat max)" "3" "-j 3"
@@ -214,7 +225,7 @@ eq "$(cd "$tmp/plain" && echo cat | $E SEMGREP_URL=$base/v1 node "$SG" -e cat)" 
 # --help: exit 0, Japanese by locale, lists the options
 code 0 "--help" -- $E LANG=C node ../semgrep.mjs --help
 eq "$($E LANG=C node ../semgrep.mjs -h | head -1 | cut -c1-14)" "usage: semgrep" "-h"
-for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key'; do
+for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose'; do
   $E LANG=C node ../semgrep.mjs --help | grep -q -- "$o" || fail "--help lacks $o"
 done
 $E LANG=C node ../semgrep.mjs --help | grep -q 'grep by meaning' || fail "--help in English"

@@ -5,6 +5,12 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 
 ## [Unreleased]
 
+### Added
+- `--dry-run`: send nothing; print to stdout the endpoint, each file searched (its units and how many would be
+  sent) and each request with its questions, grouped by wording. The `--dedup` and `--sentence` questions are
+  answered no, so those counts are an estimate. `-q` is ignored, so the list is complete.
+- `--verbose`: the same lines on stderr while searching, and the summary line even when stderr is not a terminal.
+
 ### Security
 - The `-r` / `git semgrep` skip list matched only `.env` and `.env.<x>`, though the help promised `.env*`: `.envrc`,
   `.env-local` and `.env_prod` were sent, and so were `.netrc`, `.npmrc`, `.pypirc`, `.pgpass`, `.git-credentials`,
