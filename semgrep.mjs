@@ -256,6 +256,8 @@ const apiUrl = customUrl || 'https://api.typesafe.ai/v1/systemone';
 const apiHost = (() => { try { return new URL(apiUrl).host; } catch { die(`not a URL: ${apiUrl} (--sys1-url / SEMGREP_URL)`); } })();
 const model = opt['sys1-model'] || SEMGREP_MODEL || 'jev-latest';
 const credential = opt['sys1-api-key'] || SEMGREP_API_KEY || TYPESAFE_API_KEY;
+if (credential && new URL(apiUrl).protocol === 'http:' && !/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(apiHost))
+  console.error(`semgrep: warning: the API key goes to ${apiHost} over plain http`);
 
 // Expression: a list of AND terms joined by OR. Each literal is a meaning { kind:'m', text, not } or a
 // regex { kind:'r', re, names, count, not }, matched locally. A leading ! negates just that literal.
@@ -304,7 +306,9 @@ for (const term of expr) {
 }
 const hasMeanings = expr.some(term => term.some(lit => lit.kind === 'm'));
 // A compatible local server may need no key; the TypeSafe default always does. Regex-only queries never call the API.
-if ((hasMeanings || opt.sentence === 'jev') && !credential && !customUrl) die('SEMGREP_API_KEY is not set. Export it or put it in ~/.config/semgrep/.env');
+// --sentence=jev asks Jev where wrapped lines join; with regex terms only, nothing else is sent, so the rules decide.
+if (opt.sentence === 'jev' && !hasMeanings) opt.sentence = 'rules';
+if (hasMeanings && !credential && !customUrl) die('SEMGREP_API_KEY is not set. Export it or put it in ~/.config/semgrep/.env');
 
 const levels = { loose: [0.3, 0.7], normal: [0.5, 0.5], strict: [0.7, 0.3] };
 const level = levels[opt.level];
@@ -314,11 +318,12 @@ const tNeg = opt.T === undefined ? level[1] : Number(opt.T);
 const chunkLines = Number(opt.chunk);
 // Validate numeric options. parseArgs turns -C=10 into the value "=10", so reject that here.
 for (const [k, label] of [['t', '-t'], ['T', '-T'], ['chunk', '--chunk'], ['j', '-j'], ['A', '-A'], ['B', '-B'], ['C', '-C']])
-  if (opt[k] !== undefined && !/^\d+(\.\d+)?$/.test(opt[k])) die(`${label}: invalid number '${opt[k]}' (write ${label} 10 or ${label}10, not ${label}=10)`);
+  if (opt[k] !== undefined && !(k === 't' || k === 'T' ? /^\d+(\.\d+)?$/ : /^\d+$/).test(opt[k])) die(`${label}: invalid number '${opt[k]}' (write ${label} 10 or ${label}10, not ${label}=10)`);
 if (chunkLines < 1) die('--chunk must be at least 1');
 if (tPos < 0 || tPos > 1 || tNeg < 0 || tNeg > 1) die('-t / -T must be between 0 and 1');
 if (Number(opt.j) < 1) die('-j must be at least 1');
 if (opt.sentence !== undefined && !['jev', 'rules'].includes(opt.sentence)) die('--sentence must be jev or rules');
+if (!['auto', 'always', 'never'].includes(opt.color)) die('--color must be auto, always or never');
 
 // The unit of judgement. Without -z it is a line; with -z it is a NUL-terminated record, which may
 // span several lines. Everything downstream works on an array of units, so only the terminator changes.
@@ -336,8 +341,10 @@ function expand(path) {
   let st;
   try { st = statSync(path); } catch (e) { warn(path, e); return []; }
   if (!st.isDirectory()) return [path];
-  if (!opt.r) die(`${path}: Is a directory (use -r)`);
-  return readdirSync(path, { withFileTypes: true })
+  if (!opt.r) { warn(path, { message: 'Is a directory (use -r)' }); return []; }
+  let ents;
+  try { ents = readdirSync(path, { withFileTypes: true }); } catch (e) { warn(path, e); return []; }
+  return ents
     .filter(d => !d.isSymbolicLink() && !(d.isDirectory() ? SKIP_DIRS.includes(d.name) : SKIP_FILE.test(d.name)))
     .sort((a, b) => a.name.localeCompare(b.name))
     .flatMap(d => expand(path.endsWith('/') ? path + d.name : `${path}/${d.name}`)); // not path.join(): it would drop the leading ./
@@ -373,8 +380,14 @@ async function post(state, questions) {
       throw new Error(`${apiHost}: ${e.cause?.message ?? e.message}`);
     }
     if ((res.status === 429 || res.status === 529 || res.status >= 500) && attempt < 6) { await sleep(500 * 2 ** attempt); continue; }
-    if (!res.ok) throw new Error(`${apiHost} ${res.status}: ${await res.text()}`);
+    // The body comes from whatever server SEMGREP_URL names: short, and without terminal control characters.
+    if (!res.ok) throw new Error(`${apiHost} ${res.status}: ${(await res.text()).slice(0, 300).replace(/[\x00-\x1f\x7f-\x9f]/g, ' ')}`);
     const { answers, usage = {} } = await res.json();
+    // A missing or malformed answer would read as 0 and make every "not X" hold, so it is an error instead.
+    for (const k of Object.keys(questions)) {
+      const p = answers?.[k]?.noul;
+      if (typeof p !== 'number' || !(p >= 0 && p <= 1)) throw new Error(`${apiHost}: the response has no answer for ${k}`);
+    }
     requestCount++;
     usedTokens += usage.input_tokens ?? 0;
     usedCost += typeof usage.cost === 'number' ? usage.cost : 0;
@@ -461,8 +474,12 @@ const read = new Map(); // file -> units as read (lines, or records with -z)
 for (const file of targets) {
   let buf;
   try { buf = readFileSync(file === '-' ? 0 : file); } catch (e) { warn(file, e); continue; }
-  // With -z a NUL is the record terminator, so the binary sniff would reject exactly the input we want.
-  if (!opt.z && buf.subarray(0, 8192).includes(0)) continue;
+  // With -z a NUL is the record terminator, so the binary sniff looks for other control bytes (ELF, images, archives).
+  const head = buf.subarray(0, 8192);
+  if (opt.z ? /[\x01-\x08\x0e-\x1a\x1c-\x1f]/.test(head.toString('latin1')) : head.includes(0)) {
+    if (files.includes(file)) console.error(`semgrep: ${file}: binary file skipped`); // named on the command line: say so
+    continue;
+  }
   const src = buf.toString('utf8').split(SEP);
   if (src.at(-1) === '') src.pop();
   read.set(file, src);
@@ -503,13 +520,15 @@ function regexPart(term, text) { // -> { ok, matches }: matches are the non-nega
   }
   return { ok, matches };
 }
+// A capture is text from the searched file, placed inside the quoted meaning: cap it and escape its quotes.
+const quoteSafe = s => (s ?? '').slice(0, 200).replace(/["\\]/g, '\\$&');
 function expandCaptures(text, matches) {
   const named = new Map(), positional = [];
   for (const m of matches) {
-    for (let i = 1; i < m.length; i++) positional.push(m[i] ?? '');
-    if (m.groups) for (const [k, v] of Object.entries(m.groups)) named.set(k, v ?? '');
+    for (let i = 1; i < m.length; i++) positional.push(quoteSafe(m[i]));
+    if (m.groups) for (const [k, v] of Object.entries(m.groups)) named.set(k, quoteSafe(v));
   }
-  const whole = matches[0]?.[0] ?? '';
+  const whole = quoteSafe(matches[0]?.[0]);
   return text.replace(SUBST, (all, dollar, amp, name, num) => {
     if (dollar) return '$';
     if (amp) return whole;
@@ -529,6 +548,11 @@ for (const l of allLines) {
   asksByUnit.set(l, asks);
 }
 const lines = allLines.filter(l => asksByUnit.get(l).size);
+// -q stops at the first match, like grep -q. Known before any request, --dedup's included: unsent units (blank, or
+// no term's regexes hold; their meanings score 0) and regex-only terms.
+// ponytail: process.exit may drop a warning still buffered for a stderr pipe; the exit status is what -q promises
+const regexOnly = term => term.every(lit => lit.kind === 'r');
+if (opt.quiet && allLines.some(l => expr.some(term => (!asksByUnit.get(l).size || regexOnly(term)) && termHolds(term, l)))) process.exit(0);
 
 // --dedup: machine-generated logs repeat one skeleton with a different id or number in it. Mask the parts
 // whose value carries no meaning, group by the result, and judge one member per group. The mask is only
@@ -603,17 +627,12 @@ async function evaluate(chunk) {
   chunk.forEach((l, i) => keys[i].forEach((text, k) => asksByUnit.get(l).set(text, answers[`${id(i)}_${k}`].noul)));
 }
 const isHit = l => expr.some(term => termHolds(term, l));
-// -q stops at the first match, like grep -q. Known before any request: unsent units (blank, or no term's regexes
-// hold; their meanings score 0) and regex-only terms.
-// ponytail: process.exit may drop a warning still buffered for a stderr pipe; the exit status is what -q promises
-const regexOnly = term => term.every(lit => lit.kind === 'r');
-if (opt.quiet && allLines.some(l => expr.some(term => (!asksByUnit.get(l).size || regexOnly(term)) && termHolds(term, l)))) process.exit(0);
+// -q: a failed request is reported and the rest still run, since a later match means exit 0 (grep -q).
 await Promise.all(chunks.map(chunk => pooled(() => evaluate(chunk).then(() => {
   if (opt.quiet && chunk.some(isHit)) process.exit(0);
-}))));
+}, e => { if (!opt.quiet) throw e; console.error(`semgrep: ${e.message}`); hadError = true; }))));
 
 const color = opt.color === 'always' || (opt.color === 'auto' && process.stdout.isTTY && !process.env.NO_COLOR);
-if (!['auto', 'always', 'never'].includes(opt.color)) die('--color must be auto, always or never');
 const paint = (code, s) => (color ? `\x1b[${code}m${s}\x1b[0m` : s);
 const paintProb = x => paint(x >= tPos ? 32 : x < tNeg ? 31 : 33, x.toFixed(2));
 // -p: one column per literal, in the order it was written. Regex: 1.00/0.00 for whether it matched.
@@ -670,7 +689,7 @@ const highlight = (text, rs) => {
   }
   return out + text.slice(at);
 };
-const startNo = (file, k) => (opt.o ? spansOf.get(file)[k - 1][0][0] : k); // -o: the unit where the sentence starts
+const startNo = (file, k) => (opt.o && opt.sentence ? spansOf.get(file)[k - 1][0][0] : k); // -o: the unit where the sentence starts
 
 const after = Number(opt.A ?? opt.C ?? 0), before = Number(opt.B ?? opt.C ?? 0);
 const multi = opt.r || asGit || targets.length > 1; // grep -r and git grep prefix file names even for a single file
@@ -705,4 +724,4 @@ if (process.stderr.isTTY && !opt.quiet) {
   console.error(`${matched}/${allLines.length} ${opt.sentence ? 'sentences' : opt.z ? 'records' : 'lines'} (${sent.length} sent${opt.dedup ? ` of ${lines.length}` : ''}), ${requestCount} requests, ${usedTokens} input tokens${cost}`);
 }
 // process.exit() can drop buffered stdout when piped, so set exitCode instead.
-process.exitCode = hadError ? 2 : matched ? 0 : 1; // -q exited 0 at its first match, even after an error
+process.exitCode = matched && opt.quiet ? 0 : hadError ? 2 : matched ? 0 : 1; // -q: a match wins over an error

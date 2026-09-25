@@ -35,7 +35,7 @@
   "scripts": {
     "test": "sh tests/offline.sh && sh tests/check.sh",
     "test:offline": "sh tests/offline.sh",
-    "judge": "node --no-warnings tests/judge.mts",
+    "judge": "node --no-warnings --env-file-if-exists=.env tests/judge.mts",
     "release": "sh scripts/release.sh"
   }
 }

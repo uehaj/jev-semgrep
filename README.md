@@ -14,7 +14,7 @@ and applies a threshold.
 ./semgrep -n -e "customer is angry or frustrated" tickets.txt
 ```
 
-- Zero dependencies. One file, Node.js 20.12+ and `fetch`.
+- Zero dependencies. One file, Node.js 20.16+ and `fetch`.
 - Fast. 30 lines go into one request, requests run 8 at a time. A 210-line file finishes in under a second.
 - Meanings combine with AND / OR / NOT.
 - **Language-agnostic.** The meaning and the text can each be in any language. A Japanese meaning finds French, Russian, Chinese and Korean lines alike. No translation step, same speed, same cost.
@@ -161,7 +161,7 @@ Two ways to use it: as a command-line tool (this section), or as a Claude Code s
 (see [Use it from Claude Code](#use-it-from-claude-code) below). The skill falls back to `npx @uehaj/semgrep`,
 so if you only use it through Claude Code you can skip the install here entirely and just set the API key.
 
-Requires Node.js 20.12 or later. No other dependencies.
+Requires Node.js 20.16 or later. No other dependencies.
 
 ```sh
 npm install -g @uehaj/semgrep
