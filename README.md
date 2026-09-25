@@ -363,7 +363,9 @@ tickets/sub/b.txt
 ```
 
 Without FILE it searches every tracked file under the current directory. The `-r` skip list (`.env*`, keys, ...)
-applies even to tracked files. For help use `git semgrep -h`: git takes `--help` itself and looks for a man page.
+applies even to tracked files. `--include`, `--exclude` and `--changed-within` filter the tracked files, those named
+by a pathspec included. `--changed-within` reads the working tree's modification times, not git history: right after
+a clone or a checkout, every file it wrote counts as just changed. For help use `git semgrep -h`: git takes `--help` itself and looks for a man page.
 
 ### Everything that is *not* something
 

@@ -258,7 +258,12 @@ eq "$($JI -r -l --include='*.md' --changed-within=2019-12-31T12:00Z -e cat "$P" 
 (cd "$P" && git init -q && git add .)
 eq "$(cd "$P" && $GS -l --include='*.md' --changed-within=7d -e cat | tr '\n' ' ')" "a.md sub/e.md " "git semgrep with --include and --changed-within"
 eq "$(cd "$P" && $GS -l --include='*.md' -e cat b.txt a.md | tr '\n' ' ')" "a.md " "git semgrep: pathspecs are filtered too"
+$JI -r -l --include='sub/*.md' -e cat "$P" 2>&1 >/dev/null | grep -q "has a /, but globs match the file name only" || fail "--include with a / warns"
 
+# -i without a terminal is an error; from SEMGREP_OPTS it says so. notty: a new session has no controlling terminal
+notty() { perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' "$@"; }
+code 2 "-i without a terminal" -- notty $JI -i -e cat "$P/a.md"
+notty $E SEMGREP_OPTS=-i SEMGREP_URL=$base/v1 node ../semgrep.mjs -e cat "$P/a.md" 2>&1 | grep -q 'SEMGREP_OPTS= semgrep' || fail "-i from SEMGREP_OPTS names it"
 # -i: shows the dry run on the terminal and sends nothing before the answer; y searches, anything else exits 1
 if script --version >/dev/null 2>&1; then onpty() { script -qec "$1" /dev/null; }; else onpty() { script -q /dev/null sh -c "$1"; }; fi
 # the answer is typed after the prompt is up: script(1) forwards input at once and then sends EOF, which would come first

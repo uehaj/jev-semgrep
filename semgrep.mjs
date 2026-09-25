@@ -62,8 +62,10 @@ const OPTIONS = {
 // SEMGREP_OPTS holds default options only: no meanings, no files, no --. It goes in front of the arguments, so the
 // command line wins (a later value counts; --no-X clears a flag).
 const defaults = SEMGREP_OPTS.split(/\s+/).filter(Boolean).map(fill);
+let optsInteractive = false; // -i from SEMGREP_OPTS: a script without a terminal is told where it came from
 try {
   const { tokens: t } = parseArgs({ args: defaults, options: OPTIONS, allowPositionals: true, allowNegative: true, tokens: true });
+  optsInteractive = t.some(k => k.name === 'interactive' && !k.rawName.startsWith('--no-'));
   const bad = t.find(k => k.kind !== 'option' || ['e', 'a', 'v', 'question'].includes(k.name));
   if (bad) die(`SEMGREP_OPTS: ${bad.kind === 'option' ? `${bad.name.length > 1 ? '--' : '-'}${bad.name} is not allowed (meanings go on the command line)` : `'${bad.value ?? '--'}' is not an option`}`);
 } catch (e) { die(`SEMGREP_OPTS: ${e.message}`); }
@@ -375,6 +377,8 @@ if (!['auto', 'always', 'never'].includes(opt.color)) die('--color must be auto,
 // --include / --exclude: shell globs (* ? [...] [!...]) matched against the file name, as in grep.
 const globRe = g => new RegExp(`^${g.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.').replace(/\[!/g, '[^')}$`);
 const includes = (opt.include ?? []).map(globRe), excludes = (opt.exclude ?? []).map(globRe);
+for (const [o, gs] of [['include', opt.include], ['exclude', opt.exclude]]) for (const g of gs ?? [])
+  if (g.includes('/')) console.error(`semgrep: warning: --${o}='${g}' has a /, but globs match the file name only, not the path, so it matches no file`);
 // --changed-within: a duration back from now, a date or ISO date-time, or today / this-week / this-month (local).
 // Only these forms: Date() alone reads '7' as the year 2001, which would select every file. A bare date is local
 // midnight (Date() would read it as UTC).
@@ -453,7 +457,7 @@ const stdinBuf = targets.includes('-') ? readFileSync(0) : null;
 // Nothing is sent before the answer. The answer comes from /dev/tty, so stdin can still carry the data.
 if (opt.interactive && !dry) {
   let tty;
-  try { tty = openSync('/dev/tty', 'r+'); } catch { die('-i needs a terminal to ask on'); }
+  try { tty = openSync('/dev/tty', 'r+'); } catch { die(`-i needs a terminal to ask on${optsInteractive ? ' (-i is in SEMGREP_OPTS; from a script, run SEMGREP_OPTS= semgrep ...)' : ''}`, !optsInteractive); }
   const plan = spawnSync(process.execPath, [...process.execArgv, process.argv[1], '--dry-run', ...process.argv.slice(2)], { input: stdinBuf ?? '', encoding: 'utf8', maxBuffer: Infinity });
   if (plan.status !== 0 && plan.status !== 2) { process.stderr.write(plan.stderr); process.exit(2); } // 2: a file could not be read
   const shown = plan.stdout.split('\n').filter(l => /^semgrep: (file |dry run: )/.test(l));
