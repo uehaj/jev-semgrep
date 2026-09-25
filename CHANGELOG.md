@@ -5,6 +5,9 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 
 ## [Unreleased]
 
+### Added
+- `-V`, `--version`: print `semgrep X.Y.Z` and exit, like `grep -V`.
+
 ### Security
 - The `-r` / `git semgrep` skip list matched only `.env` and `.env.<x>`, though the help promised `.env*`: `.envrc`,
   `.env-local` and `.env_prod` were sent, and so were `.netrc`, `.npmrc`, `.pypirc`, `.pgpass`, `.git-credentials`,

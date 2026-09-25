@@ -526,6 +526,7 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
   --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
                API の設定。SEMGREP_MODEL / SEMGREP_URL / SEMGREP_API_KEY より優先
   -h, --help   このヘルプ (LANG / LC_ALL / LC_MESSAGES が ja 以外なら英語)
+  -V, --version  バージョンを表示して終了
 ```
 
 FILE を省略すると stdin を読みます。複数ファイルなら `file:` を前置きします。

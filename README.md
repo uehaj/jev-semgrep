@@ -549,6 +549,7 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
   --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
                the API settings, overriding SEMGREP_MODEL, SEMGREP_URL, SEMGREP_API_KEY
   -h, --help   this help (Japanese when LANG / LC_ALL / LC_MESSAGES starts with ja)
+  -V, --version  print the version and exit
 ```
 
 Without FILE, stdin is read. With several files, output is prefixed with `file:`.
