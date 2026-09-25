@@ -342,7 +342,10 @@ tests/tickets/sub/b.txt
 `.docker`, binary files (a NUL byte in the first 8 KB) and files that usually hold secrets (`.env*`, `.netrc`,
 `.npmrc`, `.pypirc`, `.pgpass`, `.git-credentials`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`,
 `id_rsa*` and friends; names compared without case). **Every line that is searched is sent to the TypeSafe API**, so point `-r` at a directory
-you mean to scan. A file named explicitly on the command line is always searched, even if it matches the skip list. `-l` prints each
+you mean to scan. Inside a git repository, `-r` also skips what git ignores (`.gitignore`, `.git/info/exclude`, the
+global excludes file), so build output and local files stay home; a tracked file is searched even if it matches.
+A file named explicitly on the command line is always searched, even if it matches the skip list or is ignored;
+so is a directory that git ignores, when you name it (`semgrep -r -e ... dist`). `-l` prints each
 matching file once, in the order matches are found, and works with or without `-r`. `-c` prints the number of
 matching lines per file instead.
 
@@ -527,7 +530,7 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
   -T THRESH    negative threshold: "not X" when probability < THRESH (overrides --level)
                with -t 0.6 -T 0.3 a line at 0.3..0.6 matches neither X nor not-X
   -r           recurse into directories (current directory when FILE is omitted);
-               skips .git, node_modules and binary files
+               skips .git, node_modules, binary files, likely secrets and what git ignores
   -l           print only the names of files with a match, not the lines
   -A NUM       print NUM lines of trailing context after each match (context lines use - as separator)
   -B NUM       print NUM lines of leading context before each match
