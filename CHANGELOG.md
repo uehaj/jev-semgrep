@@ -37,7 +37,8 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ### Changed
 - **Requires Node.js 20.16 or later** (was 20.12), for `parseArgs`' `--no-X`, which `SEMGREP_OPTS` needs.
 - Docs: examples outside the cross-language section are in English; a FAQ on the combinations that replace
-  `--paragraph`, on jsonl and on `--record-separator`; a landing page on GitHub Pages.
+  `--paragraph`, on jsonl and on `--record-separator`; a landing page on GitHub Pages, and three of its scenes as an animated SVG at
+  the top of the README (`scripts/demo-svg.mjs` renders it from the page).
 - Tests: an offline suite against a fake Jev (`tests/offline.sh`, no key, no network); `npm test` runs it first.
   `npm run judge` passes `./.env` explicitly; `scripts/release.sh` checks `gh auth` before publishing and runs
   `npm test`.
