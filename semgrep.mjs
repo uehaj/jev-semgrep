@@ -52,6 +52,7 @@ const OPTIONS = {
   'sys1-url': { type: 'string' }, // SEMGREP_URL
   'sys1-api-key': { type: 'string' }, // SEMGREP_API_KEY / TYPESAFE_API_KEY
   help: { type: 'boolean', short: 'h', default: false },
+  version: { type: 'boolean', short: 'V', default: false },
 };
 // SEMGREP_OPTS holds default options only: no meanings, no files, no --. It goes in front of the arguments, so the
 // command line wins (a later value counts; --no-X clears a flag).
@@ -100,7 +101,8 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
   -r           recurse into directories (current directory when FILE is omitted). Skips .git,
                node_modules, .ssh/.aws/.gnupg/.kube/.docker, binary files and likely secrets (.env*,
                .netrc, .npmrc, .git-credentials, *.pem, *.key, id_rsa*...). Every searched line is sent
-               to the TypeSafe API
+               to the TypeSafe API. Inside a git repository, what git ignores (.gitignore) is skipped
+               too; a file or directory named on the command line is searched even so
   -l           print only the names of files with a match, not the lines
   -A NUM       print NUM lines of trailing context after each match (context lines use - as separator)
   -B NUM       print NUM lines of leading context before each match
@@ -150,6 +152,7 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                the API settings, overriding SEMGREP_MODEL, SEMGREP_URL, SEMGREP_API_KEY below.
                A key on the command line shows up in ps and shell history; prefer .env
   -h, --help   this help (Japanese when LANG / LC_ALL / LC_MESSAGES starts with ja)
+  -V, --version  print the version and exit
 
 Exit status: 0 matched / 1 no match / 2 error
 
@@ -193,7 +196,9 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                -t 0.6 -T 0.3 なら 0.3〜0.6 の曖昧な行はどちらにも当たらない
   -r           ディレクトリを再帰的に探す (FILE 省略時はカレント)。.git、node_modules、
                .ssh/.aws/.gnupg/.kube/.docker、バイナリ、秘密情報らしいファイル (.env*, .netrc, .npmrc,
-               .git-credentials, *.pem, *.key, id_rsa*...) は飛ばす。検索した行はすべて TypeSafe の API に送られる
+               .git-credentials, *.pem, *.key, id_rsa*...) は飛ばす。git リポジトリの中では
+               git が無視するもの (.gitignore) も飛ばす。コマンドラインで指定したファイル・ディレクトリは
+               それでも探す。検索した行はすべて TypeSafe の API に送られる
   -l           一致した行ではなくファイル名だけを表示
   -A NUM       一致行の後ろ NUM 行も表示 (grep と同じ。文脈行の区切りは - )
   -B NUM       一致行の前 NUM 行も表示
@@ -242,6 +247,7 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                API の設定。下の SEMGREP_MODEL / SEMGREP_URL / SEMGREP_API_KEY より優先。
                コマンドラインのキーは ps やシェル履歴に残るので、なるべく .env に書く
   -h, --help   このヘルプ (LANG / LC_ALL / LC_MESSAGES が ja 以外なら英語)
+  -V, --version  バージョンを表示して終了
 
 終了コード: 一致あり 0 / なし 1 / エラー 2 (引数・読めないファイル・API 障害)
 
@@ -256,6 +262,10 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                      スクリプトからは SEMGREP_OPTS= semgrep と空にして呼ぶ
   キーは SEMGREP_URL の先へそのまま送られる。SEMGREP_URL 指定時にキーが無ければ認証ヘッダを付けない。
   例:  mkdir -p ~/.config/semgrep && echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env`;
+if (opt.version) {
+  console.log(`semgrep ${JSON.parse(readFileSync(new URL('package.json', import.meta.url), 'utf8')).version}`);
+  process.exit(0);
+}
 if (opt.help) {
   const locale = process.env.LC_ALL || process.env.LC_MESSAGES || process.env.LANG || '';
   console.log(locale.startsWith('ja') ? HELP_JA : HELP_EN);
@@ -355,17 +365,28 @@ const SKIP_DIRS = ['.git', 'node_modules', '.ssh', '.aws', '.gnupg', '.kube', '.
 const SKIP_FILE = /^\.env|^\.(netrc|npmrc|pypirc|pgpass|git-credentials)$|\.(pem|key|p12|pfx|jks|keystore)$|^id_(rsa|dsa|ecdsa|ed25519)/i;
 let hadError = false;
 const warn = (file, e) => { console.error(`semgrep: ${file}: ${e.message}`); hadError = true; };
-function expand(path) {
+// -r also leaves out what git ignores (.gitignore, .git/info/exclude, the global excludes file), in one git call per
+// directory named on the command line. Paths come back relative to it; an ignored directory comes back whole, as
+// "dir/", so it is never walked. A directory that is itself ignored was named on purpose and is searched in full.
+function gitIgnored(dir) {
+  const git = args => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', maxBuffer: Infinity, stdio: ['ignore', 'pipe', 'ignore'] });
+  try { git(['check-ignore', '-q', '.']); return new Set(); } catch {} // exit 0: dir itself is ignored
+  try { return new Set(git(['ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--directory']).split('\0').map(p => p.replace(/\/$/, ''))); }
+  catch { return new Set(); } // not in a repository, or no git: nothing is ignored
+}
+function expand(path, rel = '', ignored) {
   let st;
   try { st = statSync(path); } catch (e) { warn(path, e); return []; }
   if (!st.isDirectory()) return [path];
   if (!opt.r) { warn(path, { message: 'Is a directory (use -r)' }); return []; }
+  ignored ??= gitIgnored(path);
   let ents;
   try { ents = readdirSync(path, { withFileTypes: true }); } catch (e) { warn(path, e); return []; }
   return ents
     .filter(d => !d.isSymbolicLink() && !(d.isDirectory() ? SKIP_DIRS.includes(d.name) : SKIP_FILE.test(d.name)))
+    .filter(d => !ignored.has(rel + d.name))
     .sort((a, b) => a.name.localeCompare(b.name))
-    .flatMap(d => expand(path.endsWith('/') ? path + d.name : `${path}/${d.name}`)); // not path.join(): it would drop the leading ./
+    .flatMap(d => expand(path.endsWith('/') ? path + d.name : `${path}/${d.name}`, `${rel}${d.name}/`, ignored)); // not path.join(): it would drop the leading ./
 }
 // As git semgrep, FILE arguments are pathspecs and the files are the tracked ones, like git grep. The skip list
 // still applies, since these files were not named one by one. Deleted files, submodules and symlinks are left out.

@@ -222,6 +222,22 @@ code 1 "git semgrep: over 1 MiB of paths" -- sh -c "cd '$R' && $GS -e cat -- man
 printf 'SEMGREP_GIT=1\n' >"$tmp/plain/.env"
 eq "$(cd "$tmp/plain" && echo cat | $E SEMGREP_URL=$base/v1 node "$SG" -e cat)" "cat" "SEMGREP_GIT in .env"
 
+# -r leaves out what git ignores; a file or directory named on the command line is searched even so
+I="$tmp/ign" JI="$E SEMGREP_URL=$base/v1 node $SG"
+mkdir -p "$I/dist/sub" "$I/src/build"
+for f in a.txt x.log dist/d.txt dist/sub/e.txt src/s.txt src/t.log src/build/b.txt; do printf 'cat\n' >"$I/$f"; done
+printf 'dist/\n*.log\nbuild/\n' >"$I/.gitignore"
+(cd "$I" && git init -q && git add .gitignore a.txt)
+eq "$(cd "$I" && $JI -r -l -e cat | tr '\n' ' ')" "./a.txt ./src/s.txt " "-r skips ignored files and directories"
+eq "$(cd "$I" && $JI -r -l -e cat src)" "src/s.txt" "-r on a subdirectory, the root's .gitignore applies"
+eq "$(cd "$I/src" && $JI -r -l -e cat)" "./s.txt" "-r from a subdirectory"
+eq "$(cd "$I" && $JI -r -l -e cat dist | tr '\n' ' ')" "dist/d.txt dist/sub/e.txt " "-r on an ignored directory, named: searched"
+eq "$(cd "$I" && $JI -l -e cat x.log src/t.log | tr '\n' ' ')" "x.log src/t.log " "ignored files, named: searched"
+(cd "$I" && git add -f src/t.log)
+eq "$(cd "$I" && $JI -r -l -e cat src | tr '\n' ' ')" "src/s.txt src/t.log " "-r searches a tracked file that matches .gitignore"
+mkdir "$tmp/norepo"; printf "cat\n" >"$tmp/norepo/x.log"; printf "*.log\n" >"$tmp/norepo/.gitignore"
+eq "$($JI -r -l -e cat "$tmp/norepo")" "$tmp/norepo/x.log" "-r outside a repository: .gitignore has no effect"
+
 # --help: exit 0, Japanese by locale, lists the options
 code 0 "--help" -- $E LANG=C node ../semgrep.mjs --help
 eq "$($E LANG=C node ../semgrep.mjs -h | head -1 | cut -c1-14)" "usage: semgrep" "-h"
@@ -229,6 +245,12 @@ for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '
   $E LANG=C node ../semgrep.mjs --help | grep -q -- "$o" || fail "--help lacks $o"
 done
 $E LANG=C node ../semgrep.mjs --help | grep -q 'grep by meaning' || fail "--help in English"
+
+# --version: the version in package.json, exit 0, before any check that needs a key or a meaning
+v=$(node -p "require('../package.json').version")
+eq "$($E node ../semgrep.mjs --version)" "semgrep $v" "--version"
+eq "$($E node ../semgrep.mjs -V)" "semgrep $v" "-V"
+code 0 "--version with no key" -- $E node ../semgrep.mjs --version
 $E LANG=ja_JP.UTF-8 node ../semgrep.mjs --help | grep -q '何も表示せず' || fail "--help in Japanese"
 $E LANG=C LC_MESSAGES=ja_JP.UTF-8 node ../semgrep.mjs --help | grep -q '何も表示せず' || fail "LC_MESSAGES"
 echo OK

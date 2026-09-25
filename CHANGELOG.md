@@ -10,11 +10,15 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   sent) and each request with its questions, grouped by wording. The `--dedup` and `--sentence` questions are
   answered no, so those counts are an estimate. `-q` is ignored, so the list is complete.
 - `--verbose`: the same lines on stderr while searching, and the summary line even when stderr is not a terminal.
+- `-V`, `--version`: print `semgrep X.Y.Z` and exit, like `grep -V`.
 
 ### Security
 - The `-r` / `git semgrep` skip list matched only `.env` and `.env.<x>`, though the help promised `.env*`: `.envrc`,
   `.env-local` and `.env_prod` were sent, and so were `.netrc`, `.npmrc`, `.pypirc`, `.pgpass`, `.git-credentials`,
   `id_rsa_work` and `.kube` / `.docker`. It now skips them all, comparing names without case.
+- `-r` inside a git repository skips what git ignores (`.gitignore`, `.git/info/exclude`, the global excludes
+  file), so build output and local files are not sent. Tracked files are searched even if they match. A file or
+  directory named on the command line is searched even if git ignores it.
 - **Breaking:** `./.env` in the current directory is no longer read; only the environment and
   `~/.config/semgrep/.env` are. A `.env` committed to an untrusted repository could set `SEMGREP_URL` and send
   the API key and the searched text to another server. Load a per-project file explicitly with `node --env-file`.
