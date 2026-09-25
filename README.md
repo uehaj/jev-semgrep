@@ -415,6 +415,11 @@ $ ./semgrep -n --sentence -e "the author admits they made a mistake" tests/prose
 The sentence starts on line 1 and ends at `mistake.` on line 3; only that part is colored, not
 `Next time I will add a test`, which is judged separately and does not match.
 
+On a terminal, with both meanings and `-C 3` for context, the colors show where each sentence starts and ends
+inside a line: lines 3 and 9 are colored only up to the end of the matching sentence, and lines 4-7 are context (`-`):
+
+![--sentence -C 3 --color: the matching sentences in the match color, up to mistake. on line 3 and 返金してほしいです。 on line 9; lines 4 to 7 as context](docs/sentence.svg)
+
 `-o` prints only the matching sentences, one per line, as `grep -o` prints only the matching part.
 `-n` then gives the line where the sentence starts. Japanese is joined without a space, as are Chinese,
 Thai, Lao, Khmer, Myanmar and Tibetan, which do not put spaces between words:
