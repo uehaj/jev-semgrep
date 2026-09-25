@@ -112,7 +112,8 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                too; a file or directory named on the command line is searched even so
   --include=GLOB, --exclude=GLOB  with -r and git semgrep, only files whose name matches GLOB (* ? [...]),
                or not; both can be repeated. With -r a file named on the command line is always
-               searched; git semgrep's pathspecs are filtered like the rest
+               searched; git semgrep's pathspecs are filtered like the rest.
+               * also matches a leading dot (*.md matches .notes.md), as in rg --glob
   --changed-within=WHEN  with -r and git semgrep, only files modified within WHEN: 30m, 2h, 7d, 2w;
                since a date or time (2026-09-01 is local midnight, 2026-09-01T09:00, ...Z); or today,
                this-week (from Monday) or this-month, in local time. By mtime, not git history
@@ -216,7 +217,8 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                それでも探す。検索した行はすべて TypeSafe の API に送られる
   --include=GLOB, --exclude=GLOB  -r と git semgrep で、名前が GLOB (* ? [...]) に合うファイルだけ
                (または合わないものだけ) を探す。複数指定可。-r ではコマンドラインで指定したファイルは
-               必ず探す。git semgrep の pathspec は他と同じく絞り込む
+               必ず探す。git semgrep の pathspec は他と同じく絞り込む。
+               * は先頭のドットにも合う (*.md は .notes.md にも合う。rg --glob と同じ)
   --changed-within=WHEN  -r と git semgrep で、WHEN 以内に更新したファイルだけを探す。30m / 2h / 7d / 2w、
                日付か日時以降 (2026-09-01 はその日のローカル時刻 0 時、2026-09-01T09:00、...Z)、
                または today / this-week (月曜から) / this-month (ローカル時刻)。git の履歴ではなく mtime で見る
@@ -306,7 +308,10 @@ if (credential && new URL(apiUrl).protocol === 'http:' && !/^(localhost|127\.0\.
 // the same to stderr while searching. -q's early exits would cut the list short, so --dry-run turns -q off.
 const dry = opt['dry-run'];
 if (dry) opt.quiet = false;
-const trace = dry ? s => console.log(`semgrep: ${s}`) : opt.verbose ? s => console.error(`semgrep: ${s}`) : null;
+// File names and file contents come from whatever is searched, maybe an untrusted checkout: the lines about them
+// show control characters as \xNN, so an escape sequence cannot redraw what -i asks about.
+const safe = s => String(s).replace(/[\x00-\x1f\x7f-\x9f]/g, c => `\\x${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
+const trace = dry ? s => console.log(`semgrep: ${safe(s)}`) : opt.verbose ? s => console.error(`semgrep: ${safe(s)}`) : null;
 trace?.(`endpoint ${apiHost}${new URL(apiUrl).pathname}, model ${model}`);
 
 // Expression: a list of AND terms joined by OR. Each literal is a meaning { kind:'m', text, not } or a
@@ -375,8 +380,12 @@ if (Number(opt.j) < 1) die('-j must be at least 1');
 if (opt.sentence !== undefined && !['jev', 'rules'].includes(opt.sentence)) die('--sentence must be jev or rules');
 if (!['auto', 'always', 'never'].includes(opt.color)) die('--color must be auto, always or never');
 // --include / --exclude: shell globs (* ? [...] [!...]) matched against the file name, as in grep.
-const globRe = g => new RegExp(`^${g.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.').replace(/\[!/g, '[^')}$`);
-const includes = (opt.include ?? []).map(globRe), excludes = (opt.exclude ?? []).map(globRe);
+// * also matches a leading dot, as in rg --glob (not as in the shell).
+const globRe = o => g => {
+  try { return new RegExp(`^${g.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.').replace(/\[!/g, '[^')}$`); }
+  catch { die(`--${o}: '${g}' is not a valid glob (an unclosed [ ?)`); }
+};
+const includes = (opt.include ?? []).map(globRe('include')), excludes = (opt.exclude ?? []).map(globRe('exclude'));
 for (const [o, gs] of [['include', opt.include], ['exclude', opt.exclude]]) for (const g of gs ?? [])
   if (g.includes('/')) console.error(`semgrep: warning: --${o}='${g}' has a /, but globs match the file name only, not the path, so it matches no file`);
 // --changed-within: a duration back from now, a date or ISO date-time, or today / this-week / this-month (local).
@@ -390,8 +399,12 @@ const since = (w => {
   if (w === 'today') return day.getTime();
   if (w === 'this-week') return day.setDate(day.getDate() - (day.getDay() + 6) % 7); // back to Monday
   if (w === 'this-month') return day.setDate(1);
-  const t = /^\d{4}-\d\d-\d\d(T\d\d:\d\d(:\d\d(\.\d+)?)?(Z|[+-]\d\d:\d\d)?)?$/.test(w) ? new Date(w.length === 10 ? `${w}T00:00` : w).getTime() : NaN;
+  let t = /^\d{4}-\d\d-\d\d(T\d\d:\d\d(:\d\d(\.\d+)?)?(Z|[+-]\d\d:\d\d)?)?$/.test(w) ? new Date(w.length === 10 ? `${w}T00:00` : w).getTime() : NaN;
+  // Date() rolls 2026-02-30 over to March 2 instead of failing: the day must exist in its month.
+  const [y, mo, dd] = w.slice(0, 10).split('-').map(Number), u = new Date(Date.UTC(y, mo - 1, dd));
+  if (u.getUTCFullYear() !== y || u.getUTCMonth() !== mo - 1 || u.getUTCDate() !== dd) t = NaN;
   if (isNaN(t)) die(`--changed-within: '${w}' is not a duration (30m, 2h, 7d, 2w), a date (2026-09-01, 2026-09-01T09:00), today, this-week or this-month`);
+  if (t > Date.now()) console.error(`semgrep: warning: --changed-within=${w} is in the future, so no file found by -r or git semgrep is new enough`);
   return t;
 })(opt['changed-within']);
 const wanted = (path, st) => {
@@ -411,7 +424,8 @@ const MAX_UNIT_CHARS = opt.z ? 8000 : 2000;
 const SKIP_DIRS = ['.git', 'node_modules', '.ssh', '.aws', '.gnupg', '.kube', '.docker'];
 const SKIP_FILE = /^\.env|^\.(netrc|npmrc|pypirc|pgpass|git-credentials)$|\.(pem|key|p12|pfx|jks|keystore)$|^id_(rsa|dsa|ecdsa|ed25519)/i;
 let hadError = false;
-const warn = (file, e) => { console.error(`semgrep: ${file}: ${e.message}`); hadError = true; };
+const warned = []; // what warn printed, so -i does not repeat it from its dry run
+const warn = (file, e) => { const m = `semgrep: ${safe(file)}: ${safe(e.message)}`; warned.push(m); console.error(m); hadError = true; };
 // -r also leaves out what git ignores (.gitignore, .git/info/exclude, the global excludes file), in one git call per
 // directory named on the command line. Paths come back relative to it; an ignored directory comes back whole, as
 // "dir/", so it is never walked. A directory that is itself ignored was named on purpose and is searched in full.
@@ -460,8 +474,11 @@ if (opt.interactive && !dry) {
   try { tty = openSync('/dev/tty', 'r+'); } catch { die(`-i needs a terminal to ask on${optsInteractive ? ' (-i is in SEMGREP_OPTS; from a script, run SEMGREP_OPTS= semgrep ...)' : ''}`, !optsInteractive); }
   const plan = spawnSync(process.execPath, [...process.execArgv, process.argv[1], '--dry-run', ...process.argv.slice(2)], { input: stdinBuf ?? '', encoding: 'utf8', maxBuffer: Infinity });
   if (plan.status !== 0 && plan.status !== 2) { process.stderr.write(plan.stderr); process.exit(2); } // 2: a file could not be read
-  const shown = plan.stdout.split('\n').filter(l => /^semgrep: (file |dry run: )/.test(l));
-  if (!/^semgrep: dry run: 0 requests/.test(shown.at(-1))) {
+  // A file that could not be read shows up only while reading, in the dry run: say so next to the question. What
+  // this process already printed (the file list's warnings, the option warnings) is not repeated.
+  const errors = plan.stderr.split('\n').filter(l => l.startsWith('semgrep: ') && !l.startsWith('semgrep: warning: ') && !warned.includes(l));
+  const shown = [...plan.stdout.split('\n').filter(l => /^semgrep: (file |dry run: )/.test(l)), ...errors].map(safe);
+  if (!/^semgrep: dry run: 0 requests/.test(shown.findLast(l => l.startsWith('semgrep: dry run: ')))) {
     writeSync(tty, `${shown.join('\n')}\nSearch, sending the above? [y/N] `);
     const buf = Buffer.alloc(256);
     if (!/^\s*y(es)?\s*$/i.test(buf.toString('utf8', 0, readSync(tty, buf)))) { console.error('semgrep: nothing sent'); process.exit(1); }
