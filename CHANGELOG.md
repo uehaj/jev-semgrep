@@ -5,7 +5,7 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 
 ## [Unreleased]
 
-## [0.4.0] - 2026-09-25
+## [0.4.0] - 2026-09-26
 
 ### Security
 - The `-r` / `git semgrep` skip list matched only `.env` and `.env.<x>`, though the help promised `.env*`: `.envrc`,
