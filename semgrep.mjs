@@ -20,7 +20,8 @@ if (existsSync(userEnv)) process.loadEnvFile(userEnv); // never overrides variab
 const { SEMGREP_URL, SEMGREP_MODEL, SEMGREP_API_KEY, TYPESAFE_API_KEY, SEMGREP_OPTS = '' } = process.env;
 
 // A bare --color means --color=auto (as in grep); parseArgs cannot express an optional value, so fill it in first.
-const fill = a => (a === '--color' ? '--color=auto' : a === '--sentence' ? '--sentence=jev' : a === '--null-data' ? '-z' : a);
+// --no-filename is grep's name for --no-with-filename.
+const fill = a => (a === '--color' ? '--color=auto' : a === '--sentence' ? '--sentence=jev' : a === '--null-data' ? '-z' : a === '--no-filename' ? '--no-with-filename' : a);
 const OPTIONS = {
   e: { type: 'string', multiple: true },
   a: { type: 'string', multiple: true },
@@ -29,6 +30,7 @@ const OPTIONS = {
   level: { type: 'string', default: 'normal' }, // strictness preset: loose / normal / strict
   r: { type: 'boolean', default: false }, // recurse into directories
   l: { type: 'boolean', default: false }, // print only matching file names
+  'with-filename': { type: 'boolean', short: 'H' }, // prefix file names even for one file; --no-filename: never
   t: { type: 'string' }, // positive threshold: match when p >= t (default from preset)
   T: { type: 'string' }, // negative threshold: "not X" when p < T (default from preset)
   chunk: { type: 'string', default: '30' }, // lines per request
@@ -118,6 +120,8 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                since a date or time (2026-09-01 is local midnight, 2026-09-01T09:00, ...Z); or today,
                this-week (from Monday) or this-month, in local time. By mtime, not git history
   -l           print only the names of files with a match, not the lines
+  -H, --with-filename  prefix each line (and -c count) with its file name, even for a single file
+  --no-filename  never prefix file names, even with several files, -r or git semgrep
   -A NUM       print NUM lines of trailing context after each match (context lines use - as separator)
   -B NUM       print NUM lines of leading context before each match
   -C NUM       print NUM lines of context before and after (-A NUM -B NUM)
@@ -223,6 +227,8 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                日付か日時以降 (2026-09-01 はその日のローカル時刻 0 時、2026-09-01T09:00、...Z)、
                または today / this-week (月曜から) / this-month (ローカル時刻)。git の履歴ではなく mtime で見る
   -l           一致した行ではなくファイル名だけを表示
+  -H, --with-filename  1 ファイルだけでも、各行 (と -c の件数) の前にファイル名を付ける
+  --no-filename  複数ファイル・-r・git semgrep でもファイル名を付けない
   -A NUM       一致行の後ろ NUM 行も表示 (grep と同じ。文脈行の区切りは - )
   -B NUM       一致行の前 NUM 行も表示
   -C NUM       前後 NUM 行を表示 (-A NUM -B NUM)
@@ -839,7 +845,8 @@ const highlight = (text, rs) => {
 const startNo = (file, k) => (opt.o && opt.sentence ? spansOf.get(file)[k - 1][0][0] : k); // -o: the unit where the sentence starts
 
 const after = Number(opt.A ?? opt.C ?? 0), before = Number(opt.B ?? opt.C ?? 0);
-const multi = opt.r || asGit || targets.length > 1; // grep -r and git grep prefix file names even for a single file
+// grep -r and git grep prefix file names even for a single file; -H / --no-filename decide it outright, the later one winning.
+const multi = opt['with-filename'] ?? (opt.r || asGit || targets.length > 1);
 let lastPrinted = null; // [file, line number]; used to print -- between context groups
 for (const file of opt.quiet || dry ? [] : targets) {
   if (!sources.has(file)) continue;
