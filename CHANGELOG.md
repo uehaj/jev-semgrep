@@ -5,6 +5,12 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 
 ## [Unreleased]
 
+### Added
+- `--summarize[=TOOL]` pipes what would print to an LLM CLI, asked about the meanings as they were written, and
+  prints its answer instead of the lines (#69, #75). TOOL is `claude` (`claude -p --model haiku` with no tools and
+  no settings); `SEMGREP_SUMMARIZER` picks the TOOL of a bare `--summarize`, `SEMGREP_SUMMARIZER_MODEL` its
+  model. The matching lines are sent a second time, to the TOOL's provider. `--dry-run` shows the command.
+
 ## [0.4.0] - 2026-09-26
 
 ### Security
