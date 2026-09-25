@@ -89,6 +89,7 @@ h2{font-size:1.7rem;margin:0 0 18px;letter-spacing:-.01em}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;opacity:0;transform:translateY(16px);transition:opacity .6s,transform .6s}
 .card.vis{opacity:1;transform:none}
 .card h3{margin:0 0 6px;font-size:1.05rem}
+a.card{display:block;text-decoration:none;color:inherit}a.card:hover,a.card:focus-visible{border-color:var(--accent)}a.card h3::after{content:" ↗";color:var(--mute);font-weight:400}
 .card p{margin:0;color:var(--mute);font-size:.95rem}
 pre{background:var(--t-bg);color:var(--t-fg);border-radius:10px;padding:14px 16px;overflow-x:auto;font:13.5px/1.6 var(--mono);margin:0 0 14px}
 pre .c{color:var(--t-mute)}
@@ -140,18 +141,18 @@ footer{padding:32px 0 56px;color:var(--mute);font-size:.9rem;text-align:center;b
   <section>
     <h2>Why it is different</h2>
     <div class="grid">
-      <div class="card"><h3>🌐 Language-agnostic</h3><p>A Japanese meaning finds French, Russian, Chinese and Korean lines. No translation step, same speed, same cost.</p></div>
-      <div class="card"><h3>⚖️ Propositions, not topics</h3><p>Jev reads the line and the question together, so negation and “asked for” vs “already done” change the answer. Embeddings can only measure closeness.</p></div>
-      <div class="card"><h3>🧮 Real booleans</h3><p>Each meaning yields an independent probability, so AND / OR / NOT are plain boolean operations. One threshold (0.5) works across queries.</p></div>
-      <div class="card"><h3>📦 Zero dependencies</h3><p>One file, Node.js 20.12+ and <code>fetch</code>. 30 lines per request, 8 requests in parallel. No index to build.</p></div>
-      <div class="card"><h3>✂️ Lines, sentences, records <span class="new card-b">new</span></h3><p><code>--sentence</code> finds sentences across line breaks and, with <code>--color</code>, colors just the matching sentence inside a line; <code>-z</code> judges NUL-terminated records like <code>git log -z</code>.</p></div>
-      <div class="card"><h3>🎯 Find the answer <span class="new card-b">new</span></h3><p><code>-Q</code> / <code>--question</code> finds lines that <em>answer</em> X, where <code>-e X</code> finds lines that <em>say</em> X. <code>-q</code> stops at the first match, like <code>grep -q</code>.</p></div>
-      <div class="card"><h3>🔣 Regex terms <span class="new card-b">new</span></h3><p><code>-e '/ERROR|FATAL/'</code> runs locally for free, prefilters what Jev sees, and hands captures to meanings as <code>$&lt;name&gt;</code>: <code>-a '$&lt;time&gt; is at night'</code> asks each line about its own time.</p></div>
-      <div class="card"><h3>🗜️ One request per template <span class="new card-b">new</span></h3><p><code>--dedup</code> folds machine logs by skeleton: a 43,071-line system log becomes 550 templates, 1.2% of the bytes.</p></div>
-      <div class="card"><h3>💸 Send only what matters <span class="new card-b">new</span></h3><p>Narrow before you pay: <code>--include</code> / <code>--exclude</code>, <code>--changed-within=7d</code>, <code>.gitignore</code>, binary and secret skips, regex terms, <code>--dedup</code>. <code>--dry-run</code> / <code>-i</code> show the totals first.</p></div>
-      <div class="card"><h3>🌿 git semgrep <span class="new card-b">new</span></h3><p><code>git semgrep</code> searches tracked files like <code>git grep</code>. <code>SEMGREP_OPTS</code> sets default options; <code>--sys1-url</code> / <code>--sys1-model</code> override the endpoint per run.</p></div>
-      <div class="card"><h3>🔑 Any endpoint</h3><p>TypeSafe by default; OpenRouter, Vercel AI Gateway or any server that speaks <code>POST /v1/systemone</code> via <code>SEMGREP_URL</code>.</p></div>
-      <div class="card"><h3>🤖 Claude Code skill</h3><p>Describe what you want in plain words; the skill builds the expression, runs it and reports <code>file:line</code> hits.</p></div>
+      <a class="card" href="https://github.com/uehaj/jev-semgrep#search-across-languages"><h3>🌐 Language-agnostic</h3><p>A Japanese meaning finds French, Russian, Chinese and Korean lines. No translation step, same speed, same cost.</p></a>
+      <a class="card" href="https://github.com/uehaj/jev-semgrep#how-this-differs-from-vector-search"><h3>⚖️ Propositions, not topics</h3><p>Jev reads the line and the question together, so negation and “asked for” vs “already done” change the answer. Embeddings can only measure closeness.</p></a>
+      <a class="card" href="https://github.com/uehaj/jev-semgrep#expression-grammar"><h3>🧮 Real booleans</h3><p>Each meaning yields an independent probability, so AND / OR / NOT are plain boolean operations. One threshold (0.5) works across queries.</p></a>
+      <a class="card" href="https://github.com/uehaj/jev-semgrep#how-it-works"><h3>📦 Zero dependencies</h3><p>One file, Node.js 20.16+ and <code>fetch</code>. 30 lines per request, 8 requests in parallel. No index to build.</p></a>
+      <a class="card" href="https://github.com/uehaj/jev-semgrep#one-sentence-at-a-time---sentence"><h3>✂️ Lines, sentences, records <span class="new card-b">new</span></h3><p><code>--sentence</code> finds sentences across line breaks and, with <code>--color</code>, colors just the matching sentence inside a line; <code>-z</code> judges NUL-terminated records like <code>git log -z</code>.</p></a>
+      <a class="card" href="https://github.com/uehaj/jev-semgrep#lines-that-answer-a-question--q"><h3>🎯 Find the answer <span class="new card-b">new</span></h3><p><code>-Q</code> / <code>--question</code> finds lines that <em>answer</em> X, where <code>-e X</code> finds lines that <em>say</em> X. <code>-q</code> stops at the first match, like <code>grep -q</code>.</p></a>
+      <a class="card" href="https://github.com/uehaj/jev-semgrep#regex-terms"><h3>🔣 Regex terms <span class="new card-b">new</span></h3><p><code>-e '/ERROR|FATAL/'</code> runs locally for free, prefilters what Jev sees, and hands captures to meanings as <code>$&lt;name&gt;</code>: <code>-a '$&lt;time&gt; is at night'</code> asks each line about its own time.</p></a>
+      <a class="card" href="https://github.com/uehaj/jev-semgrep#one-line-per-template---dedup"><h3>🗜️ One request per template <span class="new card-b">new</span></h3><p><code>--dedup</code> folds machine logs by skeleton: a 43,071-line system log becomes 550 templates, 1.2% of the bytes.</p></a>
+      <a class="card" href="https://github.com/uehaj/jev-semgrep#usage"><h3>💸 Send only what matters <span class="new card-b">new</span></h3><p>Narrow before you pay: <code>--include</code> / <code>--exclude</code>, <code>--changed-within=7d</code>, <code>.gitignore</code>, binary and secret skips, regex terms, <code>--dedup</code>. <code>--dry-run</code> / <code>-i</code> show the totals first.</p></a>
+      <a class="card" href="https://github.com/uehaj/jev-semgrep#as-a-git-subcommand-git-semgrep"><h3>🌿 git semgrep <span class="new card-b">new</span></h3><p><code>git semgrep</code> searches tracked files like <code>git grep</code>. <code>SEMGREP_OPTS</code> sets default options; <code>--sys1-url</code> / <code>--sys1-model</code> override the endpoint per run.</p></a>
+      <a class="card" href="https://github.com/uehaj/jev-semgrep#other-endpoints"><h3>🔑 Any endpoint</h3><p>TypeSafe by default; OpenRouter, Vercel AI Gateway or any server that speaks <code>POST /v1/systemone</code> via <code>SEMGREP_URL</code>.</p></a>
+      <a class="card" href="https://github.com/uehaj/jev-semgrep#use-it-from-claude-code"><h3>🤖 Claude Code skill</h3><p>Describe what you want in plain words; the skill builds the expression, runs it and reports <code>file:line</code> hits.</p></a>
     </div>
   </section>
 
