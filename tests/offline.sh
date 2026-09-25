@@ -314,6 +314,9 @@ eq "$($JI -r -l -e 'テストコードで cat' "$W" 2>/dev/null | tr '\n' ' ')" 
 eq "$($JI -r -l -e 'README か CHANGELOG に cat' "$W" 2>/dev/null | tr '\n' ' ')" "$W/README.md " "scope: README or CHANGELOG"
 eq "$($JI -r -l -e 'in the code cat' "$W" 2>/dev/null | tr '\n' ' ')" "$W/app.log $W/src/y.js $W/tests/x.js " "scope: code is what is not a document"
 eq "$($JI -r -l -e 'in the tests and fixtures cat' "$W" 2>/dev/null | grep -c .)" "5" "no scope when a role is listed with something else"
+for q in 'テストでもいいので cat' 'README にも書いてある cat' '仕様書でも触れている cat' '実装でもいいので cat'; do
+  eq "$($JI -r -l -e "$q" "$W" 2>&1 | grep -c 'scope:' || true)" "0" "no scope from also / even: $q"
+done
 eq "$($JI -r -l --include='*.md' --changed-within=this-month -e cat "$P" | grep -c .)" "2" "--changed-within=this-month"
 eq "$($JI -r -l --include='*.md' --changed-within=2019-12-31T12:00Z -e cat "$P" | grep -c .)" "3" "--changed-within an ISO date-time"
 (cd "$P" && git init -q && git add .)
