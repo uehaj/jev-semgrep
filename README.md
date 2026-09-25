@@ -16,6 +16,8 @@ and applies a threshold.
 
 [![semgrep demo: a Japanese meaning finds refund requests in six languages; "asking for a refund" vs "about a refund"; -Q finds the answer](docs/demo.svg)](https://uehaj.github.io/jev-semgrep/)
 
+<sub>▶ Click the demo, or open <a href="https://uehaj.github.io/jev-semgrep/">uehaj.github.io/jev-semgrep</a>, for the full demo on the landing page.</sub>
+
 - Zero dependencies. One file, Node.js 20.16+ and `fetch`.
 - Fast. 30 lines go into one request, requests run 8 at a time. A 210-line file finishes in under a second.
 - Meanings combine with AND / OR / NOT.
