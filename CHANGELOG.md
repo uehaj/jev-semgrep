@@ -24,6 +24,9 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   the API key and the searched text to another server. Load a per-project file explicitly with `node --env-file`.
 
 ### Fixed
+- A PDF is skipped as binary. About a third of them have no NUL in the first 8 KB (they open with XML metadata),
+  so their bytes were sent as lines.
+- UTF-16 with a BOM is read as text. Its NUL bytes made it look binary, so it was skipped, silently with `-r`.
 - A malformed API response (an answer without a probability) is an error (exit 2). It used to count as 0, so
   `-v X` and `!X` matched. An error body from the server is cut to 300 characters, without control characters.
 - `-q` exits 0 on a match even when another request failed, and decides a regex match before `--dedup` asks anything.

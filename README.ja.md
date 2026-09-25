@@ -322,7 +322,7 @@ tests/tickets/sub/b.txt
 ```
 
 `-r` はディレクトリを名前順にたどり、`.git`、`node_modules`、`.ssh`、`.aws`、`.gnupg`、`.kube`、`.docker`、
-バイナリ（先頭 8 KB に NUL がある）、秘密情報になりがちなファイル（`.env*`、`.netrc`、`.npmrc`、`.pypirc`、`.pgpass`、
+バイナリ（先頭 8 KB に NUL がある、または PDF。BOM 付きの UTF-16 はテキストとして読む）、秘密情報になりがちなファイル（`.env*`、`.netrc`、`.npmrc`、`.pypirc`、`.pgpass`、
 `.git-credentials`、`*.pem`、`*.key`、`*.p12`、`*.pfx`、`*.jks`、`*.keystore`、`id_rsa*` など。大文字小文字は区別しない）を飛ばします。
 **検索対象の行はすべて TypeSafe の API に送られる**ので、スキャンするつもりのディレクトリだけを指定してください。
 git リポジトリの中では、git が無視するもの（`.gitignore`、`.git/info/exclude`、グローバルの除外ファイル）も `-r` で

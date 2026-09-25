@@ -528,13 +528,16 @@ const read = new Map(); // file -> units as read (lines, or records with -z)
 for (const file of targets) {
   let buf;
   try { buf = readFileSync(file === '-' ? 0 : file); } catch (e) { warn(file, e); continue; }
+  // UTF-16 with a BOM is text though every ASCII character carries a NUL, so it skips the binary sniff.
+  const bom = buf.subarray(0, 2).toString('hex'), utf16 = bom === 'fffe' ? 'utf-16le' : bom === 'feff' ? 'utf-16be' : null;
   // With -z a NUL is the record terminator, so the binary sniff looks for other control bytes (ELF, images, archives).
+  // A PDF often opens with XML metadata, its first NUL past 8 KB, so it is told by its magic.
   const head = buf.subarray(0, 8192);
-  if (opt.z ? /[\x01-\x08\x0e-\x1a\x1c-\x1f]/.test(head.toString('latin1')) : head.includes(0)) {
+  if (!utf16 && (head.subarray(0, 5).toString('latin1') === '%PDF-' || (opt.z ? /[\x01-\x08\x0e-\x1a\x1c-\x1f]/.test(head.toString('latin1')) : head.includes(0)))) {
     if (files.includes(file)) console.error(`semgrep: ${file}: binary file skipped`); // named on the command line: say so
     continue;
   }
-  const src = buf.toString('utf8').split(SEP);
+  const src = (utf16 ? new TextDecoder(utf16).decode(buf) : buf.toString('utf8')).split(SEP);
   if (src.at(-1) === '') src.pop();
   read.set(file, src);
 }
