@@ -96,8 +96,9 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
   -T THRESH    negative threshold: "not X" when probability < THRESH (overrides --level)
                with -t 0.6 -T 0.3 a line at 0.3..0.6 matches neither X nor not-X
   -r           recurse into directories (current directory when FILE is omitted). Skips .git,
-               node_modules, .ssh/.aws/.gnupg, binary files and likely secrets (.env*, *.pem, *.key,
-               id_rsa...). Every searched line is sent to the TypeSafe API
+               node_modules, .ssh/.aws/.gnupg/.kube/.docker, binary files and likely secrets (.env*,
+               .netrc, .npmrc, .git-credentials, *.pem, *.key, id_rsa*...). Every searched line is sent
+               to the TypeSafe API
   -l           print only the names of files with a match, not the lines
   -A NUM       print NUM lines of trailing context after each match (context lines use - as separator)
   -B NUM       print NUM lines of leading context before each match
@@ -185,8 +186,8 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
   -T THRESH    否定条件の閾値。確率 < THRESH で「〜でない」と判定 (--level より優先)
                -t 0.6 -T 0.3 なら 0.3〜0.6 の曖昧な行はどちらにも当たらない
   -r           ディレクトリを再帰的に探す (FILE 省略時はカレント)。.git、node_modules、
-               .ssh/.aws/.gnupg、バイナリ、秘密情報らしいファイル (.env*, *.pem, *.key, id_rsa...) は
-               飛ばす。検索した行はすべて TypeSafe の API に送られる
+               .ssh/.aws/.gnupg/.kube/.docker、バイナリ、秘密情報らしいファイル (.env*, .netrc, .npmrc,
+               .git-credentials, *.pem, *.key, id_rsa*...) は飛ばす。検索した行はすべて TypeSafe の API に送られる
   -l           一致した行ではなくファイル名だけを表示
   -A NUM       一致行の後ろ NUM 行も表示 (grep と同じ。文脈行の区切りは - )
   -B NUM       一致行の前 NUM 行も表示
@@ -332,9 +333,10 @@ const SEP = opt.z ? '\0' : '\n';
 const MAX_UNIT_CHARS = opt.z ? 8000 : 2000;
 
 // With -r, expand directories. Line contents go to an external API, so recursion skips .git / node_modules
-// and files that usually hold secrets (.env*, keys, .ssh/.aws/.gnupg). A file named explicitly is still sent.
-const SKIP_DIRS = ['.git', 'node_modules', '.ssh', '.aws', '.gnupg'];
-const SKIP_FILE = /^\.env(\..*)?$|\.(pem|key|p12|pfx)$|^id_(rsa|dsa|ecdsa|ed25519)(\.pub)?$/;
+// and files that usually hold secrets (.env*, credential files, keys, .ssh/.aws/.gnupg/.kube/.docker). A file named
+// explicitly is still sent. Case-insensitive: macOS file systems are, so .ENV is .env there.
+const SKIP_DIRS = ['.git', 'node_modules', '.ssh', '.aws', '.gnupg', '.kube', '.docker'];
+const SKIP_FILE = /^\.env|^\.(netrc|npmrc|pypirc|pgpass|git-credentials)$|\.(pem|key|p12|pfx|jks|keystore)$|^id_(rsa|dsa|ecdsa|ed25519)/i;
 let hadError = false;
 const warn = (file, e) => { console.error(`semgrep: ${file}: ${e.message}`); hadError = true; };
 function expand(path) {
