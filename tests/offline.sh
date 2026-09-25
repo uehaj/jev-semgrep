@@ -288,6 +288,15 @@ eq "$($JI -r -n -e 'Python で cat' -a '!昨日変えた cat' "$S" 2>/dev/null |
 eq "$($JI -l -e 'Python で cat' "$S/b.js")" "$S/b.js" "scope: a named file is searched"
 eq "$($JI -r -q -e 'Python で cat' "$S" 2>&1)" "" "scope: -q prints nothing"
 eq "$($JI -p --color=never -e 'Python で cat' "$S/a.py" | head -1)" "$(printf 'Python で cat\t[0.90]')" "scope: no column in -p"
+# path roles: several in one meaning are alternatives; one listed with an unknown noun gives no scope
+W="$tmp/roles"; mkdir -p "$W/tests" "$W/src" "$W/docs"
+for f in tests/x.js src/y.js README.md docs/guide.txt app.log; do
+  printf 'テストコードで cat\nREADME か CHANGELOG に cat\nin the code cat\nin the tests and fixtures cat\n' >"$W/$f"
+done
+eq "$($JI -r -l -e 'テストコードで cat' "$W" 2>/dev/null | tr '\n' ' ')" "$W/tests/x.js " "scope: test files"
+eq "$($JI -r -l -e 'README か CHANGELOG に cat' "$W" 2>/dev/null | tr '\n' ' ')" "$W/README.md " "scope: README or CHANGELOG"
+eq "$($JI -r -l -e 'in the code cat' "$W" 2>/dev/null | tr '\n' ' ')" "$W/app.log $W/src/y.js $W/tests/x.js " "scope: code is what is not a document"
+eq "$($JI -r -l -e 'in the tests and fixtures cat' "$W" 2>/dev/null | grep -c .)" "5" "no scope when a role is listed with something else"
 eq "$($JI -r -l --include='*.md' --changed-within=this-month -e cat "$P" | grep -c .)" "2" "--changed-within=this-month"
 eq "$($JI -r -l --include='*.md' --changed-within=2019-12-31T12:00Z -e cat "$P" | grep -c .)" "3" "--changed-within an ISO date-time"
 (cd "$P" && git init -q && git add .)

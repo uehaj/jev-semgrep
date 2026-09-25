@@ -11,6 +11,8 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   yesterday", "先週追加した") only files modified since then. Only wording that makes it a necessary condition
   counts. Per term, reported on stderr as `semgrep: scope: …`, silent with `-q`; named files are never narrowed.
   `--no-scope` turns it off.
+- Auto-scope by place (#48): test code, migrations, the README, the CHANGELOG, documents, code (what is not a
+  document) and logs, by path conventions ("テストコードで", "in the docs", "README か CHANGELOG に").
 
 ## [0.4.0] - 2026-09-26
 

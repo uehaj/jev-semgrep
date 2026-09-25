@@ -402,6 +402,13 @@ semgrep: scope: 3 of 120 files
   "Rust or Kotlin implementations". Not "Python のような書き方", "port this to Go", "a Go-style error" or
   "not in Python": those say nothing about the file. SQL, HTML, CSS, JSON and XML often sit inside other code, so
   only "SQL files" / "SQL ファイル" scopes them, not "SQL のクエリ".
+- **Place**: test code ("テストコードで", "in the tests", "test files"), migrations, the README, the CHANGELOG,
+  documents ("ドキュメントに", "in the docs": `*.md *.rst *.adoc *.txt`, `docs/`), code (whatever is not a
+  document, so languages missing from the dictionary still count) and logs ("ログファイルに", "in the logs":
+  `*.log`, `logs/`), by the path conventions of JS, Python, Go, Java, Ruby, Rust and PHP. Rust keeps unit tests
+  inside the file, so test code includes every `*.rs`. Several places in one meaning are alternatives ("README
+  か CHANGELOG に"); a place listed with something else ("in the tests and fixtures") gives no scope. Not "テスト
+  している" or "README を生成する", which say what the code does, not where it is.
 - **Time of change**: a date or span next to a verb of change: "changed yesterday", "last week's commits",
   "added since Sep 20", "昨日変えた", "ここ 3 日で修正した". A file changed then was modified at or after that time;
   the modification time cannot say more, since a later change moves it. A date the line talks about ("the Sep

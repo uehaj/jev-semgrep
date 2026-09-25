@@ -125,7 +125,10 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                only those files (*.py *.pyi *.pyw), and one that says when the code changed ("changed
                yesterday", "先週追加した") only files modified since then. Only wording that makes it a
                necessary condition counts: not "Python のような書き方", "port it to Go" or "SQL のクエリ" (SQL
-               sits inside other code). Per term: -e A -e B still searches B in the files A leaves out.
+               sits inside other code). A place does too: test code ("テストコードで", "in the tests"),
+               migrations, the README, the CHANGELOG, documents ("ドキュメントに"; *.md *.rst *.txt docs/),
+               code (what is not a document) and logs ("ログファイルに"; *.log logs/), by path conventions.
+               Per term: -e A -e B still searches B in the files A leaves out.
                Each scope goes to stderr as semgrep: scope: ...; files named on the command line are never
                narrowed
   -l           print only the names of files with a match, not the lines
@@ -239,7 +242,10 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                言語・形式を指定する意味 (「Python で」「in Python」「YAML ファイル」) ならそのファイル
                (*.py *.pyi *.pyw) に、変更時期を指定する意味 (「昨日変えた」「changed last week」) ならそれ以降に
                更新したファイルに絞る。必要条件になる言い方だけが対象で、「Python のような書き方」「Go に移植」
-               「SQL のクエリ」(SQL は他の言語のコードの中にもある) は絞らない。項ごとに効くので、-e A -e B は
+               「SQL のクエリ」(SQL は他の言語のコードの中にもある) は絞らない。置き場所も同じで、テストコード
+               (「テストコードで」「in the tests」)、マイグレーション、README、CHANGELOG、文書 (「ドキュメントに」。
+               *.md *.rst *.txt docs/)、コード (文書以外)、ログ (「ログファイルに」。*.log logs/) をパスの慣習で絞る。
+               項ごとに効くので、-e A -e B は
                A が除いたファイルでも B を探す。絞り込みは semgrep: scope: ... として stderr に出す。
                コマンドラインで指定したファイルは絞らない
   -l           一致した行ではなくファイル名だけを表示
@@ -475,7 +481,7 @@ const LANGS = [ // [name pattern, globs, embedded]; a name that already says fil
 // word for a file or its code, or a word for a file. The name is not part of a word, a hyphenated one ("non-Python",
 // "Go-style") included, and not after not / except / other than or like / as.
 const LANG_BEFORE = String.raw`(?<!(?:not|except|than|like|as|besides|of)\s+)\b(?:in|written in)\s+(?:the\s+|our\s+|my\s+|a\s+)?`;
-const LANG_AFTER = String.raw`(?:\s*言語)?\s*(?:で(?![もな]|はな)|の(?:コード|ファイル|スクリプト|ソース|実装|プログラム|中|なか|記述|設定|文書|ドキュメント|定義|クラス|メソッド)|(?:コード|ファイル|スクリプト|ソース|プログラム)|\s(?:source\s+)?(?:code|files?|scripts?|sources?|programs?|codebase|services?|projects?|configs?|configuration|documents?|docs|implementations?)\b)`;
+const LANG_AFTER = String.raw`(?:\s*言語)?\s*(?:で(?![もな]|はな)|の(?:コード|ファイル|スクリプト|ソース|実装|プログラム|中|なか|記述|設定|文書|ドキュメント|定義|クラス|メソッド|テスト)|(?:コード|ファイル|スクリプト|ソース|プログラム)|\s(?:source\s+)?(?:code|files?|scripts?|sources?|programs?|codebase|services?|projects?|configs?|configuration|documents?|docs|implementations?)\b)`;
 const FILE_AFTER = String.raw`\s*(?:の?ファイル|\sfiles?\b)`;
 // "Rust or Kotlin implementations", "JavaScript か TypeScript で", "in Go and Rust": the anchor covers every name in the list.
 const ANY = String.raw`(?<![\w+#.-])(?:${LANGS.map(([name]) => name).join('|')})(?![\w+#-]|'s)(?:\s*言語)?`;
@@ -497,6 +503,52 @@ function langScope(text) {
   if (!globs.size) return null;
   const res = [...globs].map(globRe('scope'));
   return { label: [...globs].join(' '), words, test: f => res.some(re => re.test(f.split('/').at(-1))) };
+}
+// Path role (#48): where a kind of file lives, by the conventions of JS, Python, Go, Java, Ruby, Rust and PHP. The
+// phrase must say the match is in such a file ("テストコードで", "in the tests", "README に"), not that the code
+// does something with one ("テストしている", "README を生成する"). Several roles in one meaning are alternatives
+// ("README か CHANGELOG に"). Each pattern is tested on the path; a directory in it that only looks like a role
+// ("/home/me/tests/proj/") admits more files, never fewer.
+const DOC_EXT = String.raw`\.(?:md|markdown|mdx|rst|adoc|asciidoc|txt|org|tex|textile)$`;
+const ROLES = [ // [name, phrase, path pattern, what the path pattern is (for the report), bare noun]
+  // Rust keeps unit tests in the file they test (#[cfg(test)]), so every *.rs is a test file too.
+  ['test', /テスト(?:コード|ファイル|ケース|スイート)|テスト(?:で(?!き)|の中|内で)|\b(?:in|within|inside)\s+(?:the\s+|our\s+|my\s+)?(?:unit\s+|integration\s+|e2e\s+)?tests\b|\btest\s+(?:code|files?|suites?|cases?)\b|\bspec\s+files?\b/i,
+    /(?:^|\/)(?:tests?|__tests__|specs?|testing|e2e)\/|(?:^|\/)test_[^/]*\.py$|_test\.\w+$|\.(?:test|spec)\.\w+$|Tests?\.(?:java|kt|cs|php|swift)$|_spec\.rb$|(?:^|\/)conftest\.py$|\.rs$/,
+    'tests/ test/ __tests__/ spec/ e2e/ test_*.py *_test.* *.test.* *.spec.* *Test.java *_spec.rb *.rs', /テスト|tests?/i],
+  ['migration', /マイグレーション(?:ファイル|スクリプト|で|の中|のコード)|\bmigrations?\s+(?:files?|scripts?|code)\b|\bin\s+(?:the\s+|our\s+)?(?:db\s+|database\s+)?migrations\b/i,
+    /migrat|(?:^|\/)V\d+(?:_\d+)*__[^/]*\.sql$/i, '*migrat* V*__*.sql', /マイグレーション|migrations?/i],
+  ['readme', /README\s*(?:に|で|の中|の記述|の(?!生成|作成))|\bthe\s+README\s+(?:says?|mentions?|explains?|describes?|file)\b|\bin\s+(?:the\s+|our\s+)?README\b|\bREADME\s+files?\b/i,
+    /(?:^|\/)README[^/]*$/i, 'README*', /README/i],
+  ['changelog', /(?:CHANGELOG|変更履歴|更新履歴)\s*(?:に|で|の中|の記述|の(?!生成|作成))|\bin\s+(?:the\s+|our\s+)?changelog\b|\bchangelog\s+(?:entr(?:y|ies)|files?|says|mentions)\b/i,
+    /(?:^|\/)(?:CHANGELOG|CHANGES|HISTORY|NEWS)[^/]*$/i, 'CHANGELOG* CHANGES* HISTORY* NEWS*', /CHANGELOG|変更履歴|更新履歴/i],
+  ['docs', /(?:ドキュメント|文書|仕様書|設計書|マニュアル)\s*(?:に|で|の中)|\bin\s+(?:the\s+|our\s+)?(?:docs|documentation|documents|specs?|specifications?|manuals?)\b|\b(?:the\s+)?documentation\s+(?:says|mentions)\b/i,
+    new RegExp(`${DOC_EXT}|(?:^|/)(?:docs?|documentation|manual)/`, 'i'), '*.md *.rst *.adoc *.txt ... docs/ doc/', /ドキュメント|文書|仕様書|設計書|マニュアル|docs|documentation/i],
+  // Code is what is not a document: a dictionary of languages would lose the ones it lacks.
+  ['code', /(?:実装|ソースコード|コード)\s*(?:の中|内で)|実装で|\bin\s+(?:the\s+|our\s+)?(?:code|codebase|source(?:\s+code)?|implementation)\b/i,
+    new RegExp(`^(?!.*(?:${DOC_EXT}|(?:^|/)(?:docs?|documentation)/))`, 'i'), 'not *.md *.rst *.adoc *.txt ... docs/ doc/', /実装|コード|code/i],
+  ['log', /ログファイル|ログ(?:に(?:出て|残って|記録され|出力され)|の中[でに])|\bin\s+(?:the\s+|our\s+)?logs?\b(?!\s+(?:message|call|statement|level)s?\b)|\blog\s+files?\b/i,
+    /\.(?:log|out|err)(?:\.\d+)?$|(?:^|\/)(?:logs?|var\/log)\//i, '*.log *.log.N *.out *.err logs/ log/', /ログ|logs?/i],
+];
+// "README か CHANGELOG に", "in the docs or the README": a bare noun listed next to a matched phrase shares it.
+const AND_WORD = String.raw`\s*(?:,|、|/|・|\bor\b|\band\b|か|や|と|または|もしくは)\s*(?:the\s+|our\s+)?`;
+function roleScope(text) {
+  const hit = ROLES.map(([name, phrase, path, what]) => [name, phrase.exec(text), path, what]).filter(r => r[1]);
+  if (!hit.length) return null;
+  let lo = Math.min(...hit.map(r => r[1].index)), hi = Math.max(...hit.map(r => r[1].index + r[1][0].length));
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const [name, , path, what, noun] of ROLES) {
+      if (hit.some(r => r[0] === name)) continue;
+      const before = [...text.slice(0, lo).matchAll(new RegExp(`(?:${noun.source})${AND_WORD}$`, 'gi'))][0];
+      const after = new RegExp(`^${AND_WORD}(?:${noun.source})`, 'i').exec(text.slice(hi));
+      if (before) { hit.push([name, before, path, what]); lo = before.index; grew = true; }
+      else if (after) { hit.push([name, after, path, what]); hi += after[0].length; grew = true; }
+    }
+  }
+  // "in the tests and fixtures": something else listed with them may live anywhere, so no scope
+  if (/^\s*(?:\/|\bor\b|\band\b|か|や|と|または|もしくは)\s*(?:the\s+|our\s+)?[\p{L}\p{N}]/iu.test(text.slice(hi))
+    || /[\p{L}\p{N}]\s*(?:\/|\bor\b|\band\b|か|や|と|または|もしくは)\s*(?:the\s+|our\s+)?$/iu.test(text.slice(0, lo).replace(/\b(?:in|within|inside)\s*$/i, ''))) return null;
+  return { label: hit.map(([name, , , what]) => `${name} files: ${what}`).join(' | '), words: hit.map(r => r[1][0].trim()), test: f => hit.some(([, , path]) => path.test(f)) };
 }
 // Time: a date or span next to a verb of change ("昨日変えた", "先週追加した", "changed yesterday", "last week's
 // commits"), so a date the line itself talks about ("9月20日のリリース", "logs from yesterday") is not taken. Resolved
@@ -550,7 +602,7 @@ function timeScope(text) {
 // what a line is not, which says nothing about its file.
 const named = f => f === '-' || (!asGit && files.includes(f)); // stdin, or named on the command line: never narrowed
 if (opt.scope) for (const term of expr) for (const lit of term.filter(l => l.kind === 'm' && !l.not))
-  for (const sc of [langScope(lit.text), timeScope(lit.text)]) if (sc) {
+  for (const sc of [langScope(lit.text), roleScope(lit.text), timeScope(lit.text)]) if (sc) {
     const seen = new Map(); // file -> admitted
     term.push({ kind: 's', ...sc, admits: f => named(f) || (seen.has(f) ? seen.get(f) : seen.set(f, sc.test(f, statSync(f))).get(f)) });
   }
