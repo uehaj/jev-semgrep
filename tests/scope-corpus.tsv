@@ -1,0 +1,100 @@
+none	Python のような書き方をしている関数を探して
+none	Rewrite this like a Go idiom
+none	設定ファイルに書いてある値
+none	最近変更された認証コード
+none	recently touched files with a lingering TODO
+none	Rの二乗値を計算している箇所
+none	Go get the user profile from the cache
+none	ログを出している箇所
+none	テストしている関数（実行時に入力値を検証する）
+none	9月に予定されているリリースについて書かれた行
+none	昨日の売上を集計している関数
+none	a 2020 copyright notice in the file header
+none	authentication logic that looks like Django generated it
+none	C言語のように書かれた低レベルなポインタ操作
+none	直近っぽい変更に見えるが実は古いコード
+none	Rust のような色をした変数名の話
+none	Javaの島についての雑談コメント
+none	テストという単語が出てくるだけの行
+none	JSONっぽい形式のログの中身
+none	設定っぽい名前の変数を使っている箇所
+none	認証周りのエラーハンドリングをしている関数
+none	functions that retry on network failure
+none	places where we parse user input
+none	バリデーションロジックが複雑になっている箇所
+none	code that swallows exceptions silently
+none	キャッシュの無効化をしている処理
+none	places that build SQL by string concatenation
+none	セッションの有効期限を確認している箇所
+none	handlers that return a 500 without logging anything
+none	循環参照になっていそうなimport文
+none	パスワードをハッシュ化せず保存している箇所
+none	dead code that's never called
+none	マジックナンバーが使われている箇所
+none	同じロジックが複数箇所に重複している
+none	functions with more than five parameters
+time	昨日変更した箇所で認証周りを触っている行
+time	files changed last week that touch the payment flow
+time	先週末にコミットされたバグ修正
+time	since Sep 20 anything related to rate limiting
+time	2026-09に入ってから追加されたエンドポイント
+time	code touched in the last 3 days
+time	今日変更したファイルの中でTODOが残っている箇所
+time	anything committed within the past 48 hours
+time	changes made this morning to the auth module
+time	先月末に手を入れたエラーハンドリング
+time	commits from the past two weeks that mention retries
+time	今朝プッシュしたばかりの変更
+time	anything edited yesterday afternoon
+time	今週入ったコミットでconfig関連の変更
+time	code that was last touched before 2025
+time	直近24時間で変更されたファイル
+time	modifications since the last release tag
+time	先週火曜日に変えたバリデーション処理
+time	files whose last commit is older than six months
+time	今年に入ってから一度も触っていないファイル
+lang:python	Python で書かれたリトライ処理
+lang:typescript	TypeScript のコード
+lang:python	.py ファイルで例外処理をしている箇所
+lang:go	in our Go services, error wrapping logic
+lang:python	パイソンで書かれた非同期処理
+lang:shell	シェルスクリプトの中でパスを組み立てている箇所
+lang:yaml	YAML の設定でタイムアウトを指定している行
+lang:rust|kotlin	Rust or Kotlin implementations of a parser
+lang:javascript|typescript	JavaScript or TypeScript event handlers
+lang:java	Java のクラス定義
+lang:ruby	Ruby のメタプログラミング
+lang:php	PHP で書かれた認証処理
+lang:dockerfile	a Dockerfile that installs system packages
+lang:makefile	Makefile 内のビルドターゲット
+lang:sql	SQL のクエリでJOINを使っている箇所
+lang:cpp	C++ で書かれたメモリ管理コード
+lang:csharp	C# のプロパティ定義
+lang:swift	Swift でのオプショナルバインディング
+lang:html	HTML のフォーム要素
+role:test	テストコードで使っているモックの定義
+role:test	only in the tests, look for flaky assertions
+role:migration	DBのマイグレーションで型変更している箇所
+role:migration	migration files that add a foreign key
+role:readme	What does the README say about installation
+role:readme	README のバッジ部分
+role:changelog	CHANGELOG に書かれている breaking changes
+role:changelog	the changelog entry for version 2.0
+role:docs	ドキュメントに書いてある設定手順
+role:docs	mentioned in our docs about rate limits
+role:docs	仕様書に書かれている権限周りの記述
+role:code	実装の中でリトライ回数を決めている箇所
+role:log	ログファイルに出ているタイムアウトエラー
+git:author	田中さんが書いたコード
+git:author	自分が書いたコードだけ
+git:uncommitted	未コミットの変更で残っているデバッグ用print
+git:uncommitted	in my working changes, unused imports
+git:staged	ステージした変更の中でlintエラーになりそうな箇所
+git:untracked	まだgitに入れていない新規ファイル
+git:untracked	追加したばかりで未追跡のスクリプト
+git:branch	このブランチで変えた箇所だけ
+git:unpushed	commits not yet pushed to origin
+lang:python,time	先週Pythonで書き直したリトライ処理
+role:test,time	9月20日以降に変更されたテストコード
+git:author,time	自分が先週書いたコード
+lang:shell,role:test	テストで使っているシェルスクリプトの中でパスを組み立てている箇所

@@ -305,6 +305,8 @@ eq "$(gs 'ステージした cat')" "staged.txt " "git scope: staged"
 eq "$(gs '未追跡の cat')" "untr.txt " "git scope: untracked"
 eq "$(gs 'このブランチで変えた cat')" "dirty.txt feat.txt staged.txt untr.txt " "git scope: this branch"
 eq "$(cd "$G" && $GS -l -e 'ステージした cat' 2>/dev/null | tr '\n' ' ')" "staged.txt " "git scope: git semgrep"
+# the corpora (#44): no row may apply a scope it should not; a wrong scope loses matches without a trace
+node scope-eval.mjs --check >"$tmp/scope-eval" || fail "scope-eval: $(grep WRONG "$tmp/scope-eval")"
 # path roles: several in one meaning are alternatives; one listed with an unknown noun gives no scope
 W="$tmp/roles"; mkdir -p "$W/tests" "$W/src" "$W/docs"
 for f in tests/x.js src/y.js README.md docs/guide.txt app.log; do
