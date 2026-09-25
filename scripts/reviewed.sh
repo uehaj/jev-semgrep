@@ -4,8 +4,8 @@
 # needs a new review before the merge.
 # Usage: scripts/reviewed.sh PR codex|code-review FILE [SUMMARY]
 #   FILE     the review and what was done about it, posted as it is
-#   SUMMARY  the status line on the PR, at most 140 characters (default: "<by> review addressed")
-set -e
+#   SUMMARY  the status line on the PR, cut to the 140 characters GitHub allows (default: "<by> review addressed")
+set -eu
 [ $# -ge 3 ] || { echo "usage: scripts/reviewed.sh PR codex|code-review FILE [SUMMARY]" >&2; exit 2; }
 pr=$1 by=$2 file=$3 summary=${4:-"$2 review addressed"}
 case $by in codex|code-review) ;; *) echo "reviewed: by is codex or code-review, not '$by'" >&2; exit 2 ;; esac
@@ -15,5 +15,5 @@ sha=$(gh pr view "$pr" --json headRefOid -q .headRefOid)
 [ "$(git rev-parse HEAD)" = "$sha" ] || { echo "reviewed: HEAD is not PR #$pr's head $sha (push, or check out the PR)" >&2; exit 1; }
 url=$({ printf 'Review (%s) of %s\n\n' "$by" "$sha"; cat "$file"; } | gh pr comment "$pr" --body-file -)
 gh api "repos/{owner}/{repo}/statuses/$sha" -f state=success -f context=review \
-  -f description="$by: $(printf '%s' "$summary" | cut -c1-120)" -f target_url="$url" >/dev/null
+  -f description="$(node -p "process.argv[1].match(/^.{0,140}/su)[0]" "$by: $summary")" -f target_url="$url" >/dev/null
 echo "PR #$pr $sha: review recorded, $url"
