@@ -338,9 +338,10 @@ tests/tickets/a.txt
 tests/tickets/sub/b.txt
 ```
 
-`-r` walks directories in sorted order and skips `.git`, `node_modules`, `.ssh`, `.aws`, `.gnupg`, binary files
-(a NUL byte in the first 8 KB) and files that usually hold secrets (`.env*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`,
-`id_rsa` and friends). **Every line that is searched is sent to the TypeSafe API**, so point `-r` at a directory
+`-r` walks directories in sorted order and skips `.git`, `node_modules`, `.ssh`, `.aws`, `.gnupg`, `.kube`,
+`.docker`, binary files (a NUL byte in the first 8 KB) and files that usually hold secrets (`.env*`, `.netrc`,
+`.npmrc`, `.pypirc`, `.pgpass`, `.git-credentials`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`,
+`id_rsa*` and friends; names compared without case). **Every line that is searched is sent to the TypeSafe API**, so point `-r` at a directory
 you mean to scan. A file named explicitly on the command line is always searched, even if it matches the skip list. `-l` prints each
 matching file once, in the order matches are found, and works with or without `-r`. `-c` prints the number of
 matching lines per file instead.

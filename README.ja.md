@@ -321,8 +321,9 @@ tests/tickets/a.txt
 tests/tickets/sub/b.txt
 ```
 
-`-r` はディレクトリを名前順にたどり、`.git`、`node_modules`、`.ssh`、`.aws`、`.gnupg`、バイナリ（先頭 8 KB に NUL がある）、
-秘密情報になりがちなファイル（`.env*`、`*.pem`、`*.key`、`*.p12`、`*.pfx`、`id_rsa` など）を飛ばします。
+`-r` はディレクトリを名前順にたどり、`.git`、`node_modules`、`.ssh`、`.aws`、`.gnupg`、`.kube`、`.docker`、
+バイナリ（先頭 8 KB に NUL がある）、秘密情報になりがちなファイル（`.env*`、`.netrc`、`.npmrc`、`.pypirc`、`.pgpass`、
+`.git-credentials`、`*.pem`、`*.key`、`*.p12`、`*.pfx`、`*.jks`、`*.keystore`、`id_rsa*` など。大文字小文字は区別しない）を飛ばします。
 **検索対象の行はすべて TypeSafe の API に送られる**ので、スキャンするつもりのディレクトリだけを指定してください。
 コマンドラインで明示したファイルは、除外リストに該当しても検索します。
 `-l` は一致したファイルを見つかった順に 1 回ずつ表示し、`-r` の有無にかかわらず使えます。`-c` は行の代わりにファイルごとの一致行数を出します。

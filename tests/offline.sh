@@ -149,6 +149,10 @@ eq "$(stat count)" "0" "./.env sends nothing"
 printf 'SEMGREP_URL=%s/v1\n' "$base" >"$tmp/.config/semgrep/.env"
 reset; eq "$(cd "$tmp/checkout" && $E node "$OLDPWD/../semgrep.mjs" -n -e cat "$F" | nums)" "1 4 " "~/.config/semgrep/.env is read"
 rm "$tmp/.config/semgrep/.env"
+# -r and git semgrep skip files that usually hold secrets, whatever their case
+mkdir -p "$tmp/sec/.kube" "$tmp/sec/.docker"
+for f in .envrc .env-local .env_prod .ENV .netrc .npmrc .pypirc .pgpass .git-credentials id_rsa_work x.JKS .kube/config .docker/config.json ok.txt; do printf 'cat\n' >"$tmp/sec/$f"; done
+eq "$($J -r -l -e cat "$tmp/sec")" "$tmp/sec/ok.txt" "-r skips credential files"
 
 # git semgrep: tracked files only, pathspecs relative to the current directory, never stdin
 R="$tmp/repo" GS="$E SEMGREP_URL=$base/v1 node $PWD/../git-semgrep.mjs" SG="$PWD/../semgrep.mjs"
