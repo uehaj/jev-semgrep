@@ -10,6 +10,20 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   `~/.config/semgrep/.env` are. A `.env` committed to an untrusted repository could set `SEMGREP_URL` and send
   the API key and the searched text to another server. Load a per-project file explicitly with `node --env-file`.
 
+### Fixed
+- A malformed API response (an answer without a probability) is an error (exit 2). It used to count as 0, so
+  `-v X` and `!X` matched. An error body from the server is cut to 300 characters, without control characters.
+- `-q` exits 0 on a match even when another request failed, and decides a regex match before `--dedup` asks anything.
+- A directory without `-r`, or one `-r` cannot read, is reported and skipped; the rest is still searched (exit 2).
+- `-o -n` without `--sentence` no longer crashes. `-A`/`-B`/`-C`/`--chunk`/`-j` take whole numbers only.
+  `--color` is checked before any request.
+- With `-z`, a binary file (other control bytes than NUL) is skipped; a binary named on the command line is reported.
+- Regex captures placed in a question are cut to 200 characters and their quotes escaped.
+- `--sentence=jev` with regex terms only joins lines by the rules and sends nothing.
+- A warning when the API key goes to a non-local `http://` endpoint.
+- Docs: Node.js 20.16 or later (for `parseArgs`' `--no-X`), as `package.json` says. `npm run judge` passes
+  `./.env` explicitly; `scripts/release.sh` checks `gh auth` before publishing and runs `npm test`.
+
 ### Added
 - `git semgrep`: a `git-semgrep` command, so git runs it as a subcommand. Like `git grep`, it searches the tracked
   files, and FILE arguments are pathspecs. The `-r` skip list (`.env*`, keys, ...) still applies.
