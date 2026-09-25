@@ -394,7 +394,7 @@ $ semgrep -r -e 'Python でリトライ処理を書いている箇所' .
 semgrep: scope: *.py *.pyi *.pyw (from "Python")
 semgrep: scope: 12 of 340 files
 $ semgrep -r -e 'auth code changed yesterday' src/
-semgrep: scope: modified since 2026-09-25 00:00 (from "yesterday")
+semgrep: scope: changed since 2026-09-25 00:00 (git commits; the mtime for files git does not have committed) (from "yesterday")
 semgrep: scope: 3 of 120 files
 ```
 
@@ -410,9 +410,17 @@ semgrep: scope: 3 of 120 files
   か CHANGELOG に"); a place listed with something else ("in the tests and fixtures") gives no scope. Not "テスト
   している" or "README を生成する", which say what the code does, not where it is.
 - **Time of change**: a date or span next to a verb of change: "changed yesterday", "last week's commits",
-  "added since Sep 20", "昨日変えた", "ここ 3 日で修正した". A file changed then was modified at or after that time;
-  the modification time cannot say more, since a later change moves it. A date the line talks about ("the Sep
-  20 release", "logs from yesterday"), "before" / "until" and vague words ("recently", 「最近」) give no scope.
+  "added since Sep 20", "昨日変えた", "ここ 3 日で修正した". In a repository, a committed file needs a commit at or
+  after that time (the committer date: a checkout sets every mtime to now, and a commit comes after the edit it
+  records); an uncommitted one, or any file outside a repository, needs a modification time at or after it. No
+  upper bound: yesterday's change may have been committed today. A date the line talks about ("the Sep 20
+  release", "logs from yesterday"), "before" / "until" and vague words ("recently", 「最近」) give no scope.
+- **Who and what state (git)**: "code I wrote", "自分が書いた", "Alice さんが書いた", "written by Alice" (git's
+  `--author`, mailmap applied: every file a commit of theirs touched; mine include uncommitted files; a name with
+  no commit gives no scope), "未コミットの", "uncommitted" (worktree and index against HEAD, and untracked files),
+  "ステージした", "staged", "未追跡の", "untracked", "このブランチで", "on this branch" (since it left `origin/HEAD`,
+  `main` or `master`, to the worktree), "未プッシュの", "not yet pushed" (`@{upstream}..HEAD`, or commits on no
+  remote branch). Outside a repository they narrow nothing. A file renamed after the author wrote it is missed.
 - **Per term.** `-e A -e B` still searches B in the files A's scope leaves out; within an AND term the scopes
   intersect. Negated meanings (`-v`, `!`) give none. The meaning is sent unchanged.
 - Files named on the command line and stdin are never narrowed, as with `--include`. `--no-scope` turns it off.

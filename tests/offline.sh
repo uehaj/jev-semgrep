@@ -288,6 +288,23 @@ eq "$($JI -r -n -e 'Python で cat' -a '!昨日変えた cat' "$S" 2>/dev/null |
 eq "$($JI -l -e 'Python で cat' "$S/b.js")" "$S/b.js" "scope: a named file is searched"
 eq "$($JI -r -q -e 'Python で cat' "$S" 2>&1)" "" "scope: -q prints nothing"
 eq "$($JI -p --color=never -e 'Python で cat' "$S/a.py" | head -1)" "$(printf 'Python で cat\t[0.90]')" "scope: no column in -p"
+# git: time of change by commit (not the mtime a checkout sets), author, uncommitted / staged / untracked, branch
+G="$tmp/gitscope"; mkdir -p "$G"; GM='Alice さんが書いた cat|Carol さんが書いた cat|自分が書いた cat|昨日変えた cat|未コミットの cat|ステージした cat|未追跡の cat|このブランチで変えた cat'
+for f in old new feat dirty staged untr; do printf '%s\n' "$GM" | tr '|' '\n' >"$G/$f.txt"; done
+(cd "$G" && git init -q -b main && git config user.email b@x && git config user.name Bob \
+  && git add old.txt dirty.txt && GIT_AUTHOR_DATE=2020-01-01T00:00 GIT_COMMITTER_DATE=2020-01-01T00:00 git commit -q --author='Alice <a@x>' -m old \
+  && git add new.txt && git commit -q -m new && git checkout -q -b feat && git add feat.txt && git commit -q -m feat \
+  && echo more >>dirty.txt && git add staged.txt)
+gs() { $JI -r -l -e "$1" "$G" 2>/dev/null | sed "s|$G/||" | tr '\n' ' '; }
+eq "$(gs '昨日変えた cat')" "dirty.txt feat.txt new.txt staged.txt untr.txt " "git scope: time by commit, old.txt's fresh mtime aside"
+eq "$(gs 'Alice さんが書いた cat')" "dirty.txt old.txt " "git scope: author"
+eq "$(gs 'Carol さんが書いた cat' | wc -w | tr -d ' ')" "6" "git scope: an author with no commit gives no scope"
+eq "$(gs '自分が書いた cat')" "dirty.txt feat.txt new.txt staged.txt untr.txt " "git scope: me, uncommitted files included"
+eq "$(gs '未コミットの cat')" "dirty.txt staged.txt untr.txt " "git scope: uncommitted"
+eq "$(gs 'ステージした cat')" "staged.txt " "git scope: staged"
+eq "$(gs '未追跡の cat')" "untr.txt " "git scope: untracked"
+eq "$(gs 'このブランチで変えた cat')" "dirty.txt feat.txt staged.txt untr.txt " "git scope: this branch"
+eq "$(cd "$G" && $GS -l -e 'ステージした cat' 2>/dev/null | tr '\n' ' ')" "staged.txt " "git scope: git semgrep"
 # path roles: several in one meaning are alternatives; one listed with an unknown noun gives no scope
 W="$tmp/roles"; mkdir -p "$W/tests" "$W/src" "$W/docs"
 for f in tests/x.js src/y.js README.md docs/guide.txt app.log; do

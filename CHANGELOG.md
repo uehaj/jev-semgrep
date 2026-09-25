@@ -13,6 +13,9 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   `--no-scope` turns it off.
 - Auto-scope by place (#48): test code, migrations, the README, the CHANGELOG, documents, code (what is not a
   document) and logs, by path conventions ("テストコードで", "in the docs", "README か CHANGELOG に").
+- Auto-scope from git (#46): in a repository a time of change goes by commits (committer date, lower bound only),
+  uncommitted files by their mtime; and "code I wrote", "Alice さんが書いた", "未コミットの", "staged", "untracked",
+  "on this branch", "not yet pushed" narrow to what git says. One git process per repository and question.
 
 ## [0.4.0] - 2026-09-26
 

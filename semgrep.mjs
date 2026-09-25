@@ -7,6 +7,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync, writeSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { dirname, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
 // Errors are one line plus exit code 2, like grep. No stack traces.
@@ -123,7 +124,10 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
   --no-scope   do not narrow the files -r and git semgrep find by what a meaning says about them. By default
                a meaning that names a language or format ("in Python", "Python で", "YAML files") searches
                only those files (*.py *.pyi *.pyw), and one that says when the code changed ("changed
-               yesterday", "先週追加した") only files modified since then. Only wording that makes it a
+               yesterday", "先週追加した") only files changed since then (in a repository: committed since
+               then, or uncommitted and modified since). git also answers who and what state: "code I
+               wrote", "Alice さんが書いた", "未コミットの", "staged", "untracked", "on this branch",
+               "not yet pushed". Only wording that makes it a
                necessary condition counts: not "Python のような書き方", "port it to Go" or "SQL のクエリ" (SQL
                sits inside other code). A place does too: test code ("テストコードで", "in the tests"),
                migrations, the README, the CHANGELOG, documents ("ドキュメントに"; *.md *.rst *.txt docs/),
@@ -241,7 +245,9 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
   --no-scope   意味の文面からファイルを絞り込まない。既定では -r と git semgrep で見つけたファイルを、
                言語・形式を指定する意味 (「Python で」「in Python」「YAML ファイル」) ならそのファイル
                (*.py *.pyi *.pyw) に、変更時期を指定する意味 (「昨日変えた」「changed last week」) ならそれ以降に
-               更新したファイルに絞る。必要条件になる言い方だけが対象で、「Python のような書き方」「Go に移植」
+               変えたファイル (リポジトリでは、それ以降のコミットがあるか、未コミットでそれ以降に更新したもの)
+               に絞る。作者と状態も git で絞る: 「自分が書いた」「Alice さんが書いた」「未コミットの」「ステージした」
+               「未追跡の」「このブランチで」「未プッシュの」。必要条件になる言い方だけが対象で、「Python のような書き方」「Go に移植」
                「SQL のクエリ」(SQL は他の言語のコードの中にもある) は絞らない。置き場所も同じで、テストコード
                (「テストコードで」「in the tests」)、マイグレーション、README、CHANGELOG、文書 (「ドキュメントに」。
                *.md *.rst *.txt docs/)、コード (文書以外)、ログ (「ログファイルに」。*.log logs/) をパスの慣習で絞る。
@@ -550,10 +556,80 @@ function roleScope(text) {
     || /[\p{L}\p{N}]\s*(?:\/|\bor\b|\band\b|か|や|と|または|もしくは)\s*(?:the\s+|our\s+)?$/iu.test(text.slice(0, lo).replace(/\b(?:in|within|inside)\s*$/i, ''))) return null;
   return { label: hit.map(([name, , , what]) => `${name} files: ${what}`).join(' | '), words: hit.map(r => r[1][0].trim()), test: f => hit.some(([, , path]) => path.test(f)) };
 }
+// git (#46): inside a repository, git says which files changed since a time, who wrote them and what is uncommitted,
+// staged, untracked, changed on this branch or not pushed. One git process per repository and question, over the
+// whole tree: `git log -1 -- FILE` per file took 50 ms a file on a 6,400-file repository (5 minutes), `git log
+// --since` over the tree 15 ms. Files, not lines: `git blame` took 93 ms a file, and which lines changed is #49.
+// Outside a repository, without git, or when git fails, a git scope admits every file (a time falls back to the mtime).
+const repoOf = (memo => function repo(dir) {
+  if (!memo.has(dir)) memo.set(dir, existsSync(`${dir}/.git`) ? dir : dirname(dir) === dir ? null : repo(dirname(dir)));
+  return memo.get(dir);
+})(new Map());
+const gitMemo = new Map(); // repository + args -> Set of absolute paths, or null when git failed
+function gitPaths(top, ...args) {
+  const key = [top, ...args].join('\0');
+  if (!gitMemo.has(key)) {
+    let paths = null;
+    try { paths = new Set(execFileSync('git', ['-C', top, ...args], { encoding: 'utf8', maxBuffer: Infinity, stdio: ['ignore', 'pipe', 'ignore'] }).split(/[\0\n]/).filter(Boolean).map(p => resolve(top, p))); } catch {}
+    gitMemo.set(key, paths);
+  }
+  return gitMemo.get(key);
+}
+const gitOut = (top, ...args) => { try { return execFileSync('git', ['-C', top, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return ''; } };
+const union = (...sets) => (sets.some(x => !x) ? null : new Set(sets.flatMap(x => [...x])));
+const untracked = top => gitPaths(top, 'ls-files', '-z', '--others', '--exclude-standard');
+const uncommitted = top => union(gitPaths(top, 'diff', '--name-only', '-z', 'HEAD'), untracked(top)); // worktree and index against HEAD
+// The branch's own changes: from where it left the default branch (origin/HEAD, else main or master) to the worktree.
+function branchChanges(top) {
+  const base = [gitOut(top, 'rev-parse', '--abbrev-ref', 'origin/HEAD'), 'main', 'master', 'origin/main', 'origin/master'].find(b => b && gitOut(top, 'rev-parse', '--verify', '-q', b));
+  const fork = base && gitOut(top, 'merge-base', 'HEAD', base);
+  if (!fork || fork === gitOut(top, 'rev-parse', 'HEAD')) return null; // on the default branch itself: no branch of its own
+  return union(gitPaths(top, 'diff', '--name-only', '-z', fork), untracked(top));
+}
+// Commits not on the upstream; without one, commits on no remote branch.
+const unpushed = top => gitPaths(top, 'log', '--format=', '--name-only', '-z', '@{upstream}..HEAD') ?? gitPaths(top, 'log', '--format=', '--name-only', '-z', 'HEAD', '--not', '--remotes');
+// Author: every file a commit of theirs touched, by git's --author (a regex on "Name <email>", mailmap applied, any
+// case). An author with no commit at all (「田中さん」 against romanized names) gives no scope rather than no files.
+// ponytail: a file renamed after they wrote it is missed; `git log --follow` per file if that matters.
+function byAuthor(top, who) {
+  const me = who === null, pat = me ? gitOut(top, 'config', 'user.email') || gitOut(top, 'config', 'user.name') : who;
+  if (!pat) return null;
+  const files = gitPaths(top, 'log', '--use-mailmap', '-i', `--author=${pat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, '--format=', '--name-only', '-z');
+  return !files?.size ? null : me ? union(files, uncommitted(top)) : files;
+}
+const GIT_STATES = [ // [name, phrase, files of a repository]
+  ['uncommitted', /未コミット|コミット(?:して|され)(?:い)?ない|作業中の(?:変更|ファイル)|\buncommitted\b|\bworking(?:\s+tree)?\s+changes\b|\bnot\s+(?:yet\s+)?committed\b/i, uncommitted],
+  ['staged', /ステージ(?:した|済み|され|ング)|インデックスに(?:入れ|追加)|\bstaged\b/i, top => gitPaths(top, 'diff', '--name-only', '-z', '--cached')],
+  ['untracked', /未追跡|(?:git|ギット)\s*に(?:まだ)?(?:入れて|追加して|add\s*して)(?:い)?ない|まだ\s*(?:git\s*)?add\s*して(?:い)?ない|\buntracked\b|\bnot\s+(?:yet\s+)?(?:added\s+to|tracked\s+by|in)\s+git\b/i, untracked],
+  ['branch', /(?:この|今の|現在の)ブランチで|\b(?:on|in)\s+(?:this|the\s+current|my)\s+branch\b|\bthis\s+branch's\b/i, branchChanges],
+  ['unpushed', /未プッシュ|(?:プッシュ|push)して(?:い)?ない|\bunpushed\b|\bnot\s+(?:yet\s+)?pushed\b/i, unpushed],
+];
+const AUTHOR = [ // -> the author named, or '' for me
+  [/([\p{Script=Han}\p{Script=Katakana}ー\w.-]{1,20})\s?(?:さん|氏|くん|君)が[^、。]{0,6}?(?:書|作|実装|入れ|追加|変更|変え|修正|コミット)/u, m => m[1]],
+  [/(?:自分|私|僕|俺|わたし)(?:が[^、。]{0,6}?(?:書|作|実装|入れ|追加|変え|変更|修正|コミット)|の(?:コミット|変更))/, () => ''],
+  [/\b(?:written|authored|added|committed|changed|touched|made|introduced)\s+by\s+(me|myself|[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)?)/, m => (/^(me|myself)$/.test(m[1]) ? '' : m[1])],
+  [/\bI\s+(?:wrote|added|committed|changed|touched|authored|introduced)\b|\bmy\s+(?:own\s+)?commits\b/i, () => ''],
+];
+// A git scope admits a file when its repository's set holds it; no repository or no answer from git admits it.
+const inGit = files => f => { const abs = resolve(f), top = repoOf(dirname(abs)), set = top && files(top); return !set || set.has(abs); };
+function gitScopes(text) {
+  const out = GIT_STATES.map(([name, phrase, files]) => { const m = phrase.exec(text); return m && { label: `git-${name} files`, words: [m[0]], test: inGit(files) }; });
+  for (const [re, who] of AUTHOR) {
+    const m = re.exec(text);
+    if (!m) continue;
+    const name = who(m);
+    out.push({ label: `git-author files: by ${name || 'me (user.email)'}`, words: [m[0]], test: inGit(top => byAuthor(top, name || null)) });
+    break;
+  }
+  return out.filter(Boolean);
+}
 // Time: a date or span next to a verb of change ("昨日変えた", "先週追加した", "changed yesterday", "last week's
 // commits"), so a date the line itself talks about ("9月20日のリリース", "logs from yesterday") is not taken. Resolved
 // in local time to [from, to). A file changed in it was modified at or after from; the mtime cannot say more, since
-// a later change moves it. "Before" / "until" and vague words (最近, recently) give no scope.
+// a later change moves it. In a repository a committed file needs a commit at or after from instead: a checkout
+// sets every mtime to now, and a commit comes after the edit it records. The committer date, as git log --since
+// reads it: a rebase or cherry-pick moves it later, never earlier. No upper bound either: "yesterday's change"
+// may be committed today. Uncommitted files go by their mtime. "Before" / "until" and 最近 / recently give no scope.
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const NUMS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
 const UNIT_MS = { 分: 6e4, minute: 6e4, 時間: 36e5, hour: 36e5, 日: 864e5, day: 864e5, 週: 6048e5, 週間: 6048e5, week: 6048e5, か月: 2592e6, month: 2592e6 };
@@ -594,7 +670,11 @@ function timeScope(text) {
     if (!near) return null;
     const [from] = span(m, new Date().setHours(0, 0, 0, 0));
     const fmt = ms => new Date(ms - new Date(ms).getTimezoneOffset() * 6e4).toISOString().slice(0, 16).replace('T', ' ');
-    return { label: `modified since ${fmt(from)}`, words: [t], test: (f, st) => st.mtimeMs >= from };
+    const since = top => gitPaths(top, 'log', `--since=${new Date(from).toISOString()}`, '--format=', '--name-only', '-z');
+    return { label: `changed since ${fmt(from)} (git commits; the mtime for files git does not have committed)`, words: [t], test: (f, st) => {
+      const abs = resolve(f), top = repoOf(dirname(abs)), committed = top && since(top), open = top && uncommitted(top);
+      return !committed || !open ? st.mtimeMs >= from : committed.has(abs) || (open.has(abs) && st.mtimeMs >= from);
+    } };
   }
   return null;
 }
@@ -602,7 +682,7 @@ function timeScope(text) {
 // what a line is not, which says nothing about its file.
 const named = f => f === '-' || (!asGit && files.includes(f)); // stdin, or named on the command line: never narrowed
 if (opt.scope) for (const term of expr) for (const lit of term.filter(l => l.kind === 'm' && !l.not))
-  for (const sc of [langScope(lit.text), roleScope(lit.text), timeScope(lit.text)]) if (sc) {
+  for (const sc of [langScope(lit.text), roleScope(lit.text), timeScope(lit.text), ...gitScopes(lit.text)]) if (sc) {
     const seen = new Map(); // file -> admitted
     term.push({ kind: 's', ...sc, admits: f => named(f) || (seen.has(f) ? seen.get(f) : seen.set(f, sc.test(f, statSync(f))).get(f)) });
   }
