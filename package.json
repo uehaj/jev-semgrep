@@ -27,7 +27,8 @@
     "git-semgrep.mjs",
     "README.md",
     "README.ja.md",
-    "docs/color.svg"
+    "docs/color.svg",
+    "docs/demo.svg"
   ],
   "engines": {
     "node": ">=20.16"
