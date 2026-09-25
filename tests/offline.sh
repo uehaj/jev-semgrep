@@ -238,6 +238,46 @@ eq "$(cd "$I" && $JI -r -l -e cat src | tr '\n' ' ')" "src/s.txt src/t.log " "-r
 mkdir "$tmp/norepo"; printf "cat\n" >"$tmp/norepo/x.log"; printf "*.log\n" >"$tmp/norepo/.gitignore"
 eq "$($JI -r -l -e cat "$tmp/norepo")" "$tmp/norepo/x.log" "-r outside a repository: .gitignore has no effect"
 
+# --include / --exclude / --changed-within pick what -r finds and git semgrep lists; a named file is always searched
+P="$tmp/pick"
+mkdir -p "$P/sub"
+for f in a.md b.txt c.min.js d.js sub/e.md old.md; do printf 'cat\n' >"$P/$f"; done
+touch -t 202001010000 "$P/old.md"
+eq "$($JI -r -l --include='*.md' -e cat "$P" | tr '\n' ' ')" "$P/a.md $P/old.md $P/sub/e.md " "--include"
+eq "$($JI -r -l --include='*.md' --include='*.txt' -e cat "$P" | tr '\n' ' ')" "$P/a.md $P/b.txt $P/old.md $P/sub/e.md " "--include twice"
+eq "$($JI -r -l --include='*.js' --exclude='*.min.js' -e cat "$P" | tr '\n' ' ')" "$P/d.js " "--exclude"
+eq "$($JI -r -l --include='*.md' --changed-within=7d -e cat "$P" | tr '\n' ' ')" "$P/a.md $P/sub/e.md " "--changed-within a duration"
+eq "$($JI -r -l --include='*.md' --changed-within=2019-12-31 -e cat "$P" | grep -c .)" "3" "--changed-within a date"
+eq "$($JI -l --include='*.txt' --changed-within=1d -e cat "$P/old.md")" "$P/old.md" "a named file is searched whatever the filters"
+code 2 "--changed-within, not a duration or a date" -- $JI -r --changed-within=soon -e cat "$P"
+code 2 "--changed-within, a bare number is not a year" -- $JI -r --changed-within=7 -e cat "$P"
+eq "$($JI -r -l --include='*.md' --changed-within=today -e cat "$P" | tr '\n' ' ')" "$P/a.md $P/sub/e.md " "--changed-within=today"
+eq "$($JI -r -l --include='*.md' --changed-within=this-week -e cat "$P" | grep -c .)" "2" "--changed-within=this-week"
+eq "$($JI -r -l --include='*.md' --changed-within=this-month -e cat "$P" | grep -c .)" "2" "--changed-within=this-month"
+eq "$($JI -r -l --include='*.md' --changed-within=2019-12-31T12:00Z -e cat "$P" | grep -c .)" "3" "--changed-within an ISO date-time"
+(cd "$P" && git init -q && git add .)
+eq "$(cd "$P" && $GS -l --include='*.md' --changed-within=7d -e cat | tr '\n' ' ')" "a.md sub/e.md " "git semgrep with --include and --changed-within"
+eq "$(cd "$P" && $GS -l --include='*.md' -e cat b.txt a.md | tr '\n' ' ')" "a.md " "git semgrep: pathspecs are filtered too"
+$JI -r -l --include='sub/*.md' -e cat "$P" 2>&1 >/dev/null | grep -q "has a /, but globs match the file name only" || fail "--include with a / warns"
+
+# -i without a terminal is an error; from SEMGREP_OPTS it says so. notty: a new session has no controlling terminal
+notty() { perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' "$@"; }
+code 2 "-i without a terminal" -- notty $JI -i -e cat "$P/a.md"
+notty $E SEMGREP_OPTS=-i SEMGREP_URL=$base/v1 node ../semgrep.mjs -e cat "$P/a.md" 2>&1 | grep -q 'SEMGREP_OPTS= semgrep' || fail "-i from SEMGREP_OPTS names it"
+# -i: shows the dry run on the terminal and sends nothing before the answer; y searches, anything else exits 1
+if script --version >/dev/null 2>&1; then onpty() { script -qec "$1" /dev/null; }; else onpty() { script -q /dev/null sh -c "$1"; }; fi
+# the answer is typed after the prompt is up: script(1) forwards input at once and then sends EOF, which would come first
+answer() { sleep 2; printf "%s\n" "$1"; sleep 1; }
+reset; out=$(answer n | onpty "$JI -i -l -e cat '$P/a.md'; echo rc=\$?")
+eq "$(stat count)" "0" "-i, n: nothing sent"
+echo "$out" | grep -q "semgrep: file $P/a.md: 1 lines, 1 to send" || fail "-i shows the files: $out"
+echo "$out" | grep -q 'rc=1' || fail "-i, n: exit 1: $out"
+reset; out=$(answer y | onpty "$JI -i -l -e cat '$P/a.md'; echo rc=\$?")
+eq "$(stat count)" "1" "-i, y: searched: $out"
+echo "$out" | grep -q 'rc=0' || fail "-i, y: exit 0: $out"
+reset; out=$(answer y | onpty "printf 'cat\\\\n' | $JI -i -c -e cat; echo rc=\$?")
+echo "$out" | grep -q '^1' || fail "-i with stdin: the data still reaches the search: $out"
+
 # --help: exit 0, Japanese by locale, lists the options
 code 0 "--help" -- $E LANG=C node ../semgrep.mjs --help
 eq "$($E LANG=C node ../semgrep.mjs -h | head -1 | cut -c1-14)" "usage: semgrep" "-h"
