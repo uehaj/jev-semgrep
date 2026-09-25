@@ -13,7 +13,8 @@ case $by in codex|code-review) ;; *) echo "reviewed: by is codex or code-review,
 sha=$(gh pr view "$pr" --json headRefOid -q .headRefOid)
 # What was reviewed is the local tree; it must be what the PR holds.
 [ "$(git rev-parse HEAD)" = "$sha" ] || { echo "reviewed: HEAD is not PR #$pr's head $sha (push, or check out the PR)" >&2; exit 1; }
+desc=$(node -p "Array.from(process.argv[1]).slice(0, 140).join(String())" "$by: $summary")
 url=$({ printf 'Review (%s) of %s\n\n' "$by" "$sha"; cat "$file"; } | gh pr comment "$pr" --body-file -)
 gh api "repos/{owner}/{repo}/statuses/$sha" -f state=success -f context=review \
-  -f description="$(node -p "process.argv[1].match(/^.{0,140}/su)[0]" "$by: $summary")" -f target_url="$url" >/dev/null
+  -f description="$desc" -f target_url="$url" >/dev/null
 echo "PR #$pr $sha: review recorded, $url"
