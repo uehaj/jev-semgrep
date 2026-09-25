@@ -50,6 +50,9 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   and contents show as `\xNN`, so a crafted name cannot redraw the terminal.
 - `--verbose`: the same lines on stderr while searching, and the summary line even when stderr is not a terminal.
 - `-V`, `--version`: print `semgrep X.Y.Z` and exit, like `grep -V`.
+- `-H`, `--with-filename`: prefix each line, and each `-c` count, with its file name even for a single file, as
+  editors expect (Vim's `grepprg`, Emacs `M-x grep`). `--no-filename`: never, even with several files, `-r` or
+  `git semgrep`. The later one wins, and either can sit in `SEMGREP_OPTS` (#52).
 - `-i`, `--interactive`: first run the same command as `--dry-run`, show its files and totals on the terminal, and
   search only when the answer is `y`. Nothing is sent before the answer; any other answer exits 1. The answer is
   read from `/dev/tty`, so data can still come on stdin; without a terminal it is an error (exit 2), which names

@@ -527,6 +527,7 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
   --changed-within=WHEN  -r と git semgrep で、30m / 2h / 7d / 2w 以内、日付か日時以降、today / this-week /
                this-month に更新したファイルだけを探す
   -l           一致した行ではなくファイル名だけを表示
+  -H, --with-filename  1 ファイルでもファイル名を付ける。--no-filename は常に付けない
   -A NUM       一致行の後ろ NUM 行も表示 (grep と同じ。文脈行の区切りは - )
   -B NUM       一致行の前 NUM 行も表示
   -C NUM       前後 NUM 行を表示 (-A NUM -B NUM)

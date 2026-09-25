@@ -54,6 +54,15 @@ code 2 "unreadable file" -- $J -e zebra "$F" "$tmp/none"
 eq "$($J -c -e cat "$F")" "2" "-c"
 eq "$($J -c -e zebra "$F")" "0" "-c without a match"
 eq "$($J -l -e cat "$F" "$F")" "$(printf '%s\n' "$F" "$F")" "-l, one name per file"
+# -H / --no-filename: file names on one file, none on several; the later one wins; -c follows
+eq "$($J -H -n -e cat "$F" | head -1)" "$F:1:cat" "-H on one file"
+eq "$($J --with-filename -c -e cat "$F")" "$F:2" "--with-filename with -c"
+eq "$($J --no-filename -n -e cat "$F" "$F" | head -1)" "1:cat" "--no-filename on two files"
+eq "$($J --no-filename -c -e cat "$F" "$F" | tr '\n' ' ')" "2 2 " "--no-filename with -c"
+eq "$($J -H --no-filename -e cat "$F" | head -1)" "cat" "--no-filename after -H wins"
+eq "$($J --no-filename -H -e cat "$F" | head -1)" "$F:cat" "-H after --no-filename wins"
+eq "$($E SEMGREP_URL=$base/v1 SEMGREP_OPTS=-H node ../semgrep.mjs -e cat "$F" | head -1)" "$F:cat" "-H in SEMGREP_OPTS"
+eq "$($E SEMGREP_URL=$base/v1 SEMGREP_OPTS=-H node ../semgrep.mjs --no-filename -e cat "$F" | head -1)" "cat" "--no-filename overrides SEMGREP_OPTS"
 eq "$($J -n -e cat "$F" "$F" | head -1)" "$F:1:cat" "file prefix with two files"
 
 # context: -A and -B alone, groups apart are split by --, blank lines count as context
@@ -311,7 +320,7 @@ fi
 # --help: exit 0, Japanese by locale, lists the options
 code 0 "--help" -- $E LANG=C node ../semgrep.mjs --help
 eq "$($E LANG=C node ../semgrep.mjs -h | head -1 | cut -c1-14)" "usage: semgrep" "-h"
-for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose'; do
+for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename'; do
   $E LANG=C node ../semgrep.mjs --help | grep -q -- "$o" || fail "--help lacks $o"
 done
 $E LANG=C node ../semgrep.mjs --help | grep -q 'grep by meaning' || fail "--help in English"

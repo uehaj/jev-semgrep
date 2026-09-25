@@ -547,6 +547,7 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
   --changed-within=WHEN  with -r and git semgrep, only files modified within 30m / 2h / 7d / 2w, since a date
                or date-time, today, this-week or this-month
   -l           print only the names of files with a match, not the lines
+  -H, --with-filename  prefix file names even for a single file; --no-filename never prefixes them
   -A NUM       print NUM lines of trailing context after each match (context lines use - as separator)
   -B NUM       print NUM lines of leading context before each match
   -C NUM       print NUM lines of context before and after (-A NUM -B NUM)
