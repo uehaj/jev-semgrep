@@ -7,6 +7,32 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 
 ## [0.4.0] - 2026-09-25
 
+### Security
+- **Breaking:** `./.env` in the current directory is no longer read, as in 0.3.1 (see there).
+
+### Fixed
+- A malformed API response (an answer without a probability) is an error (exit 2). It used to count as 0, so
+  `-v X` and `!X` matched. An error body from the server is cut to 300 characters, without control characters.
+- `-q` exits 0 on a match even when another request failed, and decides a regex match before `--dedup` asks anything.
+- A directory without `-r`, or one `-r` cannot read, is reported and skipped; the rest is still searched (exit 2).
+- `-o -n` without `--sentence` no longer crashes. `-A`/`-B`/`-C`/`--chunk`/`-j` take whole numbers only.
+  `--color` is checked before any request.
+- With `-z`, a binary file (other control bytes than NUL) is skipped; a binary named on the command line is reported.
+- Regex captures placed in a question are cut to 200 characters and their quotes escaped.
+- `--sentence=jev` with regex terms only joins lines by the rules and sends nothing.
+- A warning when the API key goes to a non-local `http://` endpoint.
+- Docs: `--chunk` changes results, not just speed. Lines in one request are each other's context, so
+  ambiguous lines can flip with a small chunk (`--chunk 1` flipped 18 of 200 log lines). The README said
+  batching did not change the probabilities (#9).
+
+### Changed
+- **Requires Node.js 20.16 or later** (was 20.12), for `parseArgs`' `--no-X`, which `SEMGREP_OPTS` needs.
+- Docs: examples outside the cross-language section are in English; a FAQ on the combinations that replace
+  `--paragraph`, on jsonl and on `--record-separator`; a landing page on GitHub Pages.
+- Tests: an offline suite against a fake Jev (`tests/offline.sh`, no key, no network); `npm test` runs it first.
+  `npm run judge` passes `./.env` explicitly; `scripts/release.sh` checks `gh auth` before publishing and runs
+  `npm test`.
+
 ### Added
 - `SEMGREP_OPTS`: default options from the environment, split on spaces and put before the command line, which
   wins. `--no-X` turns a boolean flag off (`--color` takes `--color=never`). Options only: no meanings, files or
@@ -44,16 +70,12 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   deviation: `$<name>` naming no group, or a negated regex's group, is an error). `-p` prints `1.00`/`0.00`
   for a regex term.
 
-### Changed
-- **Requires Node.js 20.16 or later** (was 20.12), for `parseArgs`'s `allowNegative`, which `SEMGREP_OPTS` needs.
-- Docs: examples outside the cross-language section are in English; a FAQ on the combinations that replace
-  `--paragraph`, on jsonl and on `--record-separator`; a landing page on GitHub Pages.
-- Tests: an offline suite against a fake Jev (`tests/offline.sh`, no key, no network); `npm test` runs it first.
+## [0.3.1] - 2026-09-25
 
-### Fixed
-- Docs: `--chunk` changes results, not just speed. Lines in one request are each other's context, so
-  ambiguous lines can flip with a small chunk (`--chunk 1` flipped 18 of 200 log lines). The README said
-  batching did not change the probabilities (#9).
+### Security
+- **Breaking:** `./.env` in the current directory is no longer read; only the environment and
+  `~/.config/semgrep/.env` are. A `.env` committed to an untrusted repository could set `SEMGREP_URL` and send
+  the API key and the searched text to another server. Load a per-project file explicitly with `node --env-file`.
 
 ## [0.3.0] - 2026-09-24
 
@@ -148,6 +170,7 @@ First release as `@uehaj/semgrep`.
 
 [Unreleased]: https://github.com/uehaj/jev-semgrep/compare/v0.4.0...HEAD
 [0.4.0]: https://github.com/uehaj/jev-semgrep/compare/v0.3.0...v0.4.0
+[0.3.1]: https://github.com/uehaj/jev-semgrep/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/uehaj/jev-semgrep/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/uehaj/jev-semgrep/compare/v0.2.0...v0.2.2
 [0.2.0]: https://github.com/uehaj/jev-semgrep/compare/v0.1.1...v0.2.0

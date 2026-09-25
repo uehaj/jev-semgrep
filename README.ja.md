@@ -167,10 +167,11 @@ npx @uehaj/semgrep -n -e "顧客が怒っている、または不満を持って
 ```sh
 export SEMGREP_API_KEY=your-key                       # 環境変数
 echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env    # ユーザー単位 (先に mkdir -p)
-echo 'SEMGREP_API_KEY=your-key' > .env                # プロジェクト単位。カレントディレクトリから読む
 ```
 
-環境変数が優先で、足りない分は `./.env`、`~/.config/semgrep/.env` のうち最初に見つかった方から補います。
+環境変数が優先で、足りない分は `~/.config/semgrep/.env` から補います。カレントディレクトリの `.env` は読みません。
+clone したばかりのリポジトリのものかもしれず、`SEMGREP_URL` を通じてキーを別のサーバへ送らせ得るからです。
+プロジェクト単位の設定は、自分で読み込ませてください: `node --env-file=.env "$(command -v semgrep)" ...`。
 `SEMGREP_API_KEY` が無ければ `TYPESAFE_API_KEY` も使えます。
 
 ### 既定のオプション
@@ -192,7 +193,7 @@ semgrep を呼ぶスクリプトもこの既定値を拾います（grep が `GR
 API の設定は `SEMGREP_API_KEY`（または `TYPESAFE_API_KEY`）、`SEMGREP_URL`、`SEMGREP_MODEL` の 3 つだけです。
 TypeSafe の `POST /v1/systemone` と同じ形で話すエンドポイントなら使えます。キーは `SEMGREP_URL` の先へそのまま
 送られるので、2 つは組にして設定してください。コマンドラインの `--sys1-model=ID`、`--sys1-url=URL`、`--sys1-api-key=KEY` は
-この 3 つより優先します。コマンドラインのキーは `ps` やシェル履歴に残るので、キーはなるべく `.env` に書いてください。
+この 3 つより優先します。コマンドラインのキーは `ps` やシェル履歴に残るので、キーはなるべく `~/.config/semgrep/.env` に書いてください。
 
 ```sh
 # OpenRouter
@@ -480,7 +481,7 @@ npx skills add uehaj/uehaj-marketplace --skill semgrep -a claude-code -g
 
 スキルは意味を英語で書き、AND / OR / NOT を `-e` / `-a` / `-v` に振り分け、`-n` を付け、大きなディレクトリは
 課金に見合うファイルに絞り、最初の結果が怪しければ `--level loose` や `strict` で引き直します。
-API キーとエンドポイントの読み方はコマンドラインと同じです（`SEMGREP_API_KEY`、`./.env`、`~/.config/semgrep/.env`）。
+API キーとエンドポイントの読み方はコマンドラインと同じです（`SEMGREP_API_KEY`、`~/.config/semgrep/.env`）。
 
 ## 使い方
 
