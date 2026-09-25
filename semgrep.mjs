@@ -512,25 +512,26 @@ function langScope(text) {
 }
 // Path role (#48): where a kind of file lives, by the conventions of JS, Python, Go, Java, Ruby, Rust and PHP. The
 // phrase must say the match is in such a file ("テストコードで", "in the tests", "README に"), not that the code
-// does something with one ("テストしている", "README を生成する"). Several roles in one meaning are alternatives
+// does something with one ("テストしている", "README を生成する"), and not that it may be there too ("テストでも",
+// "README にも"). Several roles in one meaning are alternatives
 // ("README か CHANGELOG に"). Each pattern is tested on the path; a directory in it that only looks like a role
 // ("/home/me/tests/proj/") admits more files, never fewer.
 const DOC_EXT = String.raw`\.(?:md|markdown|mdx|rst|adoc|asciidoc|txt|org|tex|textile)$`;
 const ROLES = [ // [name, phrase, path pattern, what the path pattern is (for the report), bare noun]
   // Rust keeps unit tests in the file they test (#[cfg(test)]), so every *.rs is a test file too.
-  ['test', /テスト(?:コード|ファイル|ケース|スイート)|テスト(?:で(?!き)|の中|内で)|\b(?:in|within|inside)\s+(?:the\s+|our\s+|my\s+)?(?:unit\s+|integration\s+|e2e\s+)?tests\b|\btest\s+(?:code|files?|suites?|cases?)\b|\bspec\s+files?\b/i,
+  ['test', /テスト(?:コード|ファイル|ケース|スイート)|テスト(?:で(?![きもな]|はな)|の中|内で(?![きもな]|はな))|\b(?:in|within|inside)\s+(?:the\s+|our\s+|my\s+)?(?:unit\s+|integration\s+|e2e\s+)?tests\b|\btest\s+(?:code|files?|suites?|cases?)\b|\bspec\s+files?\b/i,
     /(?:^|\/)(?:tests?|__tests__|specs?|testing|e2e)\/|(?:^|\/)test_[^/]*\.py$|_test\.\w+$|\.(?:test|spec)\.\w+$|Tests?\.(?:java|kt|cs|php|swift)$|_spec\.rb$|(?:^|\/)conftest\.py$|\.rs$/,
     'tests/ test/ __tests__/ spec/ e2e/ test_*.py *_test.* *.test.* *.spec.* *Test.java *_spec.rb *.rs', /テスト|tests?/i],
   ['migration', /マイグレーション(?:ファイル|スクリプト|で|の中|のコード)|\bmigrations?\s+(?:files?|scripts?|code)\b|\bin\s+(?:the\s+|our\s+)?(?:db\s+|database\s+)?migrations\b/i,
     /migrat|(?:^|\/)V\d+(?:_\d+)*__[^/]*\.sql$/i, '*migrat* V*__*.sql', /マイグレーション|migrations?/i],
-  ['readme', /README\s*(?:に|で|の中|の記述|の(?!生成|作成))|\bthe\s+README\s+(?:says?|mentions?|explains?|describes?|file)\b|\bin\s+(?:the\s+|our\s+)?README\b|\bREADME\s+files?\b/i,
+  ['readme', /README\s*(?:に(?!も)|で(?![きもな]|はな)|の中|の記述|の(?!生成|作成))|\bthe\s+README\s+(?:says?|mentions?|explains?|describes?|file)\b|\bin\s+(?:the\s+|our\s+)?README\b|\bREADME\s+files?\b/i,
     /(?:^|\/)README[^/]*$/i, 'README*', /README/i],
-  ['changelog', /(?:CHANGELOG|変更履歴|更新履歴)\s*(?:に|で|の中|の記述|の(?!生成|作成))|\bin\s+(?:the\s+|our\s+)?changelog\b|\bchangelog\s+(?:entr(?:y|ies)|files?|says|mentions)\b/i,
+  ['changelog', /(?:CHANGELOG|変更履歴|更新履歴)\s*(?:に(?!も)|で(?![きもな]|はな)|の中|の記述|の(?!生成|作成))|\bin\s+(?:the\s+|our\s+)?changelog\b|\bchangelog\s+(?:entr(?:y|ies)|files?|says|mentions)\b/i,
     /(?:^|\/)(?:CHANGELOG|CHANGES|HISTORY|NEWS)[^/]*$/i, 'CHANGELOG* CHANGES* HISTORY* NEWS*', /CHANGELOG|変更履歴|更新履歴/i],
-  ['docs', /(?:ドキュメント|文書|仕様書|設計書|マニュアル)\s*(?:に|で|の中)|\bin\s+(?:the\s+|our\s+)?(?:docs|documentation|documents|specs?|specifications?|manuals?)\b|\b(?:the\s+)?documentation\s+(?:says|mentions)\b/i,
+  ['docs', /(?:ドキュメント|文書|仕様書|設計書|マニュアル)\s*(?:に(?!も)|で(?![きもな]|はな)|の中)|\bin\s+(?:the\s+|our\s+)?(?:docs|documentation|documents|specs?|specifications?|manuals?)\b|\b(?:the\s+)?documentation\s+(?:says|mentions)\b/i,
     new RegExp(`${DOC_EXT}|(?:^|/)(?:docs?|documentation|manual)/`, 'i'), '*.md *.rst *.adoc *.txt ... docs/ doc/', /ドキュメント|文書|仕様書|設計書|マニュアル|docs|documentation/i],
   // Code is what is not a document: a dictionary of languages would lose the ones it lacks.
-  ['code', /(?:実装|ソースコード|コード)\s*(?:の中|内で)|実装で|\bin\s+(?:the\s+|our\s+)?(?:code|codebase|source(?:\s+code)?|implementation)\b/i,
+  ['code', /(?:実装|ソースコード|コード)\s*(?:の中|内で(?![きもな]|はな))|実装で(?![きもな]|はな)|\bin\s+(?:the\s+|our\s+)?(?:code|codebase|source(?:\s+code)?|implementation)\b/i,
     new RegExp(`^(?!.*(?:${DOC_EXT}|(?:^|/)(?:docs?|documentation)/))`, 'i'), 'not *.md *.rst *.adoc *.txt ... docs/ doc/', /実装|コード|code/i],
   ['log', /ログファイル|ログ(?:に(?:出て|残って|記録され|出力され)|の中[でに])|\bin\s+(?:the\s+|our\s+)?logs?\b(?!\s+(?:message|call|statement|level)s?\b)|\blog\s+files?\b/i,
     /\.(?:log|out|err)(?:\.\d+)?$|(?:^|\/)(?:logs?|var\/log)\//i, '*.log *.log.N *.out *.err logs/ log/', /ログ|logs?/i],
@@ -617,6 +618,9 @@ function gitScopes(text) {
   for (const [re, who] of AUTHOR) {
     const m = re.exec(text);
     if (!m) continue;
+    // "Alice さんが書いたような", "like code written by Alice": a likeness says nothing about who wrote the file
+    if (/^\p{Script=Hiragana}{0,3}(?:よう|みたい|風|っぽ)/u.test(text.slice(m.index + m[0].length))
+      || /\b(?:like|style\s+of|similar\s+to)\s+(?:\S+\s+){0,3}$/i.test(text.slice(0, m.index))) break;
     const name = who(m);
     out.push({ label: `git-author files: by ${name || 'me (user.email)'}`, words: [m[0]], test: inGit(top => byAuthor(top, name || null)) });
     break;

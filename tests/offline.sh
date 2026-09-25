@@ -299,6 +299,8 @@ gs() { $JI -r -l -e "$1" "$G" 2>/dev/null | sed "s|$G/||" | tr '\n' ' '; }
 eq "$(gs '昨日変えた cat')" "dirty.txt feat.txt new.txt staged.txt untr.txt " "git scope: time by commit, old.txt's fresh mtime aside"
 eq "$(gs 'Alice さんが書いた cat')" "dirty.txt old.txt " "git scope: author"
 eq "$(gs 'Carol さんが書いた cat' | wc -w | tr -d ' ')" "6" "git scope: an author with no commit gives no scope"
+eq "$($JI -r -l -e 'Alice さんが書いたような cat' "$G" 2>&1 | grep -c 'scope:' || true)" "0" "git scope: no author from a likeness"
+eq "$($JI -r -l -e 'like code written by Alice cat' "$G" 2>&1 | grep -c 'scope:' || true)" "0" "git scope: no author from like ... by"
 eq "$(gs '自分が書いた cat')" "dirty.txt feat.txt new.txt staged.txt untr.txt " "git scope: me, uncommitted files included"
 eq "$(gs '未コミットの cat')" "dirty.txt staged.txt untr.txt " "git scope: uncommitted"
 eq "$(gs 'ステージした cat')" "staged.txt " "git scope: staged"
@@ -316,6 +318,9 @@ eq "$($JI -r -l -e 'テストコードで cat' "$W" 2>/dev/null | tr '\n' ' ')" 
 eq "$($JI -r -l -e 'README か CHANGELOG に cat' "$W" 2>/dev/null | tr '\n' ' ')" "$W/README.md " "scope: README or CHANGELOG"
 eq "$($JI -r -l -e 'in the code cat' "$W" 2>/dev/null | tr '\n' ' ')" "$W/app.log $W/src/y.js $W/tests/x.js " "scope: code is what is not a document"
 eq "$($JI -r -l -e 'in the tests and fixtures cat' "$W" 2>/dev/null | grep -c .)" "5" "no scope when a role is listed with something else"
+for q in 'テストでもいいので cat' 'README にも書いてある cat' '仕様書でも触れている cat' '実装でもいいので cat'; do
+  eq "$($JI -r -l -e "$q" "$W" 2>&1 | grep -c 'scope:' || true)" "0" "no scope from also / even: $q"
+done
 eq "$($JI -r -l --include='*.md' --changed-within=this-month -e cat "$P" | grep -c .)" "2" "--changed-within=this-month"
 eq "$($JI -r -l --include='*.md' --changed-within=2019-12-31T12:00Z -e cat "$P" | grep -c .)" "3" "--changed-within an ISO date-time"
 (cd "$P" && git init -q && git add .)
