@@ -44,12 +44,15 @@ const OPTIONS = {
   o: { type: 'boolean', default: false }, // with --sentence, print only the matching sentences (grep -o)
   p: { type: 'boolean', default: false }, // print each meaning's probability
   dedup: { type: 'boolean', default: false }, // judge one representative per template, reuse its answer
+  'dry-run': { type: 'boolean', default: false }, // print the files and requests, send nothing
+  verbose: { type: 'boolean', default: false }, // print the files and requests to stderr while searching
   color: { type: 'string', default: 'auto' }, // auto / always / never
   // the API settings, each overriding its environment variable
   'sys1-model': { type: 'string' }, // SEMGREP_MODEL
   'sys1-url': { type: 'string' }, // SEMGREP_URL
   'sys1-api-key': { type: 'string' }, // SEMGREP_API_KEY / TYPESAFE_API_KEY
   help: { type: 'boolean', short: 'h', default: false },
+  version: { type: 'boolean', short: 'V', default: false },
 };
 // SEMGREP_OPTS holds default options only: no meanings, no files, no --. It goes in front of the arguments, so the
 // command line wins (a later value counts; --no-X clears a flag).
@@ -96,8 +99,10 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
   -T THRESH    negative threshold: "not X" when probability < THRESH (overrides --level)
                with -t 0.6 -T 0.3 a line at 0.3..0.6 matches neither X nor not-X
   -r           recurse into directories (current directory when FILE is omitted). Skips .git,
-               node_modules, .ssh/.aws/.gnupg, binary files and likely secrets (.env*, *.pem, *.key,
-               id_rsa...). Every searched line is sent to the TypeSafe API
+               node_modules, .ssh/.aws/.gnupg/.kube/.docker, binary files and likely secrets (.env*,
+               .netrc, .npmrc, .git-credentials, *.pem, *.key, id_rsa*...). Every searched line is sent
+               to the TypeSafe API. Inside a git repository, what git ignores (.gitignore) is skipped
+               too; a file or directory named on the command line is searched even so
   -l           print only the names of files with a match, not the lines
   -A NUM       print NUM lines of trailing context after each match (context lines use - as separator)
   -B NUM       print NUM lines of leading context before each match
@@ -128,6 +133,10 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
   -o           with --sentence, print only the matching sentences, one per line; -n gives the line where the
                sentence starts, -c and -A/-B/-C count sentences
   -p           print each meaning's probability at the end of the line (for tuning thresholds)
+  --dry-run    send nothing; print to stdout the endpoint, each file searched (units, and how many would be
+               sent) and each request with its questions, grouped by wording (line ids read Lnnn).
+               The --dedup and --sentence questions are answered no, so their counts are an estimate
+  --verbose    print the same to stderr while searching, and the summary line even when not a terminal
   --dedup      judge one line per template instead of every line. Lines that differ only in ids, hashes,
                numbers, dates and times, paths and URLs share a template; one of them is sent and its answer
                is reused for the rest. Which of those may be folded depends on the meaning: a number decides
@@ -143,6 +152,7 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                the API settings, overriding SEMGREP_MODEL, SEMGREP_URL, SEMGREP_API_KEY below.
                A key on the command line shows up in ps and shell history; prefer ~/.config/semgrep/.env
   -h, --help   this help (Japanese when LANG / LC_ALL / LC_MESSAGES starts with ja)
+  -V, --version  print the version and exit
 
 Exit status: 0 matched / 1 no match / 2 error
 
@@ -185,8 +195,10 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
   -T THRESH    否定条件の閾値。確率 < THRESH で「〜でない」と判定 (--level より優先)
                -t 0.6 -T 0.3 なら 0.3〜0.6 の曖昧な行はどちらにも当たらない
   -r           ディレクトリを再帰的に探す (FILE 省略時はカレント)。.git、node_modules、
-               .ssh/.aws/.gnupg、バイナリ、秘密情報らしいファイル (.env*, *.pem, *.key, id_rsa...) は
-               飛ばす。検索した行はすべて TypeSafe の API に送られる
+               .ssh/.aws/.gnupg/.kube/.docker、バイナリ、秘密情報らしいファイル (.env*, .netrc, .npmrc,
+               .git-credentials, *.pem, *.key, id_rsa*...) は飛ばす。git リポジトリの中では
+               git が無視するもの (.gitignore) も飛ばす。コマンドラインで指定したファイル・ディレクトリは
+               それでも探す。検索した行はすべて TypeSafe の API に送られる
   -l           一致した行ではなくファイル名だけを表示
   -A NUM       一致行の後ろ NUM 行も表示 (grep と同じ。文脈行の区切りは - )
   -B NUM       一致行の前 NUM 行も表示
@@ -217,6 +229,10 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
   -o           --sentence と併用し、当たった文だけを 1 行ずつ出す。-n は文が始まる行、-c と
                -A/-B/-C は文の数で数える
   -p           各意味の確率を行末に表示 (閾値調整用)
+  --dry-run    何も送らず、送信先・検索するファイル (単位の数と送る数)・各リクエストとその質問を stdout に
+               表示する。質問は文面ごとにまとめて数える (行の ID は Lnnn と表示)。--dedup と --sentence の
+               事前の問い合わせは no と答えたものとして数えるので、その場合の数は目安
+  --verbose    同じ表示を検索しながら stderr に出す。端末でなくても最後の集計行を出す
   --dedup      全行ではなくテンプレートごとに 1 行だけ判定する。ID・ハッシュ・数値・日付と時刻・パス・
                URL だけが違う行は同じテンプレートとみなし、代表 1 行を送ってその答えを残りにも使う。
                どれをまとめてよいかは意味による。「ディスク使用率が 90% を超えている」なら数値が、
@@ -231,6 +247,7 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                API の設定。下の SEMGREP_MODEL / SEMGREP_URL / SEMGREP_API_KEY より優先。
                コマンドラインのキーは ps やシェル履歴に残るので、なるべく ~/.config/semgrep/.env に書く
   -h, --help   このヘルプ (LANG / LC_ALL / LC_MESSAGES が ja 以外なら英語)
+  -V, --version  バージョンを表示して終了
 
 終了コード: 一致あり 0 / なし 1 / エラー 2 (引数・読めないファイル・API 障害)
 
@@ -245,6 +262,10 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                      スクリプトからは SEMGREP_OPTS= semgrep と空にして呼ぶ
   キーは SEMGREP_URL の先へそのまま送られる。SEMGREP_URL 指定時にキーが無ければ認証ヘッダを付けない。
   例:  mkdir -p ~/.config/semgrep && echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env`;
+if (opt.version) {
+  console.log(`semgrep ${JSON.parse(readFileSync(new URL('package.json', import.meta.url), 'utf8')).version}`);
+  process.exit(0);
+}
 if (opt.help) {
   const locale = process.env.LC_ALL || process.env.LC_MESSAGES || process.env.LANG || '';
   console.log(locale.startsWith('ja') ? HELP_JA : HELP_EN);
@@ -258,6 +279,12 @@ const model = opt['sys1-model'] || SEMGREP_MODEL || 'jev-latest';
 const credential = opt['sys1-api-key'] || SEMGREP_API_KEY || TYPESAFE_API_KEY;
 if (credential && new URL(apiUrl).protocol === 'http:' && !/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(apiHost))
   console.error(`semgrep: warning: the API key goes to ${apiHost} over plain http`);
+// --dry-run prints the files and the requests that would be sent, to stdout, and sends nothing. --verbose prints
+// the same to stderr while searching. -q's early exits would cut the list short, so --dry-run turns -q off.
+const dry = opt['dry-run'];
+if (dry) opt.quiet = false;
+const trace = dry ? s => console.log(`semgrep: ${s}`) : opt.verbose ? s => console.error(`semgrep: ${s}`) : null;
+trace?.(`endpoint ${apiHost}${new URL(apiUrl).pathname}, model ${model}`);
 
 // Expression: a list of AND terms joined by OR. Each literal is a meaning { kind:'m', text, not } or a
 // regex { kind:'r', re, names, count, not }, matched locally. A leading ! negates just that literal.
@@ -332,22 +359,34 @@ const SEP = opt.z ? '\0' : '\n';
 const MAX_UNIT_CHARS = opt.z ? 8000 : 2000;
 
 // With -r, expand directories. Line contents go to an external API, so recursion skips .git / node_modules
-// and files that usually hold secrets (.env*, keys, .ssh/.aws/.gnupg). A file named explicitly is still sent.
-const SKIP_DIRS = ['.git', 'node_modules', '.ssh', '.aws', '.gnupg'];
-const SKIP_FILE = /^\.env(\..*)?$|\.(pem|key|p12|pfx)$|^id_(rsa|dsa|ecdsa|ed25519)(\.pub)?$/;
+// and files that usually hold secrets (.env*, credential files, keys, .ssh/.aws/.gnupg/.kube/.docker). A file named
+// explicitly is still sent. Case-insensitive: macOS file systems are, so .ENV is .env there.
+const SKIP_DIRS = ['.git', 'node_modules', '.ssh', '.aws', '.gnupg', '.kube', '.docker'];
+const SKIP_FILE = /^\.env|^\.(netrc|npmrc|pypirc|pgpass|git-credentials)$|\.(pem|key|p12|pfx|jks|keystore)$|^id_(rsa|dsa|ecdsa|ed25519)/i;
 let hadError = false;
 const warn = (file, e) => { console.error(`semgrep: ${file}: ${e.message}`); hadError = true; };
-function expand(path) {
+// -r also leaves out what git ignores (.gitignore, .git/info/exclude, the global excludes file), in one git call per
+// directory named on the command line. Paths come back relative to it; an ignored directory comes back whole, as
+// "dir/", so it is never walked. A directory that is itself ignored was named on purpose and is searched in full.
+function gitIgnored(dir) {
+  const git = args => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', maxBuffer: Infinity, stdio: ['ignore', 'pipe', 'ignore'] });
+  try { git(['check-ignore', '-q', '.']); return new Set(); } catch {} // exit 0: dir itself is ignored
+  try { return new Set(git(['ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--directory']).split('\0').map(p => p.replace(/\/$/, ''))); }
+  catch { return new Set(); } // not in a repository, or no git: nothing is ignored
+}
+function expand(path, rel = '', ignored) {
   let st;
   try { st = statSync(path); } catch (e) { warn(path, e); return []; }
   if (!st.isDirectory()) return [path];
   if (!opt.r) { warn(path, { message: 'Is a directory (use -r)' }); return []; }
+  ignored ??= gitIgnored(path);
   let ents;
   try { ents = readdirSync(path, { withFileTypes: true }); } catch (e) { warn(path, e); return []; }
   return ents
     .filter(d => !d.isSymbolicLink() && !(d.isDirectory() ? SKIP_DIRS.includes(d.name) : SKIP_FILE.test(d.name)))
+    .filter(d => !ignored.has(rel + d.name))
     .sort((a, b) => a.name.localeCompare(b.name))
-    .flatMap(d => expand(path.endsWith('/') ? path + d.name : `${path}/${d.name}`)); // not path.join(): it would drop the leading ./
+    .flatMap(d => expand(path.endsWith('/') ? path + d.name : `${path}/${d.name}`, `${rel}${d.name}/`, ignored)); // not path.join(): it would drop the leading ./
 }
 // As git semgrep, FILE arguments are pathspecs and the files are the tracked ones, like git grep. The skip list
 // still applies, since these files were not named one by one. Deleted files, submodules and symlinks are left out.
@@ -364,8 +403,23 @@ const targets = asGit ? gitFiles()
   : (files.length ? files : [opt.r ? '.' : '-']).flatMap(f => (f === '-' ? [f] : expand(f)));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let usedTokens = 0, usedCost = 0, requestCount = 0;
+let traced = 0, tracedQuestions = 0, tracedChars = 0;
+const cut = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+// --dry-run / --verbose: one line per request, then its questions grouped by wording (line ids read Lnnn).
+// --dry-run answers every question no (0), which also decides what --dedup folds and where --sentence joins.
+function show(state, questions, label) {
+  const count = new Map();
+  for (const q of Object.values(questions)) { const k = q.instructions.replace(/\bL\d{3}\b/g, 'Lnnn'); count.set(k, (count.get(k) ?? 0) + 1); }
+  const n = Object.keys(questions).length, chars = Object.values(state).join('').length;
+  trace(`request ${++traced} ${label}, ${n} question${n === 1 ? '' : 's'}, ${chars} chars`);
+  [...count].slice(0, 3).forEach(([q, k]) => trace(`  ${String(k).padStart(3)}× ${cut(q, 100)}`));
+  if (count.size > 3) trace(`       (+${count.size - 3} more)`);
+  tracedQuestions += n; tracedChars += chars;
+}
 // One request with retries: 429 / 529 / 5xx, connection errors and timeouts back off exponentially.
-async function post(state, questions) {
+async function post(state, questions, label) {
+  if (trace) show(state, questions, label);
+  if (dry) return Object.fromEntries(Object.keys(questions).map(k => [k, { noul: 0 }]));
   for (let attempt = 0; ; attempt++) {
     let res;
     try {
@@ -450,7 +504,7 @@ const CLOSING = /^[。、，．」』）】〕！？]/;
 const needsJudging = (prev, next) => prev && next && !hardBreak(prev, next) && !/[。！？!?、，]$/.test(prev) && !CLOSING.test(next)
   && (CJK.test(prev.at(-1)) || CJK.test(next[0]));
 const BREAK_ABOUT = 'A line break either ends a sentence or a separate entry (a new message, item or sentence starts on the next line), or it is only a wrap in the middle of a sentence (the sentence continues on the next line).';
-async function judgeBreaks(lines) { // -> Set of i where the break before lines[i] ends a sentence or entry
+async function judgeBreaks(lines, file) { // -> Set of i where the break before lines[i] ends a sentence or entry
   const ask = [];
   for (let i = 1; i < lines.length; i++) if (needsJudging(lines[i - 1].trim(), lines[i].trim())) ask.push(i);
   const split = new Set();
@@ -461,7 +515,7 @@ async function judgeBreaks(lines) { // -> Set of i where the break before lines[
     if (!qs.length) continue;
     const state = Object.fromEntries(lines.slice(s, s + 30).map((l, k) => [id(k), l.slice(0, MAX_UNIT_CHARS)]));
     const questions = Object.fromEntries(qs.map(i => [`b${i}`, { type: 'noul', instructions: `${BREAK_ABOUT} Does the line break between ${id(i - 1 - s)} and ${id(i - s)} end a sentence or entry (rather than being a wrap inside a sentence)?` }]));
-    jobs.push(pooled(() => post(state, questions)).then(a => qs.forEach(i => { if (a[`b${i}`].noul >= 0.7) split.add(i); })));
+    jobs.push(pooled(() => post(state, questions, `[breaks] ${file}:${s + 1}-${Math.min(s + 30, lines.length)}`)).then(a => qs.forEach(i => { if (a[`b${i}`].noul >= 0.7) split.add(i); })));
   }
   await Promise.all(jobs);
   return split;
@@ -491,7 +545,7 @@ const runsOf = src => (opt.z
 const runsByFile = new Map([...read].map(([file, src]) => [file, opt.sentence ? runsOf(src) : []]));
 const splits = new Map(); // run -> Set of breaks Jev judged to end an entry
 if (opt.sentence === 'jev')
-  await Promise.all([...runsByFile.values()].flat().map(run => judgeBreaks(run.lines).then(sp => splits.set(run, sp))));
+  await Promise.all([...runsByFile].flatMap(([file, runs]) => runs.map(run => judgeBreaks(run.lines, file).then(sp => splits.set(run, sp)))));
 for (const [file, src] of read) {
   sources.set(file, src);
   let units = src;
@@ -548,6 +602,11 @@ for (const l of allLines) {
   asksByUnit.set(l, asks);
 }
 const lines = allLines.filter(l => asksByUnit.get(l).size);
+const unitName = opt.sentence ? 'sentences' : opt.z ? 'records' : 'lines';
+if (trace) for (const file of read.keys()) {
+  const units = allLines.filter(l => l.file === file);
+  trace(`file ${file}: ${units.length} ${unitName}, ${units.filter(l => asksByUnit.get(l).size).length} to send`);
+}
 // -q stops at the first match, like grep -q. Known before any request, --dedup's included: unsent units (blank, or
 // no term's regexes hold; their meanings score 0) and regex-only terms.
 // ponytail: process.exit may drop a warning still buffered for a stderr pipe; the exit status is what -q promises
@@ -591,7 +650,7 @@ if (opt.dedup && lines.length) {
   const keep = await Promise.all(meanings.map(text => pooled(() => post({ meaning: text }, Object.fromEntries(MASK.map(([kind, , , what]) => [kind, {
     type: 'noul',
     instructions: `Log lines are grouped when they differ only in ${what}. Could the value of ${what} in a log line change whether that line matches the meaning "${text}"?`,
-  }])))).then(a => MASK.filter(([kind]) => a[kind].noul >= 0.7).map(([kind]) => kind))));
+  }])), `[dedup] "${cut(text, 40)}"`)).then(a => MASK.filter(([kind]) => a[kind].noul >= 0.7).map(([kind]) => kind))));
   const kept = MASK.filter(([kind]) => keep.flat().includes(kind));
   const fold = MASK.filter(([kind]) => !keep.flat().includes(kind));
   const rep = new Map();
@@ -623,7 +682,8 @@ async function evaluate(chunk) {
   chunk.forEach((_, i) => keys[i].forEach((text, k) => {
     questions[`${id(i)}_${k}`] = { type: 'noul', instructions: `Does line ${id(i)} match the meaning: "${text}"?` };
   }));
-  const answers = await post(state, questions);
+  const [a, b] = [chunk[0], chunk.at(-1)];
+  const answers = await post(state, questions, `[judge] ${a.file}:${a.no}-${a.file === b.file ? '' : `${b.file}:`}${b.no}, ${chunk.length} ${unitName}`);
   chunk.forEach((l, i) => keys[i].forEach((text, k) => asksByUnit.get(l).set(text, answers[`${id(i)}_${k}`].noul)));
 }
 const isHit = l => expr.some(term => termHolds(term, l));
@@ -694,7 +754,7 @@ const startNo = (file, k) => (opt.o && opt.sentence ? spansOf.get(file)[k - 1][0
 const after = Number(opt.A ?? opt.C ?? 0), before = Number(opt.B ?? opt.C ?? 0);
 const multi = opt.r || asGit || targets.length > 1; // grep -r and git grep prefix file names even for a single file
 let lastPrinted = null; // [file, line number]; used to print -- between context groups
-for (const file of opt.quiet ? [] : targets) {
+for (const file of opt.quiet || dry ? [] : targets) {
   if (!sources.has(file)) continue;
   const h = hits.get(file);
   if (opt.c) { console.log((multi ? paint(35, file) + paint(36, ':') : '') + (h?.size ?? 0)); continue; }
@@ -718,10 +778,13 @@ for (const file of opt.quiet ? [] : targets) {
   }
 }
 // Summary only when interactive; grep prints nothing to stderr when scripted.
-if (process.stderr.isTTY && !opt.quiet) {
+if (dry) {
+  const assumed = [opt.dedup && '--dedup', opt.sentence === 'jev' && '--sentence'].filter(Boolean);
+  trace(`dry run: ${traced} request${traced === 1 ? '' : 's'}, ${sent.length} of ${allLines.length} ${unitName} to send, ${tracedQuestions} questions, ${tracedChars} chars; nothing sent${assumed.length ? ` (${assumed.join(' and ')} questions assumed no)` : ''}`);
+} else if ((process.stderr.isTTY || opt.verbose) && !opt.quiet) {
   // The API's own usage.cost when reported (OpenRouter does); else an estimate at Jev's list price, only for TypeSafe itself.
   const cost = usedCost > 0 ? `, $${usedCost.toFixed(6)}` : customUrl ? '' : `, ~$${(usedTokens * 0.042 / 1e6).toFixed(6)}`;
-  console.error(`${matched}/${allLines.length} ${opt.sentence ? 'sentences' : opt.z ? 'records' : 'lines'} (${sent.length} sent${opt.dedup ? ` of ${lines.length}` : ''}), ${requestCount} requests, ${usedTokens} input tokens${cost}`);
+  console.error(`${matched}/${allLines.length} ${unitName} (${sent.length} sent${opt.dedup ? ` of ${lines.length}` : ''}), ${requestCount} requests, ${usedTokens} input tokens${cost}`);
 }
 // process.exit() can drop buffered stdout when piped, so set exitCode instead.
-process.exitCode = matched && opt.quiet ? 0 : hadError ? 2 : matched ? 0 : 1; // -q: a match wins over an error
+process.exitCode = dry ? (hadError ? 2 : 0) : matched && opt.quiet ? 0 : hadError ? 2 : matched ? 0 : 1; // -q: a match wins over an error

@@ -321,10 +321,14 @@ tests/tickets/a.txt
 tests/tickets/sub/b.txt
 ```
 
-`-r` はディレクトリを名前順にたどり、`.git`、`node_modules`、`.ssh`、`.aws`、`.gnupg`、バイナリ（先頭 8 KB に NUL がある）、
-秘密情報になりがちなファイル（`.env*`、`*.pem`、`*.key`、`*.p12`、`*.pfx`、`id_rsa` など）を飛ばします。
+`-r` はディレクトリを名前順にたどり、`.git`、`node_modules`、`.ssh`、`.aws`、`.gnupg`、`.kube`、`.docker`、
+バイナリ（先頭 8 KB に NUL がある）、秘密情報になりがちなファイル（`.env*`、`.netrc`、`.npmrc`、`.pypirc`、`.pgpass`、
+`.git-credentials`、`*.pem`、`*.key`、`*.p12`、`*.pfx`、`*.jks`、`*.keystore`、`id_rsa*` など。大文字小文字は区別しない）を飛ばします。
 **検索対象の行はすべて TypeSafe の API に送られる**ので、スキャンするつもりのディレクトリだけを指定してください。
-コマンドラインで明示したファイルは、除外リストに該当しても検索します。
+git リポジトリの中では、git が無視するもの（`.gitignore`、`.git/info/exclude`、グローバルの除外ファイル）も `-r` で
+飛ばすので、ビルド成果物や手元だけのファイルは送られません。追跡中のファイルは、無視パターンに当たっても検索します。
+コマンドラインで明示したファイルは、除外リストに該当しても、git が無視していても検索します。git が無視している
+ディレクトリも、名前を指定すれば検索します（`semgrep -r -e ... dist`）。
 `-l` は一致したファイルを見つかった順に 1 回ずつ表示し、`-r` の有無にかかわらず使えます。`-c` は行の代わりにファイルごとの一致行数を出します。
 
 ### git のサブコマンドとして (`git semgrep`)
@@ -503,8 +507,8 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
   -t THRESH    肯定条件の閾値。確率 >= THRESH で一致 (--level より優先)
   -T THRESH    否定条件の閾値。確率 < THRESH で「〜でない」と判定 (--level より優先)
                -t 0.6 -T 0.3 なら 0.3〜0.6 の曖昧な行はどちらにも当たらない
-  -r           ディレクトリを再帰的に探す (FILE 省略時はカレント)。.git と node_modules、
-               バイナリファイルは飛ばす
+  -r           ディレクトリを再帰的に探す (FILE 省略時はカレント)。.git、node_modules、
+               バイナリ、秘密情報らしいファイル、git が無視するものは飛ばす
   -l           一致した行ではなくファイル名だけを表示
   -A NUM       一致行の後ろ NUM 行も表示 (grep と同じ。文脈行の区切りは - )
   -B NUM       一致行の前 NUM 行も表示
@@ -520,6 +524,8 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
   --sentence[=HOW] 行ではなく文ごとに判定する。HOW は jev (既定) か rules (前述の「1 文ずつ判定する」を参照)
   -o           --sentence と併用し、当たった文だけを出す
   -p           各意味の確率を行末に表示 (閾値調整用)
+  --dry-run    何も送らず、送信先・検索するファイル・各リクエストとその質問を表示
+  --verbose    同じ表示を検索しながら stderr に出す
   --dedup      テンプレートごとに 1 行だけ判定し、その答えを残りにも使う (前述の「テンプレートごとに 1 行だけ判定する」を参照)
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
@@ -527,6 +533,7 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
   --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
                API の設定。SEMGREP_MODEL / SEMGREP_URL / SEMGREP_API_KEY より優先
   -h, --help   このヘルプ (LANG / LC_ALL / LC_MESSAGES が ja 以外なら英語)
+  -V, --version  バージョンを表示して終了
 ```
 
 FILE を省略すると stdin を読みます。複数ファイルなら `file:` を前置きします。

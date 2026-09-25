@@ -15,3 +15,17 @@ Run `npm run test:offline` after every change to `semgrep.mjs`; run `npm test` b
 - `offline.sh` unsets the key variables and points `HOME` at a temp dir, so no real key reaches the fake.
 - `check.sh` asserts only clear positives and negatives: Jev's probabilities drift by about ±0.05 between runs.
   A failure there can be the model, not the code; if `test:offline` passes, rerun and look at `-p` first.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for uehaj/jev-semgrep, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default labels: needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.

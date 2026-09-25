@@ -338,10 +338,14 @@ tests/tickets/a.txt
 tests/tickets/sub/b.txt
 ```
 
-`-r` walks directories in sorted order and skips `.git`, `node_modules`, `.ssh`, `.aws`, `.gnupg`, binary files
-(a NUL byte in the first 8 KB) and files that usually hold secrets (`.env*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`,
-`id_rsa` and friends). **Every line that is searched is sent to the TypeSafe API**, so point `-r` at a directory
-you mean to scan. A file named explicitly on the command line is always searched, even if it matches the skip list. `-l` prints each
+`-r` walks directories in sorted order and skips `.git`, `node_modules`, `.ssh`, `.aws`, `.gnupg`, `.kube`,
+`.docker`, binary files (a NUL byte in the first 8 KB) and files that usually hold secrets (`.env*`, `.netrc`,
+`.npmrc`, `.pypirc`, `.pgpass`, `.git-credentials`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`,
+`id_rsa*` and friends; names compared without case). **Every line that is searched is sent to the TypeSafe API**, so point `-r` at a directory
+you mean to scan. Inside a git repository, `-r` also skips what git ignores (`.gitignore`, `.git/info/exclude`, the
+global excludes file), so build output and local files stay home; a tracked file is searched even if it matches.
+A file named explicitly on the command line is always searched, even if it matches the skip list or is ignored;
+so is a directory that git ignores, when you name it (`semgrep -r -e ... dist`). `-l` prints each
 matching file once, in the order matches are found, and works with or without `-r`. `-c` prints the number of
 matching lines per file instead.
 
@@ -526,7 +530,7 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
   -T THRESH    negative threshold: "not X" when probability < THRESH (overrides --level)
                with -t 0.6 -T 0.3 a line at 0.3..0.6 matches neither X nor not-X
   -r           recurse into directories (current directory when FILE is omitted);
-               skips .git, node_modules and binary files
+               skips .git, node_modules, binary files, likely secrets and what git ignores
   -l           print only the names of files with a match, not the lines
   -A NUM       print NUM lines of trailing context after each match (context lines use - as separator)
   -B NUM       print NUM lines of leading context before each match
@@ -542,6 +546,8 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
   --sentence[=HOW] judge each sentence instead of each line; HOW is jev (default) or rules (see "One sentence at a time" above)
   -o           with --sentence, print only the matching sentences
   -p           print each meaning's probability at the end of the line
+  --dry-run    send nothing; print the endpoint, each file searched and each request with its questions
+  --verbose    print the same to stderr while searching
   --dedup      judge one line per template and reuse its answer for the rest (see "One line per template" above)
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are
@@ -550,6 +556,7 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
   --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
                the API settings, overriding SEMGREP_MODEL, SEMGREP_URL, SEMGREP_API_KEY
   -h, --help   this help (Japanese when LANG / LC_ALL / LC_MESSAGES starts with ja)
+  -V, --version  print the version and exit
 ```
 
 Without FILE, stdin is read. With several files, output is prefixed with `file:`.
