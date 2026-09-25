@@ -339,9 +339,9 @@ tests/tickets/sub/b.txt
 ```
 
 `-r` walks directories in sorted order and skips `.git`, `node_modules`, `.ssh`, `.aws`, `.gnupg`, `.kube`,
-`.docker`, binary files (a NUL byte in the first 8 KB) and files that usually hold secrets (`.env*`, `.netrc`,
-`.npmrc`, `.pypirc`, `.pgpass`, `.git-credentials`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`,
-`id_rsa*` and friends; names compared without case). **Every line that is searched is sent to the TypeSafe API**, so point `-r` at a directory
+`.docker`, binary files (a NUL byte in the first 8 KB, or a PDF; UTF-16 with a BOM is read as text) and files
+that usually hold secrets (`.env*`, `.netrc`, `.npmrc`, `.pypirc`, `.pgpass`, `.git-credentials`, `*.pem`,
+`*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `id_rsa*` and friends; names compared without case). **Every line that is searched is sent to the TypeSafe API**, so point `-r` at a directory
 you mean to scan. Inside a git repository, `-r` also skips what git ignores (`.gitignore`, `.git/info/exclude`, the
 global excludes file), so build output and local files stay home; a tracked file is searched even if it matches.
 A file named explicitly on the command line is always searched, even if it matches the skip list or is ignored;
