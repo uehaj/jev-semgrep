@@ -13,7 +13,11 @@ Jev は文章を生成せず、typed な質問に確率だけを返すモデル�
 ./semgrep -n -e "顧客が怒っている、または不満を持っている" tickets.txt
 ```
 
-- 依存ゼロ。1 ファイル、Node.js 20.12 以降と `fetch` だけで動きます。
+[![semgrep のデモ: 日本語の意味で 6 言語の返金要求を探す / 「返金について」と「返金を求めている」の違い / -Q で答えを探す](docs/demo.svg)](https://uehaj.github.io/jev-semgrep/)
+
+<sub>▶ デモをクリックするか <a href="https://uehaj.github.io/jev-semgrep/">uehaj.github.io/jev-semgrep</a> を開くと、ランディングページで全編のデモが見られます。</sub>
+
+- 依存ゼロ。1 ファイル、Node.js 20.16 以降と `fetch` だけで動きます。
 - 速い。30 行を 1 リクエストにまとめ、8 本並列で投げます。210 行のファイルが 1 秒弱で終わります。
 - 意味は AND / OR / NOT で自由に組み合わせられます。
 - **言語を問わない。** 意味も本文もどの言語でも構いません。日本語の意味でフランス語・ロシア語・中国語・韓国語の行が同じように見つかります。翻訳は挟まず、速度も費用も同じです。
@@ -149,7 +153,7 @@ $ ./semgrep -e '/(?<date>\d{4}-\d\d-\d\d) (?<time>\d\d:\d\d)/' \
 （後述の [Claude Code から使う](#claude-code-から使う)）か。スキルは `npx @uehaj/semgrep` に自動で切り替わるので、
 Claude Code からしか使わないならここでのインストールは不要で、API キーの設定だけで済みます。
 
-Node.js 20.12 以降が必要です。ほかの依存はありません。
+Node.js 20.16 以降が必要です。ほかの依存はありません。
 
 ```sh
 npm install -g @uehaj/semgrep
@@ -167,10 +171,11 @@ npx @uehaj/semgrep -n -e "顧客が怒っている、または不満を持って
 ```sh
 export SEMGREP_API_KEY=your-key                       # 環境変数
 echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env    # ユーザー単位 (先に mkdir -p)
-echo 'SEMGREP_API_KEY=your-key' > .env                # プロジェクト単位。カレントディレクトリから読む
 ```
 
-環境変数が優先で、足りない分は `./.env`、`~/.config/semgrep/.env` のうち最初に見つかった方から補います。
+環境変数が優先で、足りない分は `~/.config/semgrep/.env` から補います。カレントディレクトリの `.env` は読みません。
+clone したばかりのリポジトリのものかもしれず、`SEMGREP_URL` を通じてキーを別のサーバへ送らせ得るからです。
+プロジェクト単位の設定は、自分で読み込ませてください: `node --env-file=.env "$(command -v semgrep)" ...`。
 `SEMGREP_API_KEY` が無ければ `TYPESAFE_API_KEY` も使えます。
 
 ### 既定のオプション
@@ -192,7 +197,7 @@ semgrep を呼ぶスクリプトもこの既定値を拾います（grep が `GR
 API の設定は `SEMGREP_API_KEY`（または `TYPESAFE_API_KEY`）、`SEMGREP_URL`、`SEMGREP_MODEL` の 3 つだけです。
 TypeSafe の `POST /v1/systemone` と同じ形で話すエンドポイントなら使えます。キーは `SEMGREP_URL` の先へそのまま
 送られるので、2 つは組にして設定してください。コマンドラインの `--sys1-model=ID`、`--sys1-url=URL`、`--sys1-api-key=KEY` は
-この 3 つより優先します。コマンドラインのキーは `ps` やシェル履歴に残るので、キーはなるべく `.env` に書いてください。
+この 3 つより優先します。コマンドラインのキーは `ps` やシェル履歴に残るので、キーはなるべく `~/.config/semgrep/.env` に書いてください。
 
 ```sh
 # OpenRouter
@@ -320,10 +325,15 @@ tests/tickets/a.txt
 tests/tickets/sub/b.txt
 ```
 
-`-r` はディレクトリを名前順にたどり、`.git`、`node_modules`、`.ssh`、`.aws`、`.gnupg`、バイナリ（先頭 8 KB に NUL がある）、
-秘密情報になりがちなファイル（`.env*`、`*.pem`、`*.key`、`*.p12`、`*.pfx`、`id_rsa` など）を飛ばします。
+`-r` はディレクトリを名前順にたどり、`.git`、`node_modules`、`.ssh`、`.aws`、`.gnupg`、`.kube`、`.docker`、
+バイナリ（先頭 8 KB に NUL がある、または PDF。BOM 付きの UTF-16 はテキストとして読む）、
+秘密情報になりがちなファイル（`.env*`、`.netrc`、`.npmrc`、`.pypirc`、`.pgpass`、`.git-credentials`、`*.pem`、
+`*.key`、`*.p12`、`*.pfx`、`*.jks`、`*.keystore`、`id_rsa*` など。大文字小文字は区別しない）を飛ばします。
 **検索対象の行はすべて TypeSafe の API に送られる**ので、スキャンするつもりのディレクトリだけを指定してください。
-コマンドラインで明示したファイルは、除外リストに該当しても検索します。
+git リポジトリの中では、git が無視するもの（`.gitignore`、`.git/info/exclude`、グローバルの除外ファイル）も `-r` で
+飛ばすので、ビルド成果物や手元だけのファイルは送られません。追跡中のファイルは、無視パターンに当たっても検索します。
+コマンドラインで明示したファイルは、除外リストに該当しても、git が無視していても検索します。git が無視している
+ディレクトリも、名前を指定すれば検索します（`semgrep -r -e ... dist`）。
 `-l` は一致したファイルを見つかった順に 1 回ずつ表示し、`-r` の有無にかかわらず使えます。`-c` は行の代わりにファイルごとの一致行数を出します。
 
 ### git のサブコマンドとして (`git semgrep`)
@@ -339,6 +349,9 @@ tickets/sub/b.txt
 ```
 
 FILE を省くとカレントディレクトリ以下の追跡ファイルを全部探します。`-r` の除外リスト（`.env*`、鍵など）は追跡されていても適用します。
+`--include`、`--exclude`、`--changed-within` は追跡ファイルを絞り込み、pathspec で指定したファイルも対象になります。
+`--changed-within` は git の履歴ではなく作業ツリーのファイルの更新時刻を見ます。clone や checkout の直後は、書き出されたファイルがすべて
+「いま変わった」扱いになります。
 ヘルプは `git semgrep -h` です（`--help` は git が横取りして man ページを探しに行きます）。
 
 ### 「〜でない」行を全部
@@ -384,6 +397,11 @@ $ ./semgrep -n --sentence -e "the author admits they made a mistake" tests/prose
 
 文は 1 行目から始まり、3 行目の `mistake.` で終わります。色が付くのはその部分だけで、
 `Next time I will add a test` は別の文として判定され、一致しません。
+
+端末で意味を 2 つ渡し、`-C 3` で前後も出すと、文がどこで始まりどこで終わるかが色で分かります。3 行目と 9 行目は、当たった文の
+終わりまでだけ色が付き、4〜7 行目は文脈行（`-`）です:
+
+![--sentence -C 3 --color: 当たった文が一致の色になる。3 行目は mistake. まで、9 行目は 返金してほしいです。 まで。4〜7 行目は文脈行](docs/sentence.svg)
 
 `-o` を付けると、当たった文だけを 1 行ずつ出します。`grep -o` が一致した部分だけを出すのと同じです。
 `-n` は文が始まる行の番号になります。日本語は空白を入れずにつなぎます。単語の間に空白を置かない
@@ -480,7 +498,7 @@ npx skills add uehaj/uehaj-marketplace --skill semgrep -a claude-code -g
 
 スキルは意味を英語で書き、AND / OR / NOT を `-e` / `-a` / `-v` に振り分け、`-n` を付け、大きなディレクトリは
 課金に見合うファイルに絞り、最初の結果が怪しければ `--level loose` や `strict` で引き直します。
-API キーとエンドポイントの読み方はコマンドラインと同じです（`SEMGREP_API_KEY`、`./.env`、`~/.config/semgrep/.env`）。
+API キーとエンドポイントの読み方はコマンドラインと同じです（`SEMGREP_API_KEY`、`~/.config/semgrep/.env`）。
 
 ## 使い方
 
@@ -502,8 +520,12 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
   -t THRESH    肯定条件の閾値。確率 >= THRESH で一致 (--level より優先)
   -T THRESH    否定条件の閾値。確率 < THRESH で「〜でない」と判定 (--level より優先)
                -t 0.6 -T 0.3 なら 0.3〜0.6 の曖昧な行はどちらにも当たらない
-  -r           ディレクトリを再帰的に探す (FILE 省略時はカレント)。.git と node_modules、
-               バイナリファイルは飛ばす
+  -r           ディレクトリを再帰的に探す (FILE 省略時はカレント)。.git、node_modules、
+               バイナリ、秘密情報らしいファイル、git が無視するものは飛ばす
+  --include=GLOB, --exclude=GLOB  -r と git semgrep で、名前が GLOB に合うファイルだけ (または合わないものだけ) を探す
+               (-r ではコマンドラインで指定したファイルは必ず探す。git semgrep の pathspec は絞り込む)
+  --changed-within=WHEN  -r と git semgrep で、30m / 2h / 7d / 2w 以内、日付か日時以降、today / this-week /
+               this-month に更新したファイルだけを探す
   -l           一致した行ではなくファイル名だけを表示
   -A NUM       一致行の後ろ NUM 行も表示 (grep と同じ。文脈行の区切りは - )
   -B NUM       一致行の前 NUM 行も表示
@@ -515,15 +537,21 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                判定も変わる
   -j N         同時リクエスト数 (既定 8)
   -n           行番号を付ける
+  -z, --null-data  行ではなく NUL 終端のレコードごとに判定し、NUL 終端で出力する (前述の「複数行にまたがるレコード」を参照)
   --sentence[=HOW] 行ではなく文ごとに判定する。HOW は jev (既定) か rules (前述の「1 文ずつ判定する」を参照)
   -o           --sentence と併用し、当たった文だけを出す
   -p           各意味の確率を行末に表示 (閾値調整用)
+  --dry-run    何も送らず、送信先・検索するファイル・各リクエストとその質問を表示
+  --verbose    同じ表示を検索しながら stderr に出す
+  -i, --interactive  --dry-run と同じ内容を見せ、端末で y と答えたときだけ検索する
+  --dedup      テンプレートごとに 1 行だけ判定し、その答えを残りにも使う (前述の「テンプレートごとに 1 行だけ判定する」を参照)
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
                否定側の閾値未満を赤、あいだを黄で表示。NO_COLOR にも従う
   --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
                API の設定。SEMGREP_MODEL / SEMGREP_URL / SEMGREP_API_KEY より優先
   -h, --help   このヘルプ (LANG / LC_ALL / LC_MESSAGES が ja 以外なら英語)
+  -V, --version  バージョンを表示して終了
 ```
 
 FILE を省略すると stdin を読みます。複数ファイルなら `file:` を前置きします。

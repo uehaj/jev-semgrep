@@ -14,7 +14,11 @@ and applies a threshold.
 ./semgrep -n -e "customer is angry or frustrated" tickets.txt
 ```
 
-- Zero dependencies. One file, Node.js 20.12+ and `fetch`.
+[![semgrep demo: a Japanese meaning finds refund requests in six languages; "asking for a refund" vs "about a refund"; -Q finds the answer](docs/demo.svg)](https://uehaj.github.io/jev-semgrep/)
+
+<sub>▶ Click the demo, or open <a href="https://uehaj.github.io/jev-semgrep/">uehaj.github.io/jev-semgrep</a>, for the full demo on the landing page.</sub>
+
+- Zero dependencies. One file, Node.js 20.16+ and `fetch`.
 - Fast. 30 lines go into one request, requests run 8 at a time. A 210-line file finishes in under a second.
 - Meanings combine with AND / OR / NOT.
 - **Language-agnostic.** The meaning and the text can each be in any language. A Japanese meaning finds French, Russian, Chinese and Korean lines alike. No translation step, same speed, same cost.
@@ -161,7 +165,7 @@ Two ways to use it: as a command-line tool (this section), or as a Claude Code s
 (see [Use it from Claude Code](#use-it-from-claude-code) below). The skill falls back to `npx @uehaj/semgrep`,
 so if you only use it through Claude Code you can skip the install here entirely and just set the API key.
 
-Requires Node.js 20.12 or later. No other dependencies.
+Requires Node.js 20.16 or later. No other dependencies.
 
 ```sh
 npm install -g @uehaj/semgrep
@@ -179,10 +183,11 @@ Then give it an API key from the [TypeSafe console](https://console.typesafe.ai/
 ```sh
 export SEMGREP_API_KEY=your-key                       # environment variable
 echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env    # per user (mkdir -p first)
-echo 'SEMGREP_API_KEY=your-key' > .env                # per project, read from the current directory
 ```
 
-Variables already in the environment win; otherwise the first of `./.env` and `~/.config/semgrep/.env` fills them in.
+Variables already in the environment win; otherwise `~/.config/semgrep/.env` fills them in. A `.env` in the current
+directory is never read: it may belong to a repository you just cloned, and could send your key elsewhere through
+`SEMGREP_URL`. For per-project settings, load a file yourself: `node --env-file=.env "$(command -v semgrep)" ...`.
 `TYPESAFE_API_KEY` is accepted too when `SEMGREP_API_KEY` is not set.
 
 ### Default options
@@ -204,7 +209,7 @@ A script calling semgrep would pick these up too (grep dropped `GREP_OPTIONS` fo
 The API is configured by exactly three settings: `SEMGREP_API_KEY` (or `TYPESAFE_API_KEY`), `SEMGREP_URL` and `SEMGREP_MODEL`.
 Any endpoint that speaks TypeSafe's `POST /v1/systemone` works. The key is sent to `SEMGREP_URL` as is, so set the
 two together. On the command line, `--sys1-model=ID`, `--sys1-url=URL` and `--sys1-api-key=KEY` override
-the three. A key given this way shows up in `ps` and shell history, so prefer `.env` for it.
+the three. A key given this way shows up in `ps` and shell history, so prefer `~/.config/semgrep/.env` for it.
 
 ```sh
 # OpenRouter
@@ -337,10 +342,14 @@ tests/tickets/a.txt
 tests/tickets/sub/b.txt
 ```
 
-`-r` walks directories in sorted order and skips `.git`, `node_modules`, `.ssh`, `.aws`, `.gnupg`, binary files
-(a NUL byte in the first 8 KB) and files that usually hold secrets (`.env*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`,
-`id_rsa` and friends). **Every line that is searched is sent to the TypeSafe API**, so point `-r` at a directory
-you mean to scan. A file named explicitly on the command line is always searched, even if it matches the skip list. `-l` prints each
+`-r` walks directories in sorted order and skips `.git`, `node_modules`, `.ssh`, `.aws`, `.gnupg`, `.kube`,
+`.docker`, binary files (a NUL byte in the first 8 KB, or a PDF; UTF-16 with a BOM is read as text) and files
+that usually hold secrets (`.env*`, `.netrc`, `.npmrc`, `.pypirc`, `.pgpass`, `.git-credentials`, `*.pem`,
+`*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `id_rsa*` and friends; names compared without case). **Every line that is searched is sent to the TypeSafe API**, so point `-r` at a directory
+you mean to scan. Inside a git repository, `-r` also skips what git ignores (`.gitignore`, `.git/info/exclude`, the
+global excludes file), so build output and local files stay home; a tracked file is searched even if it matches.
+A file named explicitly on the command line is always searched, even if it matches the skip list or is ignored;
+so is a directory that git ignores, when you name it (`semgrep -r -e ... dist`). `-l` prints each
 matching file once, in the order matches are found, and works with or without `-r`. `-c` prints the number of
 matching lines per file instead.
 
@@ -358,7 +367,9 @@ tickets/sub/b.txt
 ```
 
 Without FILE it searches every tracked file under the current directory. The `-r` skip list (`.env*`, keys, ...)
-applies even to tracked files. For help use `git semgrep -h`: git takes `--help` itself and looks for a man page.
+applies even to tracked files. `--include`, `--exclude` and `--changed-within` filter the tracked files, those named
+by a pathspec included. `--changed-within` reads the working tree's modification times, not git history: right after
+a clone or a checkout, every file it wrote counts as just changed. For help use `git semgrep -h`: git takes `--help` itself and looks for a man page.
 
 ### Everything that is *not* something
 
@@ -403,6 +414,11 @@ $ ./semgrep -n --sentence -e "the author admits they made a mistake" tests/prose
 
 The sentence starts on line 1 and ends at `mistake.` on line 3; only that part is colored, not
 `Next time I will add a test`, which is judged separately and does not match.
+
+On a terminal, with both meanings and `-C 3` for context, the colors show where each sentence starts and ends
+inside a line: lines 3 and 9 are colored only up to the end of the matching sentence, and lines 4-7 are context (`-`):
+
+![--sentence -C 3 --color: the matching sentences in the match color, up to mistake. on line 3 and 返金してほしいです。 on line 9; lines 4 to 7 as context](docs/sentence.svg)
 
 `-o` prints only the matching sentences, one per line, as `grep -o` prints only the matching part.
 `-n` then gives the line where the sentence starts. Japanese is joined without a space, as are Chinese,
@@ -502,7 +518,7 @@ npx skills add uehaj/uehaj-marketplace --skill semgrep -a claude-code -g
 
 The skill writes the meaning in English, picks `-e` / `-a` / `-v` for AND / OR / NOT, adds `-n`, narrows large
 directories to files worth paying for, and re-runs with `--level loose` or `strict` when the first result looks off.
-The API key and endpoint are read the same way as on the command line (`SEMGREP_API_KEY`, `./.env`, `~/.config/semgrep/.env`).
+The API key and endpoint are read the same way as on the command line (`SEMGREP_API_KEY`, `~/.config/semgrep/.env`).
 
 ## Usage
 
@@ -525,7 +541,11 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
   -T THRESH    negative threshold: "not X" when probability < THRESH (overrides --level)
                with -t 0.6 -T 0.3 a line at 0.3..0.6 matches neither X nor not-X
   -r           recurse into directories (current directory when FILE is omitted);
-               skips .git, node_modules and binary files
+               skips .git, node_modules, binary files, likely secrets and what git ignores
+  --include=GLOB, --exclude=GLOB  with -r and git semgrep, only files whose name matches GLOB, or not
+               (with -r a file named on the command line is always searched; git semgrep's pathspecs are filtered)
+  --changed-within=WHEN  with -r and git semgrep, only files modified within 30m / 2h / 7d / 2w, since a date
+               or date-time, today, this-week or this-month
   -l           print only the names of files with a match, not the lines
   -A NUM       print NUM lines of trailing context after each match (context lines use - as separator)
   -B NUM       print NUM lines of leading context before each match
@@ -537,9 +557,14 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                on ambiguous lines, not just speed
   -j N         concurrent requests (default 8)
   -n           print line numbers
+  -z, --null-data  judge NUL-terminated records instead of lines, and print them NUL-terminated (see "Records that span several lines" above)
   --sentence[=HOW] judge each sentence instead of each line; HOW is jev (default) or rules (see "One sentence at a time" above)
   -o           with --sentence, print only the matching sentences
   -p           print each meaning's probability at the end of the line
+  --dry-run    send nothing; print the endpoint, each file searched and each request with its questions
+  --verbose    print the same to stderr while searching
+  -i, --interactive  show what --dry-run would send, and search only after y on the terminal
+  --dedup      judge one line per template and reuse its answer for the rest (see "One line per template" above)
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are
                green at or above the positive threshold, red below the negative one,
@@ -547,6 +572,7 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
   --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
                the API settings, overriding SEMGREP_MODEL, SEMGREP_URL, SEMGREP_API_KEY
   -h, --help   this help (Japanese when LANG / LC_ALL / LC_MESSAGES starts with ja)
+  -V, --version  print the version and exit
 ```
 
 Without FILE, stdin is read. With several files, output is prefixed with `file:`.

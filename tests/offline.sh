@@ -8,7 +8,7 @@ tmp=$(mktemp -d)
 node fake-jev.mjs >"$tmp/port" &
 fake=$!
 trap 'kill $fake 2>/dev/null; wait $fake 2>/dev/null || true; rm -rf "$tmp"' EXIT
-while [ ! -s "$tmp/port" ]; do sleep 0.05; done
+i=0; while [ ! -s "$tmp/port" ]; do i=$((i + 1)); [ $i -lt 200 ] || { echo "FAIL: fake-jev did not start" >&2; exit 1; }; sleep 0.05; done
 base="http://127.0.0.1:$(cat "$tmp/port")"
 # No key from the environment, and a HOME and cwd without .env, so nothing real is read or sent
 E="env -u SEMGREP_API_KEY -u TYPESAFE_API_KEY -u SEMGREP_MODEL -u NO_COLOR -u LC_ALL -u LC_MESSAGES HOME=$tmp SEMGREP_OPTS="
@@ -98,6 +98,17 @@ reset; $J --chunk 1 -e cat "$F" >/dev/null; eq "$(stat count)" "7" "--chunk 1: 7
 reset; $J --chunk 1 -e cat -e dog -Q owl "$F" >/dev/null; eq "$(stat count)" "7" "meanings share a request"
 code 2 "--chunk 0" -- $J --chunk 0 -e cat "$F"
 
+# --dry-run: the files and requests on stdout, nothing sent, exit 0 even with no match; --verbose: the same on stderr
+reset; out=$($J --dry-run --chunk 4 -e cat -v '!dog' "$F"); eq "$(stat count)" "0" "--dry-run sends nothing"
+eq "$(echo "$out" | grep -c '^semgrep: request .* \[judge\]')" "2" "--dry-run lists each request"
+echo "$out" | grep -q "^semgrep: file $F: 8 lines, 7 to send" || fail "--dry-run lists the file"
+echo "$out" | grep -q '4× Does line Lnnn match the meaning: "cat"?' || fail "--dry-run groups questions"
+code 0 "--dry-run, no match" -- $J --dry-run -e nothing "$F"
+reset; eq "$($J --dry-run -q -v cat "$F" | tail -1 | cut -d, -f1)" "semgrep: dry run: 1 request" "--dry-run ignores -q"
+reset; eq "$($J --verbose -n -e cat "$F" 2>/dev/null | nums)" "1 4 " "--verbose keeps stdout"
+eq "$(stat count)" "1" "--verbose sends"
+eq "$($J --verbose -e cat "$F" 2>&1 >/dev/null | grep -c '^semgrep: request 1 \[judge\]')" "1" "--verbose on stderr"
+
 # -j: requests in flight at once (each takes 30ms at the fake)
 reset; $J --chunk 1 -j 1 -e cat "$F" >/dev/null; eq "$(stat max)" "1" "-j 1"
 reset; $J --chunk 1 -j 3 -e cat "$F" >/dev/null; eq "$(stat max)" "3" "-j 3"
@@ -141,6 +152,59 @@ code 1 "--sys1-api-key satisfies the TypeSafe default" -- $E node ../semgrep.mjs
 reset; $E SEMGREP_URL=$base/v1 SEMGREP_MODEL=m1 node ../semgrep.mjs -e cat "$F" >/dev/null; eq "$(stat model)" "m1" "SEMGREP_MODEL"
 reset; $E SEMGREP_URL=$base/v1 SEMGREP_MODEL=m1 node ../semgrep.mjs --sys1-model=m2 -e cat "$F" >/dev/null; eq "$(stat model)" "m2" "--sys1-model over SEMGREP_MODEL"
 reset; $E SEMGREP_URL=$base/v1 SEMGREP_OPTS=--sys1-model=m3 node ../semgrep.mjs -e cat "$F" >/dev/null; eq "$(stat model)" "m3" "--sys1-model in SEMGREP_OPTS"
+# ./.env is never read (an untrusted checkout could redirect the key); ~/.config/semgrep/.env is
+mkdir -p "$tmp/checkout" "$tmp/.config/semgrep"
+printf 'SEMGREP_URL=%s/v1\nSEMGREP_OPTS=-c\n' "$base" >"$tmp/checkout/.env"
+reset; code 2 "./.env is not read" -- sh -c "cd '$tmp/checkout' && $E node '$PWD/../semgrep.mjs' -e cat '$F'"
+eq "$(stat count)" "0" "./.env sends nothing"
+printf 'SEMGREP_URL=%s/v1\n' "$base" >"$tmp/.config/semgrep/.env"
+reset; eq "$(cd "$tmp/checkout" && $E node "$OLDPWD/../semgrep.mjs" -n -e cat "$F" | nums)" "1 4 " "~/.config/semgrep/.env is read"
+rm "$tmp/.config/semgrep/.env"
+# -r and git semgrep skip files that usually hold secrets, whatever their case
+mkdir -p "$tmp/sec/.kube" "$tmp/sec/.docker"
+for f in .envrc .env-local .env_prod .ENV .netrc .npmrc .pypirc .pgpass .git-credentials id_rsa_work x.JKS .kube/config .docker/config.json ok.txt; do printf 'cat\n' >"$tmp/sec/$f"; done
+eq "$($J -r -l -e cat "$tmp/sec")" "$tmp/sec/ok.txt" "-r skips credential files"
+
+# the response and the error body come from whatever server SEMGREP_URL names
+printf 'cat @drop\n' >"$tmp/drop"
+code 2 "a missing answer is an error, not 0 (which would make -v match)" -- $J -v cat "$tmp/drop"
+printf 'cat @err\n' >"$tmp/err"
+err=$($J -e cat "$tmp/err" 2>&1 >/dev/null || true)
+eq "$(printf '%s' "$err" | grep -c "$(printf '\033')")" "0" "an error body loses its escape sequences"
+[ ${#err} -lt 500 ] || fail "an error body is cut short (got ${#err} chars)"
+printf 'x @err\ncat\n' >"$tmp/errthen"
+code 0 "-q: a later match wins over a failed request" -- $J -q --chunk 1 -j 1 -e cat "$tmp/errthen"
+code 2 "without -q a failed request is still an error" -- $J --chunk 1 -j 1 -e cat "$tmp/errthen"
+reset; $J -q --dedup -e '/cat/' -e zebra "$F"; eq "$(stat count)" "0" "-q decides a regex match before --dedup's pre-question"
+# a directory without -r, or one that can't be read, is reported and the rest is still searched (grep)
+mkdir -p "$tmp/d" "$tmp/r/sub"; printf 'cat\n' >"$tmp/r/a.txt"; chmod 000 "$tmp/r/sub"
+code 2 "a directory without -r" -- $J -e cat "$tmp/d" "$F"
+eq "$($J -e cat "$tmp/d" "$F" 2>/dev/null | wc -l | tr -d ' ')" "2" "a directory without -r skips only itself"
+eq "$($J -r -c -e cat "$tmp/r" 2>/dev/null)" "$tmp/r/a.txt:1" "-r skips an unreadable directory"
+code 2 "-r with an unreadable directory" -- $J -r -e cat "$tmp/r"
+chmod 755 "$tmp/r/sub"
+# option values: checked before anything is sent
+code 0 "-o -n without --sentence" -- $J -o -n -e cat "$F"
+code 2 "-A takes a whole number" -- $J -A 1.5 -e cat "$F"
+reset; code 2 "--color=bogus" -- $J --color=bogus -e cat "$F"; eq "$(stat count)" "0" "--color is checked before any request"
+# a key over plain http gets a warning, except to this machine
+$E SEMGREP_URL=http://example.invalid/v1 SEMGREP_API_KEY=k node ../semgrep.mjs -e cat /dev/null 2>&1 | grep -q 'over plain http' || fail "plain http warning"
+eq "$($E SEMGREP_URL=$base/v1 SEMGREP_API_KEY=k node ../semgrep.mjs -e cat "$F" 2>&1 >/dev/null)" "" "no warning for 127.0.0.1"
+# -z: NUL ends a record, so a binary is told by its other control bytes; a named binary is reported
+printf '\177ELF\001\002\003cat\000' >"$tmp/bin.dat"
+reset; eq "$($J -z -e cat "$tmp/bin.dat" 2>&1)" "semgrep: $tmp/bin.dat: binary file skipped" "-z skips a binary"
+eq "$(stat count)" "0" "-z sends nothing from a binary"
+# a PDF is binary even when its first NUL is past 8 KB; UTF-16 with a BOM is text, though it is full of NULs
+printf '%%PDF-1.5\ncat\n' >"$tmp/doc.pdf"
+reset; eq "$($J -e cat "$tmp/doc.pdf" 2>&1)" "semgrep: $tmp/doc.pdf: binary file skipped" "a PDF is skipped"
+eq "$(stat count)" "0" "nothing is sent from a PDF"
+node -e 'const le = Buffer.from("﻿cat\ndog\n", "utf16le"); require("fs").writeFileSync(process.argv[1], le); require("fs").writeFileSync(process.argv[2], Buffer.from(le).swap16())' "$tmp/le.txt" "$tmp/be.txt"
+eq "$($J -n -e cat "$tmp/le.txt")" "1:cat" "UTF-16LE is read"
+eq "$($J -n -e dog "$tmp/be.txt")" "2:dog" "UTF-16BE is read"
+eq "$($J -z -c -e cat "$tmp/le.txt")" "1" "-z with UTF-16: no NUL character, so the file is one record, as in UTF-8"
+# --sentence=jev with regex terms only asks nothing: the rules join the lines
+printf '猫がいる\n犬もいる\n' >"$tmp/ja"   # unpunctuated Japanese: the breaks --sentence=jev would ask about
+reset; $J --sentence -c -e '/猫/' "$tmp/ja" >/dev/null; eq "$(stat count)" "0" "--sentence with regex terms only sends nothing"
 
 # git semgrep: tracked files only, pathspecs relative to the current directory, never stdin
 R="$tmp/repo" GS="$E SEMGREP_URL=$base/v1 node $PWD/../git-semgrep.mjs" SG="$PWD/../semgrep.mjs"
@@ -166,13 +230,97 @@ code 1 "git semgrep: over 1 MiB of paths" -- sh -c "cd '$R' && $GS -e cat -- man
 printf 'SEMGREP_GIT=1\n' >"$tmp/plain/.env"
 eq "$(cd "$tmp/plain" && echo cat | $E SEMGREP_URL=$base/v1 node "$SG" -e cat)" "cat" "SEMGREP_GIT in .env"
 
+# -r leaves out what git ignores; a file or directory named on the command line is searched even so
+I="$tmp/ign" JI="$E SEMGREP_URL=$base/v1 node $SG"
+mkdir -p "$I/dist/sub" "$I/src/build"
+for f in a.txt x.log dist/d.txt dist/sub/e.txt src/s.txt src/t.log src/build/b.txt; do printf 'cat\n' >"$I/$f"; done
+printf 'dist/\n*.log\nbuild/\n' >"$I/.gitignore"
+(cd "$I" && git init -q && git add .gitignore a.txt)
+eq "$(cd "$I" && $JI -r -l -e cat | tr '\n' ' ')" "./a.txt ./src/s.txt " "-r skips ignored files and directories"
+eq "$(cd "$I" && $JI -r -l -e cat src)" "src/s.txt" "-r on a subdirectory, the root's .gitignore applies"
+eq "$(cd "$I/src" && $JI -r -l -e cat)" "./s.txt" "-r from a subdirectory"
+eq "$(cd "$I" && $JI -r -l -e cat dist | tr '\n' ' ')" "dist/d.txt dist/sub/e.txt " "-r on an ignored directory, named: searched"
+eq "$(cd "$I" && $JI -l -e cat x.log src/t.log | tr '\n' ' ')" "x.log src/t.log " "ignored files, named: searched"
+(cd "$I" && git add -f src/t.log)
+eq "$(cd "$I" && $JI -r -l -e cat src | tr '\n' ' ')" "src/s.txt src/t.log " "-r searches a tracked file that matches .gitignore"
+mkdir "$tmp/norepo"; printf "cat\n" >"$tmp/norepo/x.log"; printf "*.log\n" >"$tmp/norepo/.gitignore"
+eq "$($JI -r -l -e cat "$tmp/norepo")" "$tmp/norepo/x.log" "-r outside a repository: .gitignore has no effect"
+
+# --include / --exclude / --changed-within pick what -r finds and git semgrep lists; a named file is always searched
+P="$tmp/pick"
+mkdir -p "$P/sub"
+for f in a.md b.txt c.min.js d.js sub/e.md old.md; do printf 'cat\n' >"$P/$f"; done
+touch -t 202001010000 "$P/old.md"
+eq "$($JI -r -l --include='*.md' -e cat "$P" | tr '\n' ' ')" "$P/a.md $P/old.md $P/sub/e.md " "--include"
+eq "$($JI -r -l --include='*.md' --include='*.txt' -e cat "$P" | tr '\n' ' ')" "$P/a.md $P/b.txt $P/old.md $P/sub/e.md " "--include twice"
+eq "$($JI -r -l --include='*.js' --exclude='*.min.js' -e cat "$P" | tr '\n' ' ')" "$P/d.js " "--exclude"
+eq "$($JI -r -l --include='*.md' --changed-within=7d -e cat "$P" | tr '\n' ' ')" "$P/a.md $P/sub/e.md " "--changed-within a duration"
+eq "$($JI -r -l --include='*.md' --changed-within=2019-12-31 -e cat "$P" | grep -c .)" "3" "--changed-within a date"
+eq "$($JI -l --include='*.txt' --changed-within=1d -e cat "$P/old.md")" "$P/old.md" "a named file is searched whatever the filters"
+code 2 "--changed-within, not a duration or a date" -- $JI -r --changed-within=soon -e cat "$P"
+code 2 "--changed-within, a day its month lacks (Date() would roll 02-30 over to 03-02)" -- $JI -r --changed-within=2026-02-30 -e cat "$P"
+$JI -r -l --changed-within=2999-01-01 -e cat "$P" 2>&1 >/dev/null | grep -q "is in the future" || fail "--changed-within in the future warns"
+$JI -r --include="[abc" -e cat "$P" 2>&1 | grep -q "^semgrep: --include: .\[abc. is not a valid glob" || fail "a malformed glob names the option"
+code 2 "--changed-within, a bare number is not a year" -- $JI -r --changed-within=7 -e cat "$P"
+eq "$($JI -r -l --include='*.md' --changed-within=today -e cat "$P" | tr '\n' ' ')" "$P/a.md $P/sub/e.md " "--changed-within=today"
+eq "$($JI -r -l --include='*.md' --changed-within=this-week -e cat "$P" | grep -c .)" "2" "--changed-within=this-week"
+eq "$($JI -r -l --include='*.md' --changed-within=this-month -e cat "$P" | grep -c .)" "2" "--changed-within=this-month"
+eq "$($JI -r -l --include='*.md' --changed-within=2019-12-31T12:00Z -e cat "$P" | grep -c .)" "3" "--changed-within an ISO date-time"
+(cd "$P" && git init -q && git add .)
+eq "$(cd "$P" && $GS -l --include='*.md' --changed-within=7d -e cat | tr '\n' ' ')" "a.md sub/e.md " "git semgrep with --include and --changed-within"
+eq "$(cd "$P" && $GS -l --include='*.md' -e cat b.txt a.md | tr '\n' ' ')" "a.md " "git semgrep: pathspecs are filtered too"
+$JI -r -l --include='sub/*.md' -e cat "$P" 2>&1 >/dev/null | grep -q "has a /, but globs match the file name only" || fail "--include with a / warns"
+
+# -i without a terminal is an error; from SEMGREP_OPTS it says so. notty: a new session has no controlling terminal
+notty() { perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' "$@"; }
+code 2 "-i without a terminal" -- notty $JI -i -e cat "$P/a.md"
+notty $E SEMGREP_OPTS=-i SEMGREP_URL=$base/v1 node ../semgrep.mjs -e cat "$P/a.md" 2>&1 | grep -q 'SEMGREP_OPTS= semgrep' || fail "-i from SEMGREP_OPTS names it"
+# -i: shows the dry run on the terminal and sends nothing before the answer; y searches, anything else exits 1
+if script --version >/dev/null 2>&1; then onpty() { script -qec "$1" /dev/null; }; else onpty() { script -q /dev/null sh -c "$1"; }; fi
+# The answer is typed once the prompt is on the terminal (script(1) forwards input at once, then sends EOF, which
+# would come first). asking CMD ANSWER: run CMD on a pty, answer when "[y/N]" shows (10 s at most), print what showed.
+asking() {
+  : >"$tmp/pty"
+  { i=0; until grep -q 'y/N' "$tmp/pty" || [ $i -ge 100 ]; do sleep 0.1; i=$((i + 1)); done; printf '%s\n' "$2"; sleep 1; } \
+    | onpty "$1; echo rc=\$?" >"$tmp/pty"
+  cat "$tmp/pty"
+}
+reset; out=$(asking "$JI -i -l -e cat '$P/a.md'" n)
+eq "$(stat count)" "0" "-i, n: nothing sent"
+echo "$out" | grep -q "semgrep: file $P/a.md: 1 lines, 1 to send" || fail "-i shows the files: $out"
+echo "$out" | grep -q 'rc=1' || fail "-i, n: exit 1: $out"
+reset; out=$(asking "$JI -i -l -e cat '$P/a.md'" y)
+eq "$(stat count)" "1" "-i, y: searched: $out"
+echo "$out" | grep -q 'rc=0' || fail "-i, y: exit 0: $out"
+reset; out=$(asking "printf 'cat\\\\n' | $JI -i -c -e cat" y)
+echo "$out" | grep -q '^1' || fail "-i with stdin: the data still reaches the search: $out"
+# a file name cannot redraw the question: control characters show as \xNN
+X="$tmp/esc"; mkdir -p "$X"; printf 'cat\n' >"$X/$(printf 'evil\033[2Kx.txt')"
+reset; out=$(asking "$JI -i -r -l -e cat '$X'" n)
+case "$out" in *"$(printf '\033')"*) fail "-i shows an escape sequence from a file name";; esac
+printf '%s\n' "$out" | grep -q 'evil\\x1b\[2Kx.txt' || fail "-i shows the file name with a backslash-x1b"
+$JI --dry-run -r -e cat "$X" | grep -q 'evil\\x1b\[2Kx.txt' || fail "--dry-run shows control characters as \\xNN"
+# a file that cannot be read shows up next to the question, not only after y
+if [ "$(id -u)" != 0 ]; then
+  printf 'cat\n' >"$P/locked.md"; chmod 000 "$P/locked.md"
+  reset; out=$(asking "$JI -i -e cat '$P/a.md' '$P/locked.md'" n)
+  chmod 644 "$P/locked.md"; rm "$P/locked.md"
+  echo "$out" | grep -q "locked.md: EACCES" || fail "-i shows a read error before asking: $out"
+fi
+
 # --help: exit 0, Japanese by locale, lists the options
 code 0 "--help" -- $E LANG=C node ../semgrep.mjs --help
 eq "$($E LANG=C node ../semgrep.mjs -h | head -1 | cut -c1-14)" "usage: semgrep" "-h"
-for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key'; do
+for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose'; do
   $E LANG=C node ../semgrep.mjs --help | grep -q -- "$o" || fail "--help lacks $o"
 done
 $E LANG=C node ../semgrep.mjs --help | grep -q 'grep by meaning' || fail "--help in English"
+
+# --version: the version in package.json, exit 0, before any check that needs a key or a meaning
+v=$(node -p "require('../package.json').version")
+eq "$($E node ../semgrep.mjs --version)" "semgrep $v" "--version"
+eq "$($E node ../semgrep.mjs -V)" "semgrep $v" "-V"
+code 0 "--version with no key" -- $E node ../semgrep.mjs --version
 $E LANG=ja_JP.UTF-8 node ../semgrep.mjs --help | grep -q '何も表示せず' || fail "--help in Japanese"
 $E LANG=C LC_MESSAGES=ja_JP.UTF-8 node ../semgrep.mjs --help | grep -q '何も表示せず' || fail "LC_MESSAGES"
 echo OK
