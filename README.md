@@ -531,6 +531,8 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                with -t 0.6 -T 0.3 a line at 0.3..0.6 matches neither X nor not-X
   -r           recurse into directories (current directory when FILE is omitted);
                skips .git, node_modules, binary files, likely secrets and what git ignores
+  --include=GLOB, --exclude=GLOB  with -r and git semgrep, only files whose name matches GLOB, or not
+  --changed-within=WHEN  with -r and git semgrep, only files modified within 30m / 2h / 7d / 2w, or since a date
   -l           print only the names of files with a match, not the lines
   -A NUM       print NUM lines of trailing context after each match (context lines use - as separator)
   -B NUM       print NUM lines of leading context before each match
@@ -547,6 +549,7 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
   -p           print each meaning's probability at the end of the line
   --dry-run    send nothing; print the endpoint, each file searched and each request with its questions
   --verbose    print the same to stderr while searching
+  -i, --interactive  show what --dry-run would send, and search only after y on the terminal
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are
                green at or above the positive threshold, red below the negative one,

@@ -11,6 +11,12 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   answered no, so those counts are an estimate. `-q` is ignored, so the list is complete.
 - `--verbose`: the same lines on stderr while searching, and the summary line even when stderr is not a terminal.
 - `-V`, `--version`: print `semgrep X.Y.Z` and exit, like `grep -V`.
+- `-i`, `--interactive`: first run the same command as `--dry-run`, show its files and totals on the terminal, and
+  search only when the answer is `y`. Nothing is sent before the answer; any other answer exits 1. The answer is
+  read from `/dev/tty`, so data can still come on stdin; without a terminal it is an error (exit 2).
+- `--include=GLOB`, `--exclude=GLOB`: with `-r` and `git semgrep`, only files whose name matches (or does not match)
+  a shell glob; both can be repeated, as in grep. `--changed-within=WHEN`: only files modified within `30m`, `2h`,
+  `7d`, `2w`, or since a date (`2026-09-01`, local midnight). A file named on the command line is always searched.
 
 ### Security
 - The `-r` / `git semgrep` skip list matched only `.env` and `.env.<x>`, though the help promised `.env*`: `.envrc`,

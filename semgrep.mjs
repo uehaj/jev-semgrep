@@ -4,8 +4,8 @@
 //   semgrep -Q "why the job failed" FILE...   # -Q X is -e "the line answers: X": answering lines, not asking ones
 //   -e / -Q terms are OR'd; -a / -v attach AND / AND NOT to the preceding term: (A and B and not C) or D.
 //   A leading ! negates just that meaning: -e A -e '!B' is A or not B.
-import { execFileSync } from 'node:child_process';
-import { existsSync, lstatSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync, writeSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { parseArgs } from 'node:util';
 
@@ -46,6 +46,11 @@ const OPTIONS = {
   dedup: { type: 'boolean', default: false }, // judge one representative per template, reuse its answer
   'dry-run': { type: 'boolean', default: false }, // print the files and requests, send nothing
   verbose: { type: 'boolean', default: false }, // print the files and requests to stderr while searching
+  interactive: { type: 'boolean', short: 'i', default: false }, // show what --dry-run would send, search on a yes
+  // which files -r finds and git semgrep lists; a file named on the command line is always searched
+  include: { type: 'string', multiple: true }, // only names matching one of these globs
+  exclude: { type: 'string', multiple: true }, // not names matching one of these globs
+  'changed-within': { type: 'string' }, // only files modified within 30m / 2h / 7d / 2w, or since a date
   color: { type: 'string', default: 'auto' }, // auto / always / never
   // the API settings, each overriding its environment variable
   'sys1-model': { type: 'string' }, // SEMGREP_MODEL
@@ -103,6 +108,10 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                .netrc, .npmrc, .git-credentials, *.pem, *.key, id_rsa*...). Every searched line is sent
                to the TypeSafe API. Inside a git repository, what git ignores (.gitignore) is skipped
                too; a file or directory named on the command line is searched even so
+  --include=GLOB, --exclude=GLOB  with -r and git semgrep, only files whose name matches GLOB (* ? [...]),
+               or not; both can be repeated. A file named on the command line is always searched
+  --changed-within=WHEN  with -r and git semgrep, only files modified within WHEN: 30m, 2h, 7d, 2w, or
+               since a date (2026-09-01, local midnight)
   -l           print only the names of files with a match, not the lines
   -A NUM       print NUM lines of trailing context after each match (context lines use - as separator)
   -B NUM       print NUM lines of leading context before each match
@@ -137,6 +146,8 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                sent) and each request with its questions, grouped by wording (line ids read Lnnn).
                The --dedup and --sentence questions are answered no, so their counts are an estimate
   --verbose    print the same to stderr while searching, and the summary line even when not a terminal
+  -i, --interactive  first show what --dry-run would send (files, lines, requests) and ask on the
+               terminal; search only on y. Nothing is sent before the answer; no terminal is an error
   --dedup      judge one line per template instead of every line. Lines that differ only in ids, hashes,
                numbers, dates and times, paths and URLs share a template; one of them is sent and its answer
                is reused for the rest. Which of those may be folded depends on the meaning: a number decides
@@ -199,6 +210,10 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                .git-credentials, *.pem, *.key, id_rsa*...) は飛ばす。git リポジトリの中では
                git が無視するもの (.gitignore) も飛ばす。コマンドラインで指定したファイル・ディレクトリは
                それでも探す。検索した行はすべて TypeSafe の API に送られる
+  --include=GLOB, --exclude=GLOB  -r と git semgrep で、名前が GLOB (* ? [...]) に合うファイルだけ
+               (または合わないものだけ) を探す。複数指定可。コマンドラインで指定したファイルは必ず探す
+  --changed-within=WHEN  -r と git semgrep で、WHEN 以内に更新したファイルだけを探す。30m / 2h / 7d / 2w、
+               または日付 (2026-09-01、その日のローカル時刻 0 時以降)
   -l           一致した行ではなくファイル名だけを表示
   -A NUM       一致行の後ろ NUM 行も表示 (grep と同じ。文脈行の区切りは - )
   -B NUM       一致行の前 NUM 行も表示
@@ -233,6 +248,8 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                表示する。質問は文面ごとにまとめて数える (行の ID は Lnnn と表示)。--dedup と --sentence の
                事前の問い合わせは no と答えたものとして数えるので、その場合の数は目安
   --verbose    同じ表示を検索しながら stderr に出す。端末でなくても最後の集計行を出す
+  -i, --interactive  まず --dry-run と同じ内容 (ファイル・行数・リクエスト数) を見せて端末で聞き、
+               y のときだけ検索する。答えるまで何も送らない。端末が無ければエラー
   --dedup      全行ではなくテンプレートごとに 1 行だけ判定する。ID・ハッシュ・数値・日付と時刻・パス・
                URL だけが違う行は同じテンプレートとみなし、代表 1 行を送ってその答えを残りにも使う。
                どれをまとめてよいかは意味による。「ディスク使用率が 90% を超えている」なら数値が、
@@ -351,6 +368,22 @@ if (tPos < 0 || tPos > 1 || tNeg < 0 || tNeg > 1) die('-t / -T must be between 0
 if (Number(opt.j) < 1) die('-j must be at least 1');
 if (opt.sentence !== undefined && !['jev', 'rules'].includes(opt.sentence)) die('--sentence must be jev or rules');
 if (!['auto', 'always', 'never'].includes(opt.color)) die('--color must be auto, always or never');
+// --include / --exclude: shell globs (* ? [...] [!...]) matched against the file name, as in grep.
+const globRe = g => new RegExp(`^${g.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.').replace(/\[!/g, '[^')}$`);
+const includes = (opt.include ?? []).map(globRe), excludes = (opt.exclude ?? []).map(globRe);
+// --changed-within: a duration back from now, or a date (a bare date is local midnight; JS would read it as UTC).
+const since = (w => {
+  if (w === undefined) return null;
+  const d = w.match(/^(\d+)([mhdw])$/);
+  if (d) return Date.now() - d[1] * { m: 6e4, h: 36e5, d: 864e5, w: 6048e5 }[d[2]];
+  const t = new Date(/^\d{4}-\d\d-\d\d$/.test(w) ? `${w}T00:00` : w).getTime();
+  if (isNaN(t)) die(`--changed-within: '${w}' is not a duration (30m, 2h, 7d, 2w) or a date (2026-09-01)`);
+  return t;
+})(opt['changed-within']);
+const wanted = (path, st) => {
+  const name = path.split('/').at(-1);
+  return (!includes.length || includes.some(re => re.test(name))) && !excludes.some(re => re.test(name)) && (since === null || st.mtimeMs >= since);
+};
 
 // The unit of judgement. Without -z it is a line; with -z it is a NUL-terminated record, which may
 // span several lines. Everything downstream works on an array of units, so only the terminator changes.
@@ -377,7 +410,7 @@ function gitIgnored(dir) {
 function expand(path, rel = '', ignored) {
   let st;
   try { st = statSync(path); } catch (e) { warn(path, e); return []; }
-  if (!st.isDirectory()) return [path];
+  if (!st.isDirectory()) return rel && !wanted(path, st) ? [] : [path]; // rel is empty for a name on the command line
   if (!opt.r) { warn(path, { message: 'Is a directory (use -r)' }); return []; }
   ignored ??= gitIgnored(path);
   let ents;
@@ -396,11 +429,30 @@ const lsFiles = () => {
   catch (e) { if (e.status == null) die(`git ls-files: ${e.message}`); process.exit(2); } // git exited non-zero: it has said why
 };
 const gitFiles = () => [...new Set(lsFiles().split('\0'))] // a conflicted file is listed once per stage
-  .filter(p => p && !p.split('/').some(d => SKIP_DIRS.includes(d)) && !SKIP_FILE.test(p.split('/').at(-1))
-    && lstatSync(p, { throwIfNoEntry: false })?.isFile())
+  .filter(p => {
+    if (!p || p.split('/').some(d => SKIP_DIRS.includes(d)) || SKIP_FILE.test(p.split('/').at(-1))) return false;
+    const st = lstatSync(p, { throwIfNoEntry: false });
+    return st?.isFile() && wanted(p, st);
+  })
   .map(p => (p === '-' ? './-' : p)); // a tracked file named -, not stdin
 const targets = asGit ? gitFiles()
   : (files.length ? files : [opt.r ? '.' : '-']).flatMap(f => (f === '-' ? [f] : expand(f)));
+// Standard input is read once: -i hands it to its dry run, and the search reads it again from here.
+const stdinBuf = targets.includes('-') ? readFileSync(0) : null;
+// -i: run this same command once with --dry-run, show its files and totals on the terminal, and search only on a yes.
+// Nothing is sent before the answer. The answer comes from /dev/tty, so stdin can still carry the data.
+if (opt.interactive && !dry) {
+  let tty;
+  try { tty = openSync('/dev/tty', 'r+'); } catch { die('-i needs a terminal to ask on'); }
+  const plan = spawnSync(process.execPath, [...process.execArgv, process.argv[1], '--dry-run', ...process.argv.slice(2)], { input: stdinBuf ?? '', encoding: 'utf8', maxBuffer: Infinity });
+  if (plan.status !== 0 && plan.status !== 2) { process.stderr.write(plan.stderr); process.exit(2); } // 2: a file could not be read
+  const shown = plan.stdout.split('\n').filter(l => /^semgrep: (file |dry run: )/.test(l));
+  if (!/^semgrep: dry run: 0 requests/.test(shown.at(-1))) {
+    writeSync(tty, `${shown.join('\n')}\nSearch, sending the above? [y/N] `);
+    const buf = Buffer.alloc(256);
+    if (!/^\s*y(es)?\s*$/i.test(buf.toString('utf8', 0, readSync(tty, buf)))) { console.error('semgrep: nothing sent'); process.exit(1); }
+  }
+}
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let usedTokens = 0, usedCost = 0, requestCount = 0;
 let traced = 0, tracedQuestions = 0, tracedChars = 0;
@@ -527,7 +579,7 @@ const allLines = []; // { file, no, text }; includes blank lines; what the expre
 const read = new Map(); // file -> units as read (lines, or records with -z)
 for (const file of targets) {
   let buf;
-  try { buf = readFileSync(file === '-' ? 0 : file); } catch (e) { warn(file, e); continue; }
+  try { buf = file === '-' ? stdinBuf : readFileSync(file); } catch (e) { warn(file, e); continue; }
   // With -z a NUL is the record terminator, so the binary sniff looks for other control bytes (ELF, images, archives).
   const head = buf.subarray(0, 8192);
   if (opt.z ? /[\x01-\x08\x0e-\x1a\x1c-\x1f]/.test(head.toString('latin1')) : head.includes(0)) {

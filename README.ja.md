@@ -509,6 +509,8 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                -t 0.6 -T 0.3 なら 0.3〜0.6 の曖昧な行はどちらにも当たらない
   -r           ディレクトリを再帰的に探す (FILE 省略時はカレント)。.git、node_modules、
                バイナリ、秘密情報らしいファイル、git が無視するものは飛ばす
+  --include=GLOB, --exclude=GLOB  -r と git semgrep で、名前が GLOB に合うファイルだけ (または合わないものだけ) を探す
+  --changed-within=WHEN  -r と git semgrep で、30m / 2h / 7d / 2w 以内、または日付以降に更新したファイルだけを探す
   -l           一致した行ではなくファイル名だけを表示
   -A NUM       一致行の後ろ NUM 行も表示 (grep と同じ。文脈行の区切りは - )
   -B NUM       一致行の前 NUM 行も表示
@@ -525,6 +527,7 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
   -p           各意味の確率を行末に表示 (閾値調整用)
   --dry-run    何も送らず、送信先・検索するファイル・各リクエストとその質問を表示
   --verbose    同じ表示を検索しながら stderr に出す
+  -i, --interactive  --dry-run と同じ内容を見せ、端末で y と答えたときだけ検索する
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
                否定側の閾値未満を赤、あいだを黄で表示。NO_COLOR にも従う
