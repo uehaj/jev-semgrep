@@ -299,6 +299,8 @@ gs() { $JI -r -l -e "$1" "$G" 2>/dev/null | sed "s|$G/||" | tr '\n' ' '; }
 eq "$(gs '昨日変えた cat')" "dirty.txt feat.txt new.txt staged.txt untr.txt " "git scope: time by commit, old.txt's fresh mtime aside"
 eq "$(gs 'Alice さんが書いた cat')" "dirty.txt old.txt " "git scope: author"
 eq "$(gs 'Carol さんが書いた cat' | wc -w | tr -d ' ')" "6" "git scope: an author with no commit gives no scope"
+eq "$($JI -r -l -e 'Alice さんが書いたような cat' "$G" 2>&1 | grep -c 'scope:' || true)" "0" "git scope: no author from a likeness"
+eq "$($JI -r -l -e 'like code written by Alice cat' "$G" 2>&1 | grep -c 'scope:' || true)" "0" "git scope: no author from like ... by"
 eq "$(gs '自分が書いた cat')" "dirty.txt feat.txt new.txt staged.txt untr.txt " "git scope: me, uncommitted files included"
 eq "$(gs '未コミットの cat')" "dirty.txt staged.txt untr.txt " "git scope: uncommitted"
 eq "$(gs 'ステージした cat')" "staged.txt " "git scope: staged"

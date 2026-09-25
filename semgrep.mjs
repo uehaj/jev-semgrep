@@ -618,6 +618,9 @@ function gitScopes(text) {
   for (const [re, who] of AUTHOR) {
     const m = re.exec(text);
     if (!m) continue;
+    // "Alice さんが書いたような", "like code written by Alice": a likeness says nothing about who wrote the file
+    if (/^\p{Script=Hiragana}{0,3}(?:よう|みたい|風|っぽ)/u.test(text.slice(m.index + m[0].length))
+      || /\b(?:like|style\s+of|similar\s+to)\s+(?:\S+\s+){0,3}$/i.test(text.slice(0, m.index))) break;
     const name = who(m);
     out.push({ label: `git-author files: by ${name || 'me (user.email)'}`, words: [m[0]], test: inGit(top => byAuthor(top, name || null)) });
     break;
