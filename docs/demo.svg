@@ -1,38 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="920" height="360" viewBox="0 0 920 360" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="420" viewBox="0 0 920 420" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
 <title>semgrep demo: Ask in one language, find every language / Propositions, not topics / -Q finds the answer</title>
 <style>
 .a{opacity:0}
-.l0{animation:l0 28.299999999999997s linear infinite}@keyframes l0{0%,0.000%{opacity:0}0.530%,31.449%{opacity:1}32.509%,100%{opacity:0}}
-.l1{animation:l1 28.299999999999997s linear infinite}@keyframes l1{0%,1.237%{opacity:0}1.767%,31.449%{opacity:1}32.509%,100%{opacity:0}}
-.l2{animation:l2 28.299999999999997s linear infinite}@keyframes l2{0%,2.473%{opacity:0}3.004%,31.449%{opacity:1}32.509%,100%{opacity:0}}
-.l3{animation:l3 28.299999999999997s linear infinite}@keyframes l3{0%,4.947%{opacity:0}5.477%,31.449%{opacity:1}32.509%,100%{opacity:0}}
-.l4{animation:l4 28.299999999999997s linear infinite}@keyframes l4{0%,6.184%{opacity:0}6.714%,31.449%{opacity:1}32.509%,100%{opacity:0}}
-.l5{animation:l5 28.299999999999997s linear infinite}@keyframes l5{0%,7.420%{opacity:0}7.951%,31.449%{opacity:1}32.509%,100%{opacity:0}}
-.l6{animation:l6 28.299999999999997s linear infinite}@keyframes l6{0%,8.657%{opacity:0}9.187%,31.449%{opacity:1}32.509%,100%{opacity:0}}
-.l7{animation:l7 28.299999999999997s linear infinite}@keyframes l7{0%,9.894%{opacity:0}10.424%,31.449%{opacity:1}32.509%,100%{opacity:0}}
-.l8{animation:l8 28.299999999999997s linear infinite}@keyframes l8{0%,11.131%{opacity:0}11.661%,31.449%{opacity:1}32.509%,100%{opacity:0}}
-.l9{animation:l9 28.299999999999997s linear infinite}@keyframes l9{0%,12.367%{opacity:0}12.898%,31.449%{opacity:1}32.509%,100%{opacity:0}}
-.l10{animation:l10 28.299999999999997s linear infinite}@keyframes l10{0%,32.509%{opacity:0}33.039%,67.668%{opacity:1}68.728%,100%{opacity:0}}
-.l11{animation:l11 28.299999999999997s linear infinite}@keyframes l11{0%,33.746%{opacity:0}34.276%,67.668%{opacity:1}68.728%,100%{opacity:0}}
-.l12{animation:l12 28.299999999999997s linear infinite}@keyframes l12{0%,34.982%{opacity:0}35.512%,67.668%{opacity:1}68.728%,100%{opacity:0}}
-.l13{animation:l13 28.299999999999997s linear infinite}@keyframes l13{0%,37.456%{opacity:0}37.986%,67.668%{opacity:1}68.728%,100%{opacity:0}}
-.l14{animation:l14 28.299999999999997s linear infinite}@keyframes l14{0%,38.693%{opacity:0}39.223%,67.668%{opacity:1}68.728%,100%{opacity:0}}
-.l15{animation:l15 28.299999999999997s linear infinite}@keyframes l15{0%,39.929%{opacity:0}40.459%,67.668%{opacity:1}68.728%,100%{opacity:0}}
-.l16{animation:l16 28.299999999999997s linear infinite}@keyframes l16{0%,41.166%{opacity:0}41.696%,67.668%{opacity:1}68.728%,100%{opacity:0}}
-.l17{animation:l17 28.299999999999997s linear infinite}@keyframes l17{0%,42.403%{opacity:0}42.933%,67.668%{opacity:1}68.728%,100%{opacity:0}}
-.l18{animation:l18 28.299999999999997s linear infinite}@keyframes l18{0%,43.640%{opacity:0}44.170%,67.668%{opacity:1}68.728%,100%{opacity:0}}
-.l19{animation:l19 28.299999999999997s linear infinite}@keyframes l19{0%,44.876%{opacity:0}45.406%,67.668%{opacity:1}68.728%,100%{opacity:0}}
-.l20{animation:l20 28.299999999999997s linear infinite}@keyframes l20{0%,46.113%{opacity:0}46.643%,67.668%{opacity:1}68.728%,100%{opacity:0}}
-.l21{animation:l21 28.299999999999997s linear infinite}@keyframes l21{0%,47.350%{opacity:0}47.880%,67.668%{opacity:1}68.728%,100%{opacity:0}}
-.l22{animation:l22 28.299999999999997s linear infinite}@keyframes l22{0%,49.823%{opacity:0}50.353%,67.668%{opacity:1}68.728%,100%{opacity:0}}
-.l23{animation:l23 28.299999999999997s linear infinite}@keyframes l23{0%,68.728%{opacity:0}69.258%,98.940%{opacity:1}100.000%,100%{opacity:0}}
-.l24{animation:l24 28.299999999999997s linear infinite}@keyframes l24{0%,69.965%{opacity:0}70.495%,98.940%{opacity:1}100.000%,100%{opacity:0}}
-.l25{animation:l25 28.299999999999997s linear infinite}@keyframes l25{0%,72.438%{opacity:0}72.968%,98.940%{opacity:1}100.000%,100%{opacity:0}}
-.l26{animation:l26 28.299999999999997s linear infinite}@keyframes l26{0%,73.675%{opacity:0}74.205%,98.940%{opacity:1}100.000%,100%{opacity:0}}
-.l27{animation:l27 28.299999999999997s linear infinite}@keyframes l27{0%,74.912%{opacity:0}75.442%,98.940%{opacity:1}100.000%,100%{opacity:0}}
-.l28{animation:l28 28.299999999999997s linear infinite}@keyframes l28{0%,77.385%{opacity:0}77.915%,98.940%{opacity:1}100.000%,100%{opacity:0}}
-.l29{animation:l29 28.299999999999997s linear infinite}@keyframes l29{0%,78.622%{opacity:0}79.152%,98.940%{opacity:1}100.000%,100%{opacity:0}}
-.l30{animation:l30 28.299999999999997s linear infinite}@keyframes l30{0%,81.095%{opacity:0}81.625%,98.940%{opacity:1}100.000%,100%{opacity:0}}
+.l0{animation:l0 30.75s linear infinite}@keyframes l0{0%,0.000%{opacity:0}0.488%,28.943%{opacity:1}29.919%,100%{opacity:0}}
+.l1{animation:l1 30.75s linear infinite}@keyframes l1{0%,1.138%{opacity:0}1.626%,28.943%{opacity:1}29.919%,100%{opacity:0}}
+.l2{animation:l2 30.75s linear infinite}@keyframes l2{0%,2.276%{opacity:0}2.764%,28.943%{opacity:1}29.919%,100%{opacity:0}}
+.l3{animation:l3 30.75s linear infinite}@keyframes l3{0%,4.553%{opacity:0}5.041%,28.943%{opacity:1}29.919%,100%{opacity:0}}
+.l4{animation:l4 30.75s linear infinite}@keyframes l4{0%,5.691%{opacity:0}6.179%,28.943%{opacity:1}29.919%,100%{opacity:0}}
+.l5{animation:l5 30.75s linear infinite}@keyframes l5{0%,6.829%{opacity:0}7.317%,28.943%{opacity:1}29.919%,100%{opacity:0}}
+.l6{animation:l6 30.75s linear infinite}@keyframes l6{0%,7.967%{opacity:0}8.455%,28.943%{opacity:1}29.919%,100%{opacity:0}}
+.l7{animation:l7 30.75s linear infinite}@keyframes l7{0%,9.106%{opacity:0}9.593%,28.943%{opacity:1}29.919%,100%{opacity:0}}
+.l8{animation:l8 30.75s linear infinite}@keyframes l8{0%,10.244%{opacity:0}10.732%,28.943%{opacity:1}29.919%,100%{opacity:0}}
+.l9{animation:l9 30.75s linear infinite}@keyframes l9{0%,11.382%{opacity:0}11.870%,28.943%{opacity:1}29.919%,100%{opacity:0}}
+.l10{animation:l10 30.75s linear infinite}@keyframes l10{0%,29.919%{opacity:0}30.407%,62.276%{opacity:1}63.252%,100%{opacity:0}}
+.l11{animation:l11 30.75s linear infinite}@keyframes l11{0%,31.057%{opacity:0}31.545%,62.276%{opacity:1}63.252%,100%{opacity:0}}
+.l12{animation:l12 30.75s linear infinite}@keyframes l12{0%,32.195%{opacity:0}32.683%,62.276%{opacity:1}63.252%,100%{opacity:0}}
+.l13{animation:l13 30.75s linear infinite}@keyframes l13{0%,34.472%{opacity:0}34.959%,62.276%{opacity:1}63.252%,100%{opacity:0}}
+.l14{animation:l14 30.75s linear infinite}@keyframes l14{0%,35.610%{opacity:0}36.098%,62.276%{opacity:1}63.252%,100%{opacity:0}}
+.l15{animation:l15 30.75s linear infinite}@keyframes l15{0%,36.748%{opacity:0}37.236%,62.276%{opacity:1}63.252%,100%{opacity:0}}
+.l16{animation:l16 30.75s linear infinite}@keyframes l16{0%,37.886%{opacity:0}38.374%,62.276%{opacity:1}63.252%,100%{opacity:0}}
+.l17{animation:l17 30.75s linear infinite}@keyframes l17{0%,39.024%{opacity:0}39.512%,62.276%{opacity:1}63.252%,100%{opacity:0}}
+.l18{animation:l18 30.75s linear infinite}@keyframes l18{0%,40.163%{opacity:0}40.650%,62.276%{opacity:1}63.252%,100%{opacity:0}}
+.l19{animation:l19 30.75s linear infinite}@keyframes l19{0%,41.301%{opacity:0}41.789%,62.276%{opacity:1}63.252%,100%{opacity:0}}
+.l20{animation:l20 30.75s linear infinite}@keyframes l20{0%,42.439%{opacity:0}42.927%,62.276%{opacity:1}63.252%,100%{opacity:0}}
+.l21{animation:l21 30.75s linear infinite}@keyframes l21{0%,43.577%{opacity:0}44.065%,62.276%{opacity:1}63.252%,100%{opacity:0}}
+.l22{animation:l22 30.75s linear infinite}@keyframes l22{0%,45.854%{opacity:0}46.341%,62.276%{opacity:1}63.252%,100%{opacity:0}}
+.l23{animation:l23 30.75s linear infinite}@keyframes l23{0%,63.252%{opacity:0}63.740%,99.024%{opacity:1}100.000%,100%{opacity:0}}
+.l24{animation:l24 30.75s linear infinite}@keyframes l24{0%,64.390%{opacity:0}64.878%,99.024%{opacity:1}100.000%,100%{opacity:0}}
+.l25{animation:l25 30.75s linear infinite}@keyframes l25{0%,65.528%{opacity:0}66.016%,99.024%{opacity:1}100.000%,100%{opacity:0}}
+.l26{animation:l26 30.75s linear infinite}@keyframes l26{0%,67.805%{opacity:0}68.293%,99.024%{opacity:1}100.000%,100%{opacity:0}}
+.l27{animation:l27 30.75s linear infinite}@keyframes l27{0%,70.081%{opacity:0}70.569%,99.024%{opacity:1}100.000%,100%{opacity:0}}
+.l28{animation:l28 30.75s linear infinite}@keyframes l28{0%,71.220%{opacity:0}71.707%,99.024%{opacity:1}100.000%,100%{opacity:0}}
+.l29{animation:l29 30.75s linear infinite}@keyframes l29{0%,73.496%{opacity:0}73.984%,99.024%{opacity:1}100.000%,100%{opacity:0}}
+.l30{animation:l30 30.75s linear infinite}@keyframes l30{0%,74.634%{opacity:0}75.122%,99.024%{opacity:1}100.000%,100%{opacity:0}}
+.l31{animation:l31 30.75s linear infinite}@keyframes l31{0%,75.772%{opacity:0}76.260%,99.024%{opacity:1}100.000%,100%{opacity:0}}
+.l32{animation:l32 30.75s linear infinite}@keyframes l32{0%,78.049%{opacity:0}78.537%,99.024%{opacity:1}100.000%,100%{opacity:0}}
+.l33{animation:l33 30.75s linear infinite}@keyframes l33{0%,79.187%{opacity:0}79.675%,99.024%{opacity:1}100.000%,100%{opacity:0}}
+.l34{animation:l34 30.75s linear infinite}@keyframes l34{0%,81.463%{opacity:0}81.951%,99.024%{opacity:1}100.000%,100%{opacity:0}}
+.l35{animation:l35 30.75s linear infinite}@keyframes l35{0%,82.602%{opacity:0}83.089%,99.024%{opacity:1}100.000%,100%{opacity:0}}
 @media (prefers-reduced-motion:reduce){.a{animation:none}.s0{opacity:1}}
 </style>
 <rect width="100%" height="100%" rx="10" fill="#1e1e2e"/>
@@ -63,11 +68,16 @@
 <text class="a l21" x="18" y="284" xml:space="preserve"><tspan fill="#8ce99a">8</tspan><tspan fill="#66d9e8">:</tspan><tspan fill="#cdd6f4">The customer got angry and hung up the phone.</tspan><tspan fill="#ff6b6b">  [0.06]</tspan></text>
 <text class="a l22" x="18" y="324" xml:space="preserve"><tspan fill="#6c7086">Threshold 0.5 — calibrated probabilities, no per-query tuning.</tspan></text>
 <text class="a l23" x="18" y="44" xml:space="preserve"><tspan fill="#ffffff" font-weight="700" font-family="system-ui,sans-serif" font-size="15">-Q finds the answer</tspan></text>
-<text class="a l24" x="18" y="64" xml:space="preserve"><tspan fill="#6c7086">-e X finds lines that say X. -Q X finds lines that answer X. -Q X is shorthand for -e "the line answers: X".</tspan></text>
-<text class="a l25" x="18" y="104" xml:space="preserve"><tspan fill="#6c7086">$ </tspan><tspan fill="#cdd6f4">semgrep -n -e "how to get a refund" tests/intent.txt</tspan></text>
-<text class="a l26" x="18" y="124" xml:space="preserve"><tspan fill="#8ce99a">12</tspan><tspan fill="#66d9e8">:</tspan><tspan fill="#cdd6f4">Email support with your order number to receive a refund.</tspan></text>
-<text class="a l27" x="18" y="144" xml:space="preserve"><tspan fill="#8ce99a">13</tspan><tspan fill="#66d9e8">:</tspan><tspan fill="#cdd6f4">How do I get a refund?</tspan></text>
-<text class="a l28" x="18" y="184" xml:space="preserve"><tspan fill="#6c7086">$ </tspan><tspan fill="#cdd6f4">semgrep -n -Q "how to get a refund" tests/intent.txt</tspan></text>
-<text class="a l29" x="18" y="204" xml:space="preserve"><tspan fill="#8ce99a">12</tspan><tspan fill="#66d9e8">:</tspan><tspan fill="#cdd6f4">Email support with your order number to receive a refund.</tspan></text>
-<text class="a l30" x="18" y="244" xml:space="preserve"><tspan fill="#6c7086">Line 12 tells you how to get a refund.</tspan></text>
+<text class="a l24" x="18" y="64" xml:space="preserve"><tspan fill="#6c7086">Ask the question as you would ask it. -e X finds lines that say X; -Q X finds lines that answer X. “The job</tspan></text>
+<text class="a l25" x="18" y="84" xml:space="preserve"><tspan fill="#6c7086">failed.” does not say the job succeeded, but it answers whether it did: no.</tspan></text>
+<text class="a l26" x="18" y="124" xml:space="preserve"><tspan fill="#6c7086">$ </tspan><tspan fill="#cdd6f4">echo "The job failed." | semgrep -n -e "Did the job succeed?"</tspan></text>
+<text class="a l27" x="18" y="164" xml:space="preserve"><tspan fill="#6c7086">$ </tspan><tspan fill="#cdd6f4">echo "The job failed." | semgrep -n -Q "Did the job succeed?"</tspan></text>
+<text class="a l28" x="18" y="184" xml:space="preserve"><tspan fill="#8ce99a">1</tspan><tspan fill="#66d9e8">:</tspan><tspan fill="#cdd6f4">The job failed.</tspan></text>
+<text class="a l29" x="18" y="224" xml:space="preserve"><tspan fill="#6c7086">$ </tspan><tspan fill="#cdd6f4">semgrep -n -e "how to get a refund" tests/intent.txt</tspan></text>
+<text class="a l30" x="18" y="244" xml:space="preserve"><tspan fill="#8ce99a">12</tspan><tspan fill="#66d9e8">:</tspan><tspan fill="#cdd6f4">Email support with your order number to receive a refund.</tspan></text>
+<text class="a l31" x="18" y="264" xml:space="preserve"><tspan fill="#8ce99a">13</tspan><tspan fill="#66d9e8">:</tspan><tspan fill="#cdd6f4">How do I get a refund?</tspan></text>
+<text class="a l32" x="18" y="304" xml:space="preserve"><tspan fill="#6c7086">$ </tspan><tspan fill="#cdd6f4">semgrep -n -Q "how to get a refund" tests/intent.txt</tspan></text>
+<text class="a l33" x="18" y="324" xml:space="preserve"><tspan fill="#8ce99a">12</tspan><tspan fill="#66d9e8">:</tspan><tspan fill="#cdd6f4">Email support with your order number to receive a refund.</tspan></text>
+<text class="a l34" x="18" y="364" xml:space="preserve"><tspan fill="#6c7086">A “no” answers a yes/no question too; a line that asks it (13) answers nothing. -Q X is shorthand for -e "the</tspan></text>
+<text class="a l35" x="18" y="384" xml:space="preserve"><tspan fill="#6c7086">line answers: X".</tspan></text>
 </svg>

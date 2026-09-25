@@ -252,9 +252,18 @@ None of these lines contain the words "angry" or "frustrated".
 
 ### Lines that answer a question (`-Q`)
 
-`-e` asks whether a line states a meaning. `-Q QUESTION` (`--question`) finds lines that answer it instead.
-A line that *asks* the question is close to it in meaning but answers nothing, and for a yes/no question
-a line that *denies* it still answers it:
+`-e` asks whether a line states a meaning. `-Q QUESTION` (`--question`) finds lines that answer it instead,
+so you can write the question as you would ask it:
+
+```sh
+$ echo "The job failed." | ./semgrep -e "Did the job succeed?"
+$ echo "The job failed." | ./semgrep -Q "Did the job succeed?"
+The job failed.
+```
+
+As a meaning, "Did the job succeed?" is not what the line says (0.08), so `-e` finds nothing. As a question,
+the line answers it: no, it failed (0.83). A line that *asks* the question is close to it in meaning but
+answers nothing, and for a yes/no question a line that *denies* it still answers it:
 
 ```sh
 $ ./semgrep -n -Q "whether the server is down" tests/intent.txt
