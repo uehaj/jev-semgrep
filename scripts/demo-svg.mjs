@@ -29,7 +29,7 @@ function linesOf(s) {
     }
     lines.push([]);
   }
-  if (s.note) lines.push([[s.note, C.mute]]);
+  if (s.note) lines.push(...wrap(s.note, COLS).map(t => [[t, C.mute]]));
   return lines;
 }
 
