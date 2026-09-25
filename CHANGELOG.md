@@ -5,6 +5,9 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 
 ## [Unreleased]
 
+### Added
+- `-V`, `--version`: print `semgrep X.Y.Z` and exit, like `grep -V`.
+
 ### Security
 - **Breaking:** `./.env` in the current directory is no longer read; only the environment and
   `~/.config/semgrep/.env` are. A `.env` committed to an untrusted repository could set `SEMGREP_URL` and send

@@ -50,6 +50,7 @@ const OPTIONS = {
   'sys1-url': { type: 'string' }, // SEMGREP_URL
   'sys1-api-key': { type: 'string' }, // SEMGREP_API_KEY / TYPESAFE_API_KEY
   help: { type: 'boolean', short: 'h', default: false },
+  version: { type: 'boolean', short: 'V', default: false },
 };
 // SEMGREP_OPTS holds default options only: no meanings, no files, no --. It goes in front of the arguments, so the
 // command line wins (a later value counts; --no-X clears a flag).
@@ -143,6 +144,7 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                the API settings, overriding SEMGREP_MODEL, SEMGREP_URL, SEMGREP_API_KEY below.
                A key on the command line shows up in ps and shell history; prefer .env
   -h, --help   this help (Japanese when LANG / LC_ALL / LC_MESSAGES starts with ja)
+  -V, --version  print the version and exit
 
 Exit status: 0 matched / 1 no match / 2 error
 
@@ -231,6 +233,7 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                API の設定。下の SEMGREP_MODEL / SEMGREP_URL / SEMGREP_API_KEY より優先。
                コマンドラインのキーは ps やシェル履歴に残るので、なるべく .env に書く
   -h, --help   このヘルプ (LANG / LC_ALL / LC_MESSAGES が ja 以外なら英語)
+  -V, --version  バージョンを表示して終了
 
 終了コード: 一致あり 0 / なし 1 / エラー 2 (引数・読めないファイル・API 障害)
 
@@ -245,6 +248,10 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                      スクリプトからは SEMGREP_OPTS= semgrep と空にして呼ぶ
   キーは SEMGREP_URL の先へそのまま送られる。SEMGREP_URL 指定時にキーが無ければ認証ヘッダを付けない。
   例:  mkdir -p ~/.config/semgrep && echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env`;
+if (opt.version) {
+  console.log(`semgrep ${JSON.parse(readFileSync(new URL('package.json', import.meta.url), 'utf8')).version}`);
+  process.exit(0);
+}
 if (opt.help) {
   const locale = process.env.LC_ALL || process.env.LC_MESSAGES || process.env.LANG || '';
   console.log(locale.startsWith('ja') ? HELP_JA : HELP_EN);

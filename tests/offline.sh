@@ -214,6 +214,12 @@ for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '
   $E LANG=C node ../semgrep.mjs --help | grep -q -- "$o" || fail "--help lacks $o"
 done
 $E LANG=C node ../semgrep.mjs --help | grep -q 'grep by meaning' || fail "--help in English"
+
+# --version: the version in package.json, exit 0, before any check that needs a key or a meaning
+v=$(node -p "require('../package.json').version")
+eq "$($E node ../semgrep.mjs --version)" "semgrep $v" "--version"
+eq "$($E node ../semgrep.mjs -V)" "semgrep $v" "-V"
+code 0 "--version with no key" -- $E node ../semgrep.mjs --version
 $E LANG=ja_JP.UTF-8 node ../semgrep.mjs --help | grep -q '何も表示せず' || fail "--help in Japanese"
 $E LANG=C LC_MESSAGES=ja_JP.UTF-8 node ../semgrep.mjs --help | grep -q '何も表示せず' || fail "LC_MESSAGES"
 echo OK
