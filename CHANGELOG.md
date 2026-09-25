@@ -17,8 +17,8 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 - **Breaking:** `./.env` in the current directory is no longer read, as in 0.3.1 (see there).
 
 ### Fixed
-- A PDF is skipped as binary. About a third of them have no NUL in the first 8 KB (they open with XML metadata),
-  so their bytes were sent as lines.
+- A PDF is skipped as binary. One that opens with XML metadata has no NUL in the first 8 KB, so its bytes were
+  sent as lines.
 - UTF-16 with a BOM is read as text. Its NUL bytes made it look binary, so it was skipped, silently with `-r`.
 - A malformed API response (an answer without a probability) is an error (exit 2). It used to count as 0, so
   `-v X` and `!X` matched. An error body from the server is cut to 300 characters, without control characters.

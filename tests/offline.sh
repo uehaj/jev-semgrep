@@ -198,10 +198,10 @@ eq "$(stat count)" "0" "-z sends nothing from a binary"
 printf '%%PDF-1.5\ncat\n' >"$tmp/doc.pdf"
 reset; eq "$($J -e cat "$tmp/doc.pdf" 2>&1)" "semgrep: $tmp/doc.pdf: binary file skipped" "a PDF is skipped"
 eq "$(stat count)" "0" "nothing is sent from a PDF"
-printf 'cat\ndog\n' | iconv -f UTF-8 -t UTF-16LE | { printf '\377\376'; cat; } >"$tmp/le.txt"
-printf 'cat\ndog\n' | iconv -f UTF-8 -t UTF-16BE | { printf '\376\377'; cat; } >"$tmp/be.txt"
+node -e 'const le = Buffer.from("﻿cat\ndog\n", "utf16le"); require("fs").writeFileSync(process.argv[1], le); require("fs").writeFileSync(process.argv[2], Buffer.from(le).swap16())' "$tmp/le.txt" "$tmp/be.txt"
 eq "$($J -n -e cat "$tmp/le.txt")" "1:cat" "UTF-16LE is read"
 eq "$($J -n -e dog "$tmp/be.txt")" "2:dog" "UTF-16BE is read"
+eq "$($J -z -c -e cat "$tmp/le.txt")" "1" "-z with UTF-16: no NUL character, so the file is one record, as in UTF-8"
 # --sentence=jev with regex terms only asks nothing: the rules join the lines
 printf '猫がいる\n犬もいる\n' >"$tmp/ja"   # unpunctuated Japanese: the breaks --sentence=jev would ask about
 reset; $J --sentence -c -e '/猫/' "$tmp/ja" >/dev/null; eq "$(stat count)" "0" "--sentence with regex terms only sends nothing"
