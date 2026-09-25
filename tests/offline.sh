@@ -332,4 +332,6 @@ eq "$($E node ../semgrep.mjs -V)" "semgrep $v" "-V"
 code 0 "--version with no key" -- $E node ../semgrep.mjs --version
 $E LANG=ja_JP.UTF-8 node ../semgrep.mjs --help | grep -q '何も表示せず' || fail "--help in Japanese"
 $E LANG=C LC_MESSAGES=ja_JP.UTF-8 node ../semgrep.mjs --help | grep -q '何も表示せず' || fail "LC_MESSAGES"
+# Required literals for the rg front end (#80): every line a regex matches contains one of them
+node literals.mjs >/dev/null || fail "required literals"
 echo OK
