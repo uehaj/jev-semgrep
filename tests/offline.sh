@@ -401,6 +401,8 @@ code 2 "--summarize in SEMGREP_OPTS" -- $E PATH=$tmp/bin:$PATH SEMGREP_OPTS=--su
 eq "$(stat count)" "0" "--summarize errors send nothing"
 rm -f "$tmp/sum.in"; $S --summarize --dry-run -e cat "$F" | grep -q '^semgrep: summarize: claude -p --model haiku --tools "" .*--system-prompt "Summarize' || fail "--dry-run shows the summarizer"
 [ ! -e "$tmp/sum.in" ] || fail "--dry-run runs the summarizer"
+out=$(asking "$S -i --summarize -e cat '$F'" n)
+echo "$out" | grep -q 'then the matching lines to claude? \[y/N\]' || fail "-i says the lines go to the summarizer: $out"
 
 # the spinner (#89): on a terminal, one line on stderr while waiting, erased before the output; never when not a terminal
 printf 'cat @slow\ndog\n' >"$tmp/slow.txt"

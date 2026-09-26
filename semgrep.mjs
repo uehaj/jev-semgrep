@@ -733,7 +733,7 @@ if (opt.interactive && !dry) {
   const shown = [...plan.stdout.split('\n').filter(l => /^semgrep: (file |dry run: |summarize: )/.test(l)), ...errors].map(safe);
   warned.push(...errors); // its scope lines among them: not printed again after the answer
   if (!/^semgrep: dry run: 0 requests/.test(shown.findLast(l => l.startsWith('semgrep: dry run: ')))) {
-    writeSync(tty, `${shown.join('\n')}\nSearch, sending the above? [y/N] `);
+    writeSync(tty, `${shown.join('\n')}\nSearch, sending the above${summarizer ? `, then the matching lines to ${opt.summarize}` : ''}? [y/N] `);
     const buf = Buffer.alloc(256);
     if (!/^\s*y(es)?\s*$/i.test(buf.toString('utf8', 0, readSync(tty, buf)))) { console.error('semgrep: nothing sent'); process.exit(1); }
   }
