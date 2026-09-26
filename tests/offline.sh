@@ -291,6 +291,7 @@ printf 'cat\n' >"$G/base.txt"; printf 'cat\n' >"$G/removed.txt"
 reset
 eq "$(cd "$G" && $GS --chunk 1 -n -e cat v1 v2 -- base.txt | tr '\n' ' ')" "v1:base.txt:1:cat v2:base.txt:1:cat " "#50: a blob shared by two trees prints under each tree's prefix"
 eq "$(stat count)" "1" "#50: ...but is judged once (one request for the shared blob)"
+eq "$(cd "$G" && $GS -c -e cat v1 -- base.txt)" "v1:base.txt:1" "#50: a <tree>: -c is prefixed too"
 # a symlink and a submodule in a tree are left out, as in the working tree
 (cd "$G" && ln -s base.txt link.txt && git add link.txt && git update-index --add --cacheinfo 160000,"$(git rev-parse HEAD)",fakesub && git commit -q -m v3 && git tag v3)
 eq "$(cd "$G" && $GS -l -e cat v3 | tr '\n' ' ')" "v3:base.txt v3:removed.txt " "#50: a <tree>: a symlink and a submodule are left out"
