@@ -322,6 +322,15 @@ echo "$V" | grep -qE '^semgrep:   · test code \(.*\) +0\.40  \(below 0\.6, not 
 echo "$V" | grep -qE '^semgrep:   ✓ what was changed yesterday .*keeps [0-9]+ of 4 files$' || fail "--verbose: the narrowest span applied: $V"
 echo "$V" | grep -qE '^semgrep:   · what was changed within the last 30 days .*\(a narrower span applied\)$' || fail "--verbose: a wider span not applied: $V"
 eq "$($JI -r -l --dry-run --verbose -e 'cat @s:l_python' "$S" 2>&1 | grep -c '^semgrep:   [✓·]' || true)" "0" "--verbose: no candidate lines with --dry-run"
+# --verbose (#104): the scopes a matching file got through, once per file; the files left out, 10 by name
+V=$($JI -r -n --verbose -e 'cat @s:l_python' "$S" "$S/b.js" 2>&1 >/dev/null || true)
+eq "$(echo "$V" | grep -c ': searched by scope ')" "3" "--verbose: a scope line per matching file, not per line, none for a named file"
+echo "$V" | grep -qx "semgrep: $S/sub/c.py: searched by scope Python files (\*.py \*.pyi \*.pyw)" || fail "--verbose: the scope a file got through: $V"
+eq "$($JI -r -l --verbose -e 'cat @s:l_python' "$S" 2>&1 >/dev/null | grep '^semgrep:   left out: ')" "semgrep:   left out: $S/b.js" "--verbose: a file left out"
+M="$tmp/many"; mkdir -p "$M"; for i in 01 02 03 04 05 06 07 08 09 10 11 12; do echo cat >"$M/$i.js"; done; echo cat >"$M/a.py"
+eq "$($JI -r -l --verbose -e 'cat @s:l_python' "$M" 2>&1 >/dev/null | grep '^semgrep:   left out: ')" "semgrep:   left out: $(for i in 01 02 03 04 05 06 07 08 09 10; do printf '%s ' "$M/$i.js"; done)… (+2 more)" "--verbose: 10 left out by name, the rest counted"
+eq "$($JI -r -q --verbose -e 'cat @s:l_python' "$S" 2>&1 | grep -cE 'searched by scope|left out: ' || true)" "0" "--verbose: neither line with -q"
+eq "$($JI -r --dry-run --verbose -e 'cat @s:l_python' "$S" 2>&1 | grep -cE 'searched by scope|left out: ' || true)" "0" "--verbose: neither line with --dry-run"
 # git: time by commit (not the mtime a checkout sets), states and authors; not asked outside a repository
 G="$tmp/gitscope"; mkdir -p "$G"
 GM='cat @s:t_yesterday|cat @s:a_a_x|cat @s:g_mine|cat @s:g_mine @s:a_b_x|cat @s:g_uncommitted|cat @s:g_staged|cat @s:g_untracked|cat @s:g_branch|cat @s:g_unpushed'

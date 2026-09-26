@@ -28,7 +28,9 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   `semgrep: scope: …` with Jev's answer, silent with `-q`, asked only after `-i`'s answer; named files are never
   narrowed. `--no-auto-scope` turns it off, `--auto-scope` back on.
   `--verbose` lists each candidate Jev answered 0.2 or more, with its answer, ✓ if applied or · if not, and how
-  many of the files found it alone keeps (#99).
+  many of the files found it alone keeps (#99). It also names, once per file with a match, the scopes that file got
+  through (`semgrep: src/app.py: searched by scope Python files (*.py *.pyi *.pyw)`), and after `scope: N of M files`
+  the files left out, 10 by name and the rest counted (`semgrep:   left out: README.md … (+325 more)`) (#104).
 - Auto-scope by place (#48): test code, migrations, the README, the changelog, documentation, source code (what is
   not documentation) and logs, by path conventions, asked of Jev with the other candidates.
 - Auto-scope from git (#46): in a repository a time goes by commits (uncommitted files by their mtime), and git

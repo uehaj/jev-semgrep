@@ -135,7 +135,8 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                commit since then, an uncommitted one its mtime
                (*.py *.pyi *.pyw; modified since then). Jev reads the whole meaning, so "案A、B、Cで" is not
                about C files. Per term: -e A -e B still searches B in the files A leaves out. Each scope goes
-               to stderr as semgrep: scope: ...; with -r a file named on the command line is never narrowed,
+               to stderr as semgrep: scope: ... (with --verbose, also the scopes each matching file got through
+               and the files left out); with -r a file named on the command line is never narrowed,
                git semgrep's pathspecs are narrowed like the rest (as with --include)
   --auto-scope turn it back on after --no-auto-scope in SEMGREP_OPTS
   -l           print only the names of files with a match, not the lines
@@ -265,7 +266,8 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                (コミット済みはそれ以降のコミットがあるもの、未コミットは mtime)。0.6 以上で yes なら、-r と git semgrep で見つけたファイルをそのファイル
                (*.py *.pyi *.pyw、それ以降に更新したもの) に絞る。Jev は意味全体を読むので、「案A、B、Cで」は
                C のファイルの話にならない。項ごとに効くので、-e A -e B は A が除いたファイルでも B を探す。
-               絞り込みは semgrep: scope: ... として stderr に出す。-r ではコマンドラインで指定したファイルは
+               絞り込みは semgrep: scope: ... として stderr に出す (--verbose では、一致したファイルごとに通った
+               絞り込みと、除いたファイルも出す)。-r ではコマンドラインで指定したファイルは
                絞らない。git semgrep の pathspec は他と同じく絞る (--include と同じ)
   --auto-scope SEMGREP_OPTS の --no-auto-scope を打ち消して、絞り込みを有効に戻す
   -l           一致した行ではなくファイル名だけを表示
@@ -656,13 +658,13 @@ function gitCandidates(found) {
 }
 const scopeQuestions = text => Object.fromEntries(CANDIDATES.map(c => [c.key, { type: 'noul', instructions: `Does the meaning "${text}" restrict its matches to ${c.what}?` }]));
 const SCOPE_AT = 0.6; // a candidate counts at this or more (see the top of auto-scope)
-// Jev's answers -> one scope per category that got a yes: { label, words, test }
+// Jev's answers -> one scope per category that got a yes: { label, words, names, test } (names: for --verbose)
 function scopesOf(answers) {
   const yes = CANDIDATES.filter(c => answers[c.key].noul >= SCOPE_AT), out = [];
   for (const cat of new Set(yes.map(c => c.cat))) {
     let cs = yes.filter(c => c.cat === cat);
     if (cat === 'time') cs = [cs.reduce((a, b) => (b.from > a.from ? b : a))];
-    out.push({ label: [...new Set(cs.map(c => c.label))].join(' | '), words: cs.map(c => `${c.what}: ${answers[c.key].noul.toFixed(2)}`), test: (f, st) => cs.some(c => c.test(f, st)) });
+    out.push({ label: [...new Set(cs.map(c => c.label))].join(' | '), words: cs.map(c => `${c.what}: ${answers[c.key].noul.toFixed(2)}`), names: cs.map(c => `${c.what} (${cut(c.label, 40)})`), test: (f, st) => cs.some(c => c.test(f, st)) });
   }
   return out;
 }
@@ -837,6 +839,9 @@ const targets = found.filter(f => expr.some(term => admitted(term, f)));
 if (!opt.quiet && narrowable) {
   const lines = [...new Set(expr.flat().filter(lit => lit.kind === 's').map(lit => `semgrep: scope: ${safe(lit.label)} (from ${lit.words.map(w => `"${safe(w)}"`).join(', ')})`))];
   if (lines.length) lines.push(`semgrep: scope: ${targets.length} of ${found.length} files`);
+  // --verbose: the files the scopes left out, the first 10 by name (#104)
+  const kept = new Set(targets), out = found.filter(f => !kept.has(f));
+  if (lines.length && opt.verbose && !dry && out.length) lines.push(`semgrep:   left out: ${out.slice(0, 10).map(safe).join(' ')}${out.length > 10 ? ` … (+${out.length - 10} more)` : ''}`);
   for (const m of lines) if (!warned.includes(m)) { console.error(m); warned.push(m); }
 }
 
@@ -1187,6 +1192,9 @@ for (const file of opt.quiet || dry ? [] : targets) {
   const h = hits.get(file);
   if (opt.c) { console.log((multi ? paint(35, file) + paint(36, ':') : '') + (h?.size ?? 0)); continue; }
   if (!h) continue;
+  // --verbose: the scopes that let this file through, once per file with a match (#104)
+  const via = opt.verbose && !named(file) ? [...new Set(expr.filter(t => admitted(t, file)).flatMap(t => t.flatMap(l => (l.kind === 's' ? l.names : []))))] : [];
+  if (via.length) console.error(`semgrep: ${safe(file)}: searched by scope ${via.map(safe).join(', ')}`);
   if (opt.l) { console.log(paint(35, file)); continue; }
   const src = sources.get(file);
   let last = 0; // last line number already printed for this file
