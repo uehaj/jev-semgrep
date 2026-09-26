@@ -453,6 +453,25 @@ applies even to tracked files. `--include`, `--exclude` and `--changed-within` f
 by a pathspec included. `--changed-within` reads the working tree's modification times, not git history: right after
 a clone or a checkout, every file it wrote counts as just changed. For help use `git sys1grep -h`: git takes `--help` itself and looks for a man page.
 
+`--cached`, `--untracked` and a `<tree>...` choose what is searched instead of the working tree, as `git grep` has
+them (only one of the three at a time):
+
+```sh
+$ git sys1grep --cached -e "a retry is attempted"       # staged, uncommitted changes included
+$ git sys1grep --untracked -e "a retry is attempted"    # tracked files plus untracked ones (.gitignore still applies)
+$ git sys1grep -n -e "a retry is attempted" main v0.3.1 -- '*.py'
+main:src/job.py:42:    retry(job, times=3)
+v0.3.1:src/job.py:40:    retry(job)
+```
+
+A `<tree>` (a branch, tag, commit or `@{u}`) is any argument before `--` that resolves as a revision; several may
+be given, searched in the order given, each line prefixed with the name as typed (`@{u}:path`, not the branch it
+resolves to). `--changed-within` needs the working tree: a blob (`--cached`, a `<tree>`) has no mtime of its own.
+A `<tree>`'s own pathspec is a literal or directory-prefix match (`git ls-tree`'s own rule), not the glob
+`--include` / a plain pathspec elsewhere in sys1grep gives; `--include` / `--exclude` (by name) still work.
+**An old `<tree>` can hold a secret an ordinary file once carried and was later removed from**: the skip list
+drops files by name only, not by what changed since.
+
 ### Everything that is *not* something
 
 ```sh
@@ -652,6 +671,10 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
                with -t 0.6 -T 0.3 a line at 0.3..0.6 matches neither X nor not-X
   -r           recurse into directories (current directory when FILE is omitted);
                skips .git, node_modules, binary files, likely secrets and what git ignores
+  --cached     git sys1grep only: search the index instead of the working tree, as git grep --cached
+  --untracked  git sys1grep only: also search untracked files (.gitignore still applies), as git grep --untracked
+  <tree>...    git sys1grep only: a branch, tag, commit or @{u} before -- searches that revision's tree
+               instead, as git grep does; output is prefixed <tree>: with the name as typed
   --include=GLOB, --exclude=GLOB  with -r and git sys1grep, only files whose name matches GLOB, or not
                (with -r a file named on the command line is always searched; git sys1grep's pathspecs are filtered)
   --changed-within=WHEN  with -r and git sys1grep, only files modified within 30m / 2h / 7d / 2w, since a date

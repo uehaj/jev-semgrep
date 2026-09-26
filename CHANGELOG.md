@@ -6,6 +6,14 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
+- `git sys1grep` gets `--cached`, `--untracked` and `<tree>...`, as `git grep` has them (#50). `--cached`
+  searches the blobs staged in the index instead of the working tree (a file deleted from the working tree
+  but still staged is still found); `--untracked` searches tracked files plus untracked ones (`.gitignore`
+  still applies); a `<tree>...` (a branch, tag, commit or `@{u}`, named before `--`) searches that revision's
+  tree instead, several may be given, each line prefixed `<tree>:` with the name as typed. Only one of the
+  three at a time. A blob shared by several trees is judged once, without needing `--dedup`. Auto-scope does
+  not narrow a blob (index or tree) target, and `--changed-within` is an error with `--cached` or a `<tree>`:
+  a blob has no mtime of its own.
 - `-g` / `--gitlog` searches the commits of `git log` instead of files, one record each (`%h %ad %s`, then the
   body). With one term, auto-scope turns into git log's arguments: a time into `--since`, a language into
   pathspecs, an author or "mine" into `--author`, this branch or not pushed into a range, so
