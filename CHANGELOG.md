@@ -6,6 +6,12 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
+- `-g` / `--gitlog` searches the commits of `git log` instead of files, one record each (`%h %ad %s`, then the
+  body). With one term, auto-scope turns into git log's arguments: a time into `--since`, a language into
+  pathspecs, an author or "mine" into `--author`, this branch or not pushed into a range, so
+  `semgrep -g -Q '今日、.mjsにおこなった性能向上の修正'` runs `git log --since=<today> -- '*.mjs' …` and judges
+  those commits. The command is printed on stderr. FILE arguments are pathspecs and are never narrowed. Places
+  and uncommitted / staged / untracked are not asked. Not with `-r` or `git semgrep`.
 - Auto-scope's note (#111): each judging request tells Jev which scopes all its lines got through, in one
   `note` in its state (`note: every line here is from what was changed yesterday, .mjs files.`), named as the
   scope question named them, or a language by the extension the meaning wrote. A line cannot show when it
