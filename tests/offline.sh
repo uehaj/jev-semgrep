@@ -112,6 +112,7 @@ eq "$($J --sentence=rules -o --color=always -e cat -a '/sat/' "$tmp/s.txt")" "Th
 eq "$($J -o -n -e '/a/' "$F" | tr '\n' '|')" "1:a|4:a|7:a|" "-o: regex matches"
 eq "$($J -o -n -e '/o/' -a '/owl/' "$F" | tr '\n' '|')" "7:owl|8:owl|" "-o: overlapping matches print once, the longest"
 eq "$($J -o -n -e cat "$F" | tr '\n' '|')" "1:cat|4:cat dog|" "-o: a meaning-only line prints whole"
+printf 'ABcYZde\n' >"$tmp/o.txt"; eq "$($J -o -e '/AB/' -e '/B.{5}/' -e '/YZ/' "$tmp/o.txt" | tr '\n' '|')" "AB|YZ|" "-o: a skipped overlap does not hide a later match"
 eq "$($J -o -n -A 1 -e '/cat/' "$F" | tr '\n' '|')" "1:cat|4:cat|" "-o: no context"
 
 # --chunk: lines per request (7 lines are sent; the blank one is not)

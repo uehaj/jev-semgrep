@@ -1163,7 +1163,8 @@ for (const file of opt.quiet || dry ? [] : targets) {
       const matches = !p ? [] : sentences ? sentences.flatMap(([a, b, s]) => regexRanges(text, s, a, b)) : regexRanges(text, p);
       // Only data records carry the NUL terminator, as in grep -z; file names and counts stay on newlines.
       if (partsOnly && matches.length) {
-        for (const [a, b] of matches.filter(([a], i) => !matches.slice(0, i).some(([, e]) => a < e))) write(prefix + paint('01;31', text.slice(a, b)) + tail + EOL); // overlaps print once
+        let end = -1; // a match overlapping the last one printed is skipped; a skipped one does not hide later ones
+        for (const [a, b] of matches) if (a >= end) { write(prefix + paint('01;31', text.slice(a, b)) + tail + EOL); end = b; }
       } else write(prefix + highlight(text, sentences, matches) + tail + EOL);
     }
     last = Math.max(last, to);
