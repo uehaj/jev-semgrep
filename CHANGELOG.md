@@ -12,6 +12,11 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   `semgrep -g -Q '今日、.mjsにおこなった性能向上の修正'` runs `git log --since=<today> -- '*.mjs' …` and judges
   those commits. The command is printed on stderr. FILE arguments are pathspecs and are never narrowed. Places
   and uncommitted / staged / untracked are not asked. Not with `-r` or `git semgrep`.
+- Auto-scope's note (#111): each judging request tells Jev which scopes all its lines got through, in one
+  `note` in its state (`note: every line here is from what was changed yesterday, .mjs files.`), named as the
+  scope question named them, or a language by the extension the meaning wrote. A line cannot show when it
+  changed, where it lives or who wrote it, so those words in a meaning pulled the verdicts down: on 49 lines,
+  "昨日変更された、例外を処理している箇所" went from F1 0.00 to 1.00 at 0.5. `--verbose` shows the note under each request.
 - `--summarize[=TOOL]` pipes what would print to an LLM CLI, asked about the meanings as they were written, and
   prints its answer instead of the lines (#69, #75). TOOL is `claude` (`claude -p --model haiku` with no tools and
   no settings); `SEMGREP_SUMMARIZER` picks the TOOL of a bare `--summarize`, `SEMGREP_SUMMARIZER_MODEL` its

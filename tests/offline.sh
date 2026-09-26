@@ -331,6 +331,14 @@ M="$tmp/many"; mkdir -p "$M"; for i in 01 02 03 04 05 06 07 08 09 10 11 12; do e
 eq "$($JI -r -l --verbose -e 'cat @s:l_python' "$M" 2>&1 >/dev/null | grep '^semgrep:   left out: ')" "semgrep:   left out: $(for i in 01 02 03 04 05 06 07 08 09 10; do printf '%s ' "$M/$i.js"; done)… (+2 more)" "--verbose: 10 left out by name, the rest counted"
 eq "$($JI -r -q --verbose -e 'cat @s:l_python' "$S" 2>&1 | grep -cE 'searched by scope|left out: ' || true)" "0" "--verbose: neither line with -q"
 eq "$($JI -r --dry-run --verbose -e 'cat @s:l_python' "$S" 2>&1 | grep -cE 'searched by scope|left out: ' || true)" "0" "--verbose: neither line with --dry-run"
+# The note (#111): each judging request says which scopes all its lines got through, as the scope question named them
+nt() { $JI -r --verbose "$@" 2>&1 >/dev/null | grep '^semgrep:   note: ' | sort -u; }
+eq "$(nt -e 'cat @s:l_python' "$S")" "semgrep:   note: every line here is from Python files." "note: an applied scope"
+eq "$(nt -e 'a cat in .py files @s:l_python' "$S")" "semgrep:   note: every line here is from .py files." "note: a language by the extension the meaning wrote"
+eq "$(nt -e 'cat @s:l_python @s:t_yesterday @s:t_day30' "$S")" "semgrep:   note: every line here is from Python files, what was changed yesterday." "note: categories, the narrowest span"
+eq "$(nt -z -e 'cat @s:l_python' "$S")" "semgrep:   note: every record here is from Python files." "note: the unit word"
+eq "$(nt -e cat "$S")" "" "note: none without a scope"
+eq "$(nt -e 'cat @s:l_python' "$S" "$S/b.js" | grep -c . || true)" "0" "note: a request with a named file (never narrowed) carries none"
 # git: time by commit (not the mtime a checkout sets), states and authors; not asked outside a repository
 G="$tmp/gitscope"; mkdir -p "$G"
 GM='cat @s:t_yesterday|cat @s:a_a_x|cat @s:g_mine|cat @s:g_mine @s:a_b_x|cat @s:g_uncommitted|cat @s:g_staged|cat @s:g_untracked|cat @s:g_branch|cat @s:g_unpushed'
@@ -371,6 +379,9 @@ eq "$(gl -e 'cat @s:l_python' b.js)" "newjs " "-g: FILE is a pathspec, never nar
 eq "$(gl --no-auto-scope -e 'cat @s:t_today')" "newpy newjs oldpy " "-g: --no-auto-scope"
 eq "$(cd "$L" && $JI -g --dry-run -e 'cat @s:l_python' -e dog | grep -c '\[scope\]' || true)" "0" "-g: no scope question with two terms"
 (cd "$L" && $JI -g -e 'cat @s:t_today @s:l_python' 2>&1 >/dev/null) | grep -qE "^semgrep: git log .*--since=[0-9T:.-]+Z -- ':\(glob\)\*\*/\*\.py'" || fail "-g: the git log command on stderr"
+gn() { (cd "$L" && $JI -g --verbose "$@" 2>&1 >/dev/null) | grep '^semgrep:   note: ' | sort -u; }
+eq "$(gn -e 'cat @s:t_today @s:l_python')" "semgrep:   note: every record here is from Python files, what was changed today." "-g: the note names the scopes git log took"
+eq "$(gn -e 'cat @s:l_python' b.js)" "" "-g: no language in the note when FILE pathspecs replaced it"
 code 2 "-g with -r" -- sh -c "cd '$L' && $JI -g -r -e cat"
 eq "$(gs g_branch)" "dirty.txt feat.txt staged.txt untr.txt " "git scope: this branch"
 eq "$(gs g_unpushed)" "dirty.txt feat.txt new.txt old.txt " "git scope: unpushed, no remote"
@@ -473,10 +484,16 @@ eq "$($S --summarize --dedup -e cat "$tmp/dd.txt")" "SUMMARY" "--summarize --ded
 eq "$(cat "$tmp/sum.in")" "cat 1   (×3 like it)" "--summarize --dedup: a representative and its count"
 grep -q 'stands for N matching lines' "$tmp/sum.argv" || fail "--summarize --dedup: the prompt says what ×N is"
 $S --summarize -e cat "$tmp/dd.txt" >/dev/null; grep -q 'like it' "$tmp/sum.argv" && fail "--summarize without --dedup: no ×N in the prompt"
+printf 'The cat 1 sat. A dog ran.\nThe cat 2 sat.\nThe cat 3\nsat.\n' >"$tmp/dds.txt"
+$S --summarize --dedup --sentence=rules -n -e cat "$tmp/dds.txt" >/dev/null
+eq "$(tr '\n' '|' <"$tmp/sum.in")" "1:The cat 1 sat. A dog ran.   (×3 like it)|" "--summarize --dedup --sentence: one representative for sentences across lines"
 node -e "for (let i = 0; i < 3000; i++) console.log('cat ' + 'x'.repeat(80) + ' ' + i)" >"$tmp/big.txt"
 rm -f "$tmp/sum.in"; code 2 "--summarize over 200 KB" -- $S --summarize -e '/cat/' "$tmp/big.txt"
 [ ! -e "$tmp/sum.in" ] || fail "--summarize over 200 KB runs the summarizer"
 $S --summarize -e '/cat/' "$tmp/big.txt" 2>&1 >/dev/null | grep -q '^semgrep: --summarize: 3000 matching lines (2[0-9][0-9] KB) are more than the 200 KB to summarize; narrow the expression or add --dedup$' || fail "--summarize over 200 KB: the message: $($S --summarize -e '/cat/' "$tmp/big.txt" 2>&1 >/dev/null)"
+# 300 templates (told apart by letters, which --dedup never folds), 10 lines each: 300 representatives, about 240 KB
+node -e "for (let i = 0; i < 3000; i++) console.log('cat ' + [...String(i % 300)].map(d => 'ghijklmnop'[d]).join('') + ' ' + 'x'.repeat(800) + ' ' + i)" >"$tmp/bigdd.txt"
+$S --summarize --dedup --chunk 100 -e cat "$tmp/bigdd.txt" 2>&1 >/dev/null | grep -q '^semgrep: --summarize: 3000 matching lines as 300 representatives ([0-9]* KB) are more than the 200 KB to summarize; narrow the expression$' || fail "--summarize --dedup over 200 KB: $($S --summarize --dedup --chunk 100 -e cat "$tmp/bigdd.txt" 2>&1 >/dev/null)"
 $S --summarize --dry-run -e cat "$F" | grep -q '^semgrep: summarize: .* (stops over 200 KB)$' || fail "--dry-run shows the limit"
 
 # the spinner (#89): on a terminal, one line on stderr while waiting, erased before the output; never when not a terminal

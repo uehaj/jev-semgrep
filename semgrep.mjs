@@ -676,7 +676,7 @@ function gitCandidates(found) {
 const scopeQuestions = text => Object.fromEntries(CANDIDATES.map(c => [c.key, { type: 'noul', instructions: `Does the meaning "${text}" restrict its matches to ${c.what}?` }]));
 const SCOPE_AT = 0.6; // a candidate counts at this or more (see the top of auto-scope)
 // Jev's answers -> one scope per category that got a yes: { label, words, names, cs, test } (names: for --verbose;
-// cs: its candidates, which -g turns into git log arguments)
+// cs: its candidates, for the judging requests' note and -g's git log arguments)
 function scopesOf(answers) {
   const yes = CANDIDATES.filter(c => answers[c.key].noul >= SCOPE_AT), out = [];
   for (const cat of new Set(yes.map(c => c.cat))) {
@@ -802,6 +802,7 @@ function show(state, questions, label) {
   for (const q of Object.values(questions)) { const k = q.instructions.replace(/\bL\d{3}\b/g, 'Lnnn'); count.set(k, (count.get(k) ?? 0) + 1); }
   const n = Object.keys(questions).length, chars = Object.values(state).join('').length;
   trace(`request ${++traced} ${label}, ${n} question${n === 1 ? '' : 's'}, ${chars} chars`);
+  if (state.note) trace(`  ${cut(state.note, 110)}`);
   [...count].slice(0, 3).forEach(([q, k]) => trace(`  ${String(k).padStart(3)}× ${cut(q, 100)}`));
   if (count.size > 3) trace(`       (+${count.size - 3} more)`);
   tracedQuestions += n; tracedChars += chars; tracedBytes += Buffer.byteLength(JSON.stringify({ model, state, questions }));
@@ -857,7 +858,7 @@ if (narrowable) spin.set('asking which files each meaning restricts to (auto-sco
 if (narrowable) await Promise.all(expr.flatMap(term => scoped(term).map(lit =>
   pooled(() => post({ meaning: lit.text }, scopeQuestions(lit.text), `[scope] "${cut(lit.text, 40)}"`)).then(a => {
     if (opt.verbose && !dry) traceScope(lit.text, a, found.filter(f => !named(f)));
-    scopesOf(a).forEach(sc => addScope(term, sc));
+    scopesOf(a).forEach(sc => addScope(term, { ...sc, meaning: lit.text }));
   }))));
 // A file no term admits is not read. Each scope is reported when it can narrow something (not with named files only),
 // with -q silent, and not again after -i showed it.
@@ -1125,8 +1126,23 @@ const chunked = units => {
 };
 const chunks = chunked(sent);
 const id = i => `L${String(i).padStart(3, '0')}`;
+// The note (#111): the scopes every unit of a request got through, named as the scope question named them, or a
+// language by the extension its meaning wrote (".mjs files"). A line cannot show when it changed, where it lives or
+// who wrote it, so without the note the meaning's words for that pull Jev's verdicts down.
+const extIn = (x, text) => new RegExp(`${x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?!\\w)`, 'i').test(text);
+function noteOf(chunk) {
+  // -g's git log took the scopes as its arguments, all but a language when FILE pathspecs were given
+  const holds = (l, f) => (f === GITLOG ? !(files.length && l.cs.some(c => c.cat === 'language')) : !named(f) && l.admits(f));
+  const lits = [...new Set(expr.flat())].filter(l => l.kind === 's' && chunk.every(u => holds(l, u.file)));
+  const said = [...new Set(lits.map(l => l.cs.map(c => {
+    const exts = c.cat === 'language' ? [...new Set(c.label.split(' ').filter(g => g.startsWith('*.')).map(g => g.slice(1).toLowerCase()))].filter(x => extIn(x, l.meaning)) : [];
+    return exts.length ? `${exts.join(' or ')} files` : c.what;
+  }).join(' or ')))];
+  return said.length ? `note: every ${unitName.slice(0, -1)} here is from ${said.join(', ')}.` : null;
+}
 function requestOf(chunk) { // -> { state, questions }: one judging request; question i_k asks unit i its k-th meaning
-  const state = Object.fromEntries(chunk.map((l, i) => [id(i), l.text.slice(0, MAX_UNIT_CHARS)]));
+  const note = noteOf(chunk);
+  const state = { ...(note && { note }), ...Object.fromEntries(chunk.map((l, i) => [id(i), l.text.slice(0, MAX_UNIT_CHARS)])) };
   const questions = {};
   chunk.forEach((l, i) => [...asksByUnit.get(l).keys()].forEach((text, k) => {
     questions[`${id(i)}_${k}`] = { type: 'noul', instructions: `Does line ${id(i)} match the meaning: "${text}"?` };
@@ -1232,9 +1248,13 @@ const piped = [];
 const write = summarizer ? s => piped.push(s) : s => process.stdout.write(s);
 const EOL = opt.gitlog ? '\n' : summarizer && opt.z ? '\n\n' : SEP; // -g: each commit ends in a newline, so a blank line between
 // --summarize --dedup (#98): a representative stands for its template, as it did for Jev: members share its answers
-// (the same Map), so each Map is piped once, with how many matching units it stands for.
-const likeIt = new Map(), pipedUnits = new Set();
-if (summarizer && opt.dedup) for (const h of hits.values()) for (const p of h.values()) likeIt.set(asksByUnit.get(p), (likeIt.get(asksByUnit.get(p)) ?? 0) + 1);
+// (the same Map), so each Map is piped once, with how many matching units it stands for: sentences, not the lines
+// they touch, so a sentence over two lines counts once.
+const likeIt = new Map(), pipedUnits = new Set(); // answer Map -> Set of the matching units sharing it
+if (summarizer && opt.dedup) for (const h of hits.values()) for (const p of h.values()) {
+  const g = asksByUnit.get(p);
+  likeIt.set(g, (likeIt.get(g) ?? new Set()).add(p));
+}
 for (const file of opt.quiet || dry ? [] : targets) {
   if (!sources.has(file)) continue;
   const h = hits.get(file);
@@ -1260,7 +1280,7 @@ for (const file of opt.quiet || dry ? [] : targets) {
       const text = src[k - 1], sentences = ranges.get(file)?.get(k);
       const matches = !p ? [] : sentences ? sentences.flatMap(([a, b, s]) => regexRanges(text, s, a, b)) : regexRanges(text, p);
       // Only data records carry the NUL terminator, as in grep -z; file names and counts stay on newlines.
-      const n = p && group && k === no ? likeIt.get(group) : 0, like = n > 1 ? `   (×${n} like it)` : '';
+      const n = p && group && k === no ? likeIt.get(group).size : 0, like = n > 1 ? `   (×${n} like it)` : '';
       if (partsOnly && matches.length) {
         let end = -1; // a match overlapping the last one printed is skipped; a skipped one does not hide later ones
         for (const [a, b] of matches) if (a >= end) { write(prefix + paint('01;31', text.slice(a, b)) + tail + like + EOL); end = b; }
@@ -1276,7 +1296,8 @@ const pipedBytes = Buffer.byteLength(piped.join(''));
 if (summarizer && !dry && matched && pipedBytes > SUMMARY_MAX) {
   // Not cut short: a summary of the first part would read as a summary of all of it.
   const size = pipedBytes >= 1024 * 1024 ? `${(pipedBytes / 1024 / 1024).toFixed(1)} MB` : `${Math.round(pipedBytes / 1024)} KB`;
-  console.error(`semgrep: --summarize: ${likeIt.size ? pipedUnits.size : matched} matching ${unitName} (${size}) are more than the ${SUMMARY_MAX / 1024} KB to summarize; narrow the expression${opt.dedup ? '' : ' or add --dedup'}`);
+  const count = likeIt.size ? `${matched} matching ${unitName} as ${pipedUnits.size} representatives` : `${matched} matching ${unitName}`;
+  console.error(`semgrep: --summarize: ${count} (${size}) are more than the ${SUMMARY_MAX / 1024} KB to summarize; narrow the expression${opt.dedup ? '' : ' or add --dedup'}`);
   summaryFailed = true;
 } else if (summarizer && !dry && matched) {
   // spawn, not spawnSync: the spinner's timer runs only while the event loop does. Its output erases the spinner.
