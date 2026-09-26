@@ -412,7 +412,7 @@ semgrep: scope: 3 of 120 files
   meaning is sent unchanged.
 - The question costs one small request per meaning, sent only when `-r` / `git semgrep` found something to
   narrow, and after `-i`'s answer. `--dry-run` shows it as `[scope]`. Files named on the command line and stdin are
-  never narrowed, as with `--include`. `--no-scope` turns it off.
+  never narrowed, as with `--include`. `--no-auto-scope` turns it off (`--auto-scope` turns it back on).
 
 ### As a git subcommand (`git semgrep`)
 
@@ -607,7 +607,8 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                (with -r a file named on the command line is always searched; git semgrep's pathspecs are filtered)
   --changed-within=WHEN  with -r and git semgrep, only files modified within 30m / 2h / 7d / 2w, since a date
                or date-time, today, this-week or this-month
-  --no-scope   do not narrow those files by what a meaning says about them (see Scope from the meaning)
+  --no-auto-scope  do not narrow those files by what a meaning says about them (see Scope from the meaning);
+               --auto-scope turns it back on
   -l           print only the names of files with a match, not the lines
   -H, --with-filename  prefix file names even for a single file; --no-filename never prefixes them
   -A NUM       print NUM lines of trailing context after each match (context lines use - as separator)

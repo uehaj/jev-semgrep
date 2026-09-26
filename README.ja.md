@@ -400,7 +400,7 @@ semgrep: scope: 3 of 120 files
   文面はそのまま送ります。
 - 問い合わせは意味 1 つにつき小さなリクエスト 1 つで、`-r` / `git semgrep` で絞れるファイルが見つかったとき
   だけ、`-i` の答えの後に送ります。`--dry-run` では `[scope]` と表示します。コマンドラインで指定したファイルと
-  stdin は、`--include` と同じく絞りません。`--no-scope` で止められます。
+  stdin は、`--include` と同じく絞りません。`--no-auto-scope` で止められます (`--auto-scope` で戻せます)。
 
 ### git のサブコマンドとして (`git semgrep`)
 
@@ -592,7 +592,7 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                (-r ではコマンドラインで指定したファイルは必ず探す。git semgrep の pathspec は絞り込む)
   --changed-within=WHEN  -r と git semgrep で、30m / 2h / 7d / 2w 以内、日付か日時以降、today / this-week /
                this-month に更新したファイルだけを探す
-  --no-scope   意味の文面からファイルを絞り込まない (意味からの絞り込みを参照)
+  --no-auto-scope  意味の文面からファイルを絞り込まない (意味からの絞り込みを参照)。--auto-scope で戻す
   -l           一致した行ではなくファイル名だけを表示
   -H, --with-filename  1 ファイルでもファイル名を付ける。--no-filename は常に付けない
   -A NUM       一致行の後ろ NUM 行も表示 (grep と同じ。文脈行の区切りは - )

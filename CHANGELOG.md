@@ -10,7 +10,7 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   restricts its matches to a language or format (26 of them) or to what changed within a span (the last minute
   … this fiscal year, 14 of them); a yes at 0.7 or more searches only those files. Per term, reported on stderr as
   `semgrep: scope: …` with Jev's answer, silent with `-q`, asked only after `-i`'s answer; named files are never
-  narrowed. `--no-scope` turns it off.
+  narrowed. `--no-auto-scope` turns it off, `--auto-scope` back on.
 
 ## [0.4.0] - 2026-09-26
 
