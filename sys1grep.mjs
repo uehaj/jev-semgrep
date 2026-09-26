@@ -577,7 +577,13 @@ if (trace) {
     else if (TYPESAFE_API_KEY !== undefined) trace(`key: TYPESAFE_API_KEY${keyFileTag('TYPESAFE_API_KEY')}`);
     else trace('key: none (no auth header sent)');
   }
-  if (SYS1GREP_OPTS) trace(`${envOPTS.name}: ${SYS1GREP_OPTS}`);
+  // --sys1-api-key's value is masked here too: SYS1GREP_OPTS is not on the rejected-option list (only
+  // e/a/v/question/summarize are), so a key placed there would otherwise leak in full, unlike the option
+  // typed on the command line, which only ever shows as its name (line above).
+  if (SYS1GREP_OPTS) {
+    const masked = SYS1GREP_OPTS.split(/\s+/).filter(Boolean).map((tok, i, toks) => (toks[i - 1] === '--sys1-api-key' ? '***' : tok.replace(/^--sys1-api-key=.*$/, '--sys1-api-key=***'))).join(' ');
+    trace(`${envOPTS.name}: ${masked}`);
+  }
   const thresholds = optSrc('t') === null && optSrc('T') === null
     ? `--level ${opt.level}${optTag('level')} = -t ${tPos} -T ${tNeg}`
     : `-t ${tPos}${optTag('t')}, -T ${tNeg}${optTag('T')}`;

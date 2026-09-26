@@ -533,14 +533,23 @@ out=$($E SYS1GREP_URL=$base/v1 node ../sys1grep.mjs --verbose -e cat "$F" 2>&1 >
 echo "$out" | grep -qx 'sys1grep: key: none (no auth header sent)' || fail "key: none, with a custom endpoint and no key: $out"
 out=$($E SEMGREP_URL=$base/v1 SEMGREP_API_KEY=sekrit9 node ../sys1grep.mjs --verbose -e cat "$F" 2>&1 >/dev/null)
 echo "$out" | grep -qx 'sys1grep: key: SEMGREP_API_KEY' || fail "key: the deprecated var name it actually used: $out"
-mkdir -p "$tmp/.config/sys1grep"; printf 'SYS1GREP_API_KEY=sekrit9\n' >"$tmp/.config/sys1grep/.env"
-out=$($E SYS1GREP_URL=$base/v1 node ../sys1grep.mjs --verbose -e cat "$F" 2>&1 >/dev/null)
+echo "$out" | grep -qF "sys1grep: endpoint $hostport/v1 (SEMGREP_URL), model jev-latest (default)" || fail "endpoint: the deprecated var name it actually used: $out"
+mkdir -p "$tmp/.config/sys1grep"
+printf 'SYS1GREP_URL=%s/v1\nSYS1GREP_MODEL=fromenv\nSYS1GREP_API_KEY=sekrit9\n' "$base" >"$tmp/.config/sys1grep/.env"
+out=$($E node ../sys1grep.mjs --verbose -e cat "$F" 2>&1 >/dev/null)
 echo "$out" | grep -qx 'sys1grep: key: SYS1GREP_API_KEY (~/.config/sys1grep/.env)' || fail "key: the var name plus which .env file: $out"
+echo "$out" | grep -qF "sys1grep: endpoint $hostport/v1 (SYS1GREP_URL, ~/.config/sys1grep/.env), model fromenv (SYS1GREP_MODEL, ~/.config/sys1grep/.env)" || fail "endpoint/model: the var name plus which .env file: $out"
 [ "$(echo "$out" | grep -c sekrit9)" = 0 ] || fail "the key's value must never print (.env): $out"
 rm -rf "$tmp/.config"
 out=$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS='--level strict --color=never' node ../sys1grep.mjs --verbose -e cat "$F" 2>&1 >/dev/null)
 echo "$out" | grep -qx 'sys1grep: SYS1GREP_OPTS: --level strict --color=never' || fail "the raw SYS1GREP_OPTS line: $out"
 echo "$out" | grep -qx 'sys1grep: options: --level strict (SYS1GREP_OPTS) = -t 0.7 -T 0.3, --chunk 30, -j 8, scope on' || fail "options names --level's source: $out"
+out=$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS='--sys1-api-key=sekrit9 --level strict' node ../sys1grep.mjs --dry-run -e cat "$F")
+echo "$out" | grep -qxF 'sys1grep: SYS1GREP_OPTS: --sys1-api-key=*** --level strict' || fail "SYS1GREP_OPTS's own key value is masked (--sys1-api-key=VALUE): $out"
+[ "$(echo "$out" | grep -c sekrit9)" = 0 ] || fail "the key's value must never print (--sys1-api-key in SYS1GREP_OPTS): $out"
+out=$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS='--sys1-api-key sekrit9' node ../sys1grep.mjs --dry-run -e cat "$F")
+echo "$out" | grep -qxF 'sys1grep: SYS1GREP_OPTS: --sys1-api-key ***' || fail "SYS1GREP_OPTS's own key value is masked (--sys1-api-key VALUE, two tokens): $out"
+[ "$(echo "$out" | grep -c sekrit9)" = 0 ] || fail "the key's value must never print (--sys1-api-key VALUE in SYS1GREP_OPTS): $out"
 out=$($J --verbose -e cat "$F" 2>&1 >/dev/null)
 echo "$out" | grep -q '^sys1grep: SYS1GREP_OPTS:' && fail "no SYS1GREP_OPTS line when it is empty: $out"
 out=$($J --verbose -t 0.6 -e cat "$F" 2>&1 >/dev/null)
@@ -555,9 +564,14 @@ out=$($S --verbose --summarize=claude -e cat "$F" 2>&1 >/dev/null)
 echo "$out" | grep -qx 'sys1grep: summarize: claude, model haiku (default)' || fail "summarize: an explicit TOOL has no source tag: $out"
 out=$($E PATH=$tmp/bin:$PATH SUM=$tmp/sum SYS1GREP_URL=$base/v1 SYS1GREP_SUMMARIZER_MODEL=sonnet node ../sys1grep.mjs --verbose --summarize -e cat "$F" 2>&1 >/dev/null)
 echo "$out" | grep -qx 'sys1grep: summarize: claude (default), model sonnet (SYS1GREP_SUMMARIZER_MODEL)' || fail "summarize: the model's source: $out"
+out=$($E PATH=$tmp/bin:$PATH SUM=$tmp/sum SYS1GREP_URL=$base/v1 SEMGREP_SUMMARIZER=claude SEMGREP_SUMMARIZER_MODEL=sonnet node ../sys1grep.mjs --verbose --summarize -e cat "$F" 2>&1 >/dev/null)
+echo "$out" | grep -qx 'sys1grep: summarize: claude (SEMGREP_SUMMARIZER), model sonnet (SEMGREP_SUMMARIZER_MODEL)' || fail "summarize: TOOL and model, each the deprecated var name it actually used: $out"
 reset; out=$(asking "$JI -i -l -e cat '$F'" n)
 echo "$out" | grep -q '^sys1grep: endpoint' || fail "-i shows the endpoint/model line too: $out"
 echo "$out" | grep -q '^sys1grep: options:' || fail "-i shows the options line too: $out"
+reset; out=$(asking "$E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS='--sys1-api-key=sekrit9' node ../sys1grep.mjs -i -l -e cat '$F'" n)
+echo "$out" | grep -qF 'sys1grep: SYS1GREP_OPTS: --sys1-api-key=***' || fail "-i preview masks SYS1GREP_OPTS's own key value: $out"
+[ "$(echo "$out" | grep -c sekrit9)" = 0 ] || fail "-i preview must never show the key's value (SYS1GREP_OPTS): $out"
 reset
 
 # the spinner (#89): on a terminal, one line on stderr while waiting, erased before the output; never when not a terminal
