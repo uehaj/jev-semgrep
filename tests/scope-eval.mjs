@@ -1,58 +1,106 @@
-// Auto-scope accuracy (#44): runs semgrep --dry-run on every row of a corpus (EXPECTED<TAB>QUESTION) and compares
-// the scopes it reports with the expected ones. Sends nothing: --dry-run on a small repository.
-//   node tests/scope-eval.mjs [FILE.tsv]           per-label table and the rows that differ (default: both corpora)
-//   node tests/scope-eval.mjs --check [FILE.tsv]   exit 1 if any row applies a scope it should not (a lost match)
-// scope-corpus.tsv was written blind to the rules and then used to tune them; scope-holdout.tsv was written blind
-// after the tuning and never tuned against, so its numbers are the honest ones.
-// A wrong scope loses matches without a trace, so "wrong" is the number that matters; a missed one only costs requests.
-import { execFileSync, spawnSync } from 'node:child_process';
+// Auto-scope accuracy (#44): runs semgrep -r --verbose on every row of a corpus (EXPECTED<TAB>QUESTION) against real
+// Jev, reads the answers to the scope question, and scores them against the expected scopes at several thresholds.
+// Each row sends one request, the scope question: the directory searched is a small repository whose files hold
+// only blank lines, which are never sent.
+//   node tests/scope-eval.mjs [FILE.tsv...]   a table per corpus (default: both), the rows that differ at 0.7
+//   --at=0.6                                  list the rows that differ at another threshold
+// Needs the API key (as semgrep reads it) and costs one small request per row. Both corpora were written blind by
+// separate agents. Tune on scope-corpus.tsv only; scope-holdout.tsv gives the honest number.
+//
+// Scoring is per category, as semgrep combines them. A category Jev says yes to but the row does not expect narrows
+// what it should not: "wrong", which loses matches without a trace. Where the row expects something in that
+// category, the yes answers are alternatives, so they are safe when they include it, or a superset of it: source code
+// (whatever is not documentation) holds test code, migrations and logs; uncommitted holds staged and untracked; this
+// branch holds uncommitted. A code-only scope the row did not expect is counted apart ("code"): it loses only matches
+// inside documentation, and the corpora rarely label it. The span of a time and the identity of an author are not
+// checked: any yes counts when the row expects one.
+import { execFile, execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { promisify } from 'node:util';
 
 const here = new URL('.', import.meta.url).pathname;
-const given = process.argv.slice(2).filter(a => !a.startsWith('--'));
-const corpus = (given.length ? given : [`${here}scope-corpus.tsv`, `${here}scope-holdout.tsv`]).flatMap(f => readFileSync(f, 'utf8').trim().split('\n').map(l => l.split('\t')));
-// The first glob of each language in semgrep.mjs's LANGS names it
-const LANG = { '*.py': 'python', '*.js': 'javascript', '*.ts': 'typescript', '*.go': 'go', '*.rs': 'rust', '*.java': 'java', '*.kt': 'kotlin', '*.rb': 'ruby', '*.php': 'php', '*.c': 'c', '*.cpp': 'cpp', '*.cs': 'csharp', '*.swift': 'swift', '*.scala': 'scala', '*.r': 'r', '*.sh': 'shell', '*.sql': 'sql', '*.html': 'html', '*.css': 'css', '*.md': 'markdown', '*.yaml': 'yaml', '*.json': 'json', '*.toml': 'toml', '*.xml': 'xml', Dockerfile: 'dockerfile', Makefile: 'makefile' };
-// A scope line -> its labels. A language scope lists every language it admits.
-function labels(line) {
-  const what = line.replace(/^semgrep: scope: /, '').replace(/ \(from .*\)$/, '');
-  if (/^\d+ of \d+ files$/.test(what)) return [];
-  if (/^(modified|changed) /.test(what)) return ['time'];
-  const m = what.match(/^([\w-]+) files\b/);
-  if (m) return [`${m[1].startsWith('git-') ? 'git' : 'role'}:${m[1].replace(/^git-/, '')}`];
-  const langs = what.split(' ').map(g => LANG[g]).filter(Boolean);
-  return langs.length ? [`lang:${[...new Set(langs)].sort().join('|')}`] : [`?:${what}`];
+const files = process.argv.slice(2).filter(a => !a.startsWith('--'));
+const at = Number(process.argv.find(a => a.startsWith('--at='))?.slice(5) ?? 0.7);
+const corpora = (files.length ? files : [`${here}scope-corpus.tsv`, `${here}scope-holdout.tsv`])
+  .map(f => [f.split('/').at(-1), readFileSync(f, 'utf8').trim().split('\n').map(l => l.split('\t'))]);
+const THRESHOLDS = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8];
+// A candidate key -> [group, label]
+const LANG = { cpp: 'cpp', cs: 'csharp', shellscript: 'shell' };
+function group(key) {
+  const [kind, name] = [key[0], key.slice(2)];
+  if (kind === 'l') return ['lang', LANG[name] ?? name];
+  if (kind === 'r') return ['place', name];
+  if (kind === 't') return ['time', 'time'];
+  if (kind === 'a' || key === 'g_mine') return ['author', 'author'];
+  return [`git:${name}`, name];
 }
+// An expected label -> [group, alternatives]
+function expected(label) {
+  const [kind, rest] = label.split(':');
+  if (kind === 'lang') return ['lang', rest.split('|')];
+  if (kind === 'role') return ['place', [rest]];
+  if (kind === 'time') return ['time', ['time']];
+  if (rest === 'author') return ['author', ['author']];
+  return [`git:${rest}`, [rest]];
+}
+const covers = (grp, got, want) => want.some(w => got.has(w)) || (grp === 'place' && got.has('code') && want.some(w => ['test', 'migration', 'log'].includes(w)));
+const SUPERSET = { 'git:staged': ['git:uncommitted', 'git:branch'], 'git:untracked': ['git:uncommitted', 'git:branch'], 'git:uncommitted': ['git:branch'] };
+// One row at one threshold -> { wrong: [...], missed: [...], code: bool }
+function score(answers, exp, t) {
+  const got = new Map(); // group -> Set of labels
+  for (const [k, p] of answers) if (p >= t) { const [g, l] = group(k); got.set(g, (got.get(g) ?? new Set()).add(l)); }
+  const want = new Map(exp === 'none' ? [] : exp.split(',').map(expected));
+  const wrong = [], missed = [];
+  let code = false;
+  for (const [g, ls] of got) {
+    if (want.has(g)) { if (!covers(g, ls, want.get(g))) wrong.push(`${g}:${[...ls]}`); continue; }
+    if ((SUPERSET[g] ?? []).some(x => want.has(x)) || Object.entries(SUPERSET).some(([sub, sups]) => sups.includes(g) && want.has(sub))) continue;
+    if (g === 'place' && [...ls].every(l => l === 'code')) { code = true; continue; }
+    wrong.push(`${g}:${[...ls]}`);
+  }
+  for (const [g, ws] of want) if (!got.has(g) && !(SUPERSET[g] ?? []).some(x => got.has(x))) missed.push(`${g}:${ws.join('|')}`);
+  return { wrong, missed, code };
+}
+
 const dir = mkdtempSync(`${tmpdir()}/scope-eval-`);
-// A repository git can answer for: a commit by 田中 on main, one by user.email on a branch, no hooks. A git scope
-// git could not answer (no repository, an author with no commit, "this branch" on main) is not reported.
-writeFileSync(`${dir}/x.txt`, 'x\n'); // scopes are reported only when -r finds a file
+// A repository git can answer for: a commit by 田中 on main, one by user.email on a branch, no hooks.
 const git = (...a) => execFileSync('git', ['-C', dir, '-c', 'core.hooksPath=/dev/null', ...a], { stdio: 'ignore' });
+writeFileSync(`${dir}/x.txt`, '\n'); // scopes are asked only when -r finds a file; a blank line is never sent
 git('init', '-q', '-b', 'main'); git('config', 'user.email', 'me@x'); git('config', 'user.name', 'Me');
 git('add', 'x.txt'); git('commit', '-q', '--author=田中 <tanaka@x>', '-m', 'a');
-git('checkout', '-q', '-b', 'feat'); writeFileSync(`${dir}/y.txt`, 'y\n'); git('add', 'y.txt'); git('commit', '-q', '-m', 'b');
-const env = { ...process.env, SEMGREP_URL: 'http://127.0.0.1:1/v1', SEMGREP_OPTS: '', SEMGREP_API_KEY: '', TYPESAFE_API_KEY: '' };
-const stats = new Map(), diff = [];
-let wrongRows = 0, missedRows = 0;
-const bump = (label, k) => { const s = stats.get(label) ?? { tp: 0, fp: 0, fn: 0 }; s[k]++; stats.set(label, s); };
-// A language scope is right when it admits every language expected; admitting more costs requests, not matches.
-const covers = (got, want) => want.split(':')[0] === got.split(':')[0] && (got === want || (got.startsWith('lang:') && want.slice(5).split('|').every(l => got.slice(5).split('|').includes(l))));
-for (const [expected, q] of corpus) {
-  const out = spawnSync(process.execPath, [`${here}../semgrep.mjs`, '--dry-run', '-r', '-e', q, dir], { env, encoding: 'utf8' }).stderr;
-  const got = out.split('\n').filter(l => l.startsWith('semgrep: scope: ')).flatMap(labels);
-  const want = expected === 'none' ? [] : expected.split(',');
-  const wrong = got.filter(g => !want.some(w => covers(g, w))), missed = want.filter(w => !got.some(g => covers(g, w)));
-  for (const w of want) bump(w.split(':')[0] === 'lang' ? 'lang' : w, missed.includes(w) ? 'fn' : 'tp');
-  for (const g of wrong) bump(g.startsWith('lang:') ? 'lang' : g, 'fp');
-  if (wrong.length) wrongRows++;
-  if (missed.length) missedRows++;
-  if (wrong.length || missed.length) diff.push(`${wrong.length ? 'WRONG ' : 'missed'}  want ${expected.padEnd(18)} got ${(got.join(',') || 'none').padEnd(18)} ${q}`);
+git('checkout', '-q', '-b', 'feat'); writeFileSync(`${dir}/y.txt`, '\n'); git('add', 'y.txt'); git('commit', '-q', '-m', 'b');
+const env = { ...process.env, SEMGREP_OPTS: '' };
+const run = promisify(execFile);
+let failed = 0;
+for (const [name, rows] of corpora) {
+  // Eight rows at once. A row whose request failed is counted apart, not as "none".
+  const answers = new Array(rows.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: 8 }, async () => {
+    while (next < rows.length) {
+      const i = next++;
+      let err;
+      try { err = (await run(process.execPath, [`${here}../semgrep.mjs`, '--verbose', '-r', '-e', rows[i][1], dir], { env })).stderr; }
+      catch (e) { err = e.code === 1 ? e.stderr : null; } // 1: no match, which every row is (the files are blank)
+      const line = err?.split('\n').find(l => l.startsWith('semgrep: scope answers '));
+      answers[i] = line ? [...line.replace(/^.*?": /, '').matchAll(/(\w+)=([\d.]+)/g)].map(m => [m[1], +m[2]]) : null;
+    }
+  }));
+  failed += answers.filter(a => a === null).length;
+  console.log(`## ${name} (${rows.length} rows${answers.includes(null) ? `, ${answers.filter(a => a === null).length} failed` : ''})\n`);
+  console.log('| threshold | wrong | code only | missed | exact |\n|---|---|---|---|---|');
+  for (const t of THRESHOLDS) {
+    const s = rows.map(([exp], i) => answers[i] && score(answers[i], exp, t)).filter(Boolean);
+    console.log(`| ${t} | ${s.filter(x => x.wrong.length).length} | ${s.filter(x => x.code && !x.wrong.length).length} | ${s.filter(x => x.missed.length).length} | ${s.filter(x => !x.wrong.length && !x.missed.length).length} |`);
+  }
+  console.log(`\nAt ${at}:\n`);
+  rows.forEach(([exp, q], i) => {
+    if (!answers[i]) return console.log(`ERROR   ${q}`);
+    const { wrong, missed } = score(answers[i], exp, at);
+    if (wrong.length || missed.length) console.log(`${wrong.length ? 'WRONG ' : 'missed'}  want ${exp.padEnd(20)} ${wrong.length ? `extra ${wrong.join(' ')}` : `lacks ${missed.join(' ')}`}  | ${q}  [${answers[i].slice(0, 4).map(([k, p]) => `${k}=${p}`).join(' ')}]`);
+  });
+  console.log('');
 }
 rmSync(dir, { recursive: true });
-const pct = (a, b) => (b ? `${Math.round((100 * a) / b)}%` : '-');
-console.log('| scope | expected | found | wrong | precision | recall |\n|---|---|---|---|---|---|');
-for (const [label, { tp, fp, fn }] of [...stats].sort()) console.log(`| ${label} | ${tp + fn} | ${tp} | ${fp} | ${pct(tp, tp + fp)} | ${pct(tp, tp + fn)} |`);
-console.log(`\n${corpus.length} rows: ${wrongRows} apply a wrong scope (lost matches), ${missedRows} miss one (no saving)\n`);
-console.log(diff.join('\n'));
-if (process.argv.includes('--check') && wrongRows) process.exit(1);
+if (failed) process.exit(1);

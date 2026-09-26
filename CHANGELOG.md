@@ -6,16 +6,20 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
-- Auto-scope (#43): with `-r` and `git semgrep`, a meaning that names a language or format ("in Python",
-  "Python で", "YAML files") searches only those files, and one that says when the code changed ("changed
-  yesterday", "先週追加した") only files modified since then. Only wording that makes it a necessary condition
-  counts. Per term, reported on stderr as `semgrep: scope: …`, silent with `-q`; named files are never narrowed.
-  `--no-scope` turns it off.
-- Auto-scope by place (#48): test code, migrations, the README, the CHANGELOG, documents, code (what is not a
-  document) and logs, by path conventions ("テストコードで", "in the docs", "README か CHANGELOG に").
-- Auto-scope from git (#46): in a repository a time of change goes by commits (committer date, lower bound only),
-  uncommitted files by their mtime; and "code I wrote", "Alice さんが書いた", "未コミットの", "staged", "untracked",
-  "on this branch", "not yet pushed" narrow to what git says. One git process per repository and question.
+- The `--dry-run` summary line (also shown by `-i`) estimates the input tokens and, for TypeSafe itself, the price:
+  `…, 2315 chars, ~3178 input tokens, ~$0.000133; nothing sent`. The estimate is 650 tokens a request plus 0.21 a
+  request-body byte, fitted on real requests in English and Japanese; it was within -8% to +12% of what Jev billed.
+- Auto-scope (#43): with `-r` and `git semgrep`, each meaning first asks Jev, in one small request, whether it
+  restricts its matches to a language or format (26 of them) or to what changed within a span (the last minute
+  … this fiscal year, 14 of them); a yes at 0.6 or more searches only those files. Per term, reported on stderr as
+  `semgrep: scope: …` with Jev's answer, silent with `-q`, asked only after `-i`'s answer; named files are never
+  narrowed. `--no-auto-scope` turns it off, `--auto-scope` back on.
+  `--verbose` prints Jev's answers to the scope question (`semgrep: scope answers …`).
+- Auto-scope by place (#48): test code, migrations, the README, the changelog, documentation, source code (what is
+  not documentation) and logs, by path conventions, asked of Jev with the other candidates.
+- Auto-scope from git (#46): in a repository a time goes by commits (uncommitted files by their mtime), and git
+  states (uncommitted, staged, untracked, this branch, not pushed, mine) and the 30 most active authors are
+  candidates too. One git process per repository and question.
 
 ## [0.4.0] - 2026-09-26
 

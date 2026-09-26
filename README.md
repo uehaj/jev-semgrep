@@ -167,14 +167,16 @@ to the narrowest:
 - **Which files.** `-r` skips `.git`, `node_modules`, binary files, likely secrets and what git ignores;
   [`git semgrep`](#as-a-git-subcommand-git-semgrep) searches tracked files only. `--include` / `--exclude`
   (file-name globs) and `--changed-within` (`30m`, `7d`, `today`, `this-week`, a date) narrow them further.
-  A meaning that names a language or a time of change narrows them by itself: see
+  A meaning that restricts itself to a language or a time of change narrows them by itself: see
   [Scope from the meaning](#scope-from-the-meaning).
 - **Which lines.** A [regex term](#regex-terms) is matched locally, and only the lines it holds for are asked
   its AND term's meanings. Blank lines are never sent.
 - **How many times.** [`--dedup`](#one-line-per-template---dedup) judges one line per template: lines that
   differ only in ids, numbers, times or paths share one answer.
 - **Check before paying.** `--dry-run` sends nothing and prints the files, how many lines each would send and
-  every request with its questions. `-i` shows the same totals on the terminal and sends only after `y`.
+  every request with its questions. Its last line estimates the input tokens and, for TypeSafe itself, the price
+  (`~3178 input tokens, ~$0.000133`; within about 10%). `-i` shows the same totals on the terminal and sends only
+  after `y`.
 
 ```sh
 $ semgrep --dry-run -r --include='*.log' --changed-within=today -e '/ERROR|FATAL/' -a 'a customer is affected' logs/
@@ -385,45 +387,47 @@ matching lines per file instead.
 
 ### Scope from the meaning
 
-A meaning that names a language or format, or says when the code changed, can only match in such files. With
-`-r` and `git semgrep` those are the only files searched; the rest is never read or sent. Each scope is reported
-on stderr, so a wrong one is visible:
+A meaning that restricts its matches to some kind of file can only match in such files. With `-r` and
+`git semgrep`, each meaning first asks Jev, in one small request, a yes / no per candidate, and a yes at 0.6 or
+more narrows the files before anything else is sent. The rest is never read or sent. Each scope is reported on
+stderr with Jev's answer, so a wrong one is visible:
 
 ```sh
 $ semgrep -r -e 'Python でリトライ処理を書いている箇所' .
-semgrep: scope: *.py *.pyi *.pyw (from "Python")
+semgrep: scope: *.py *.pyi *.pyw (from "Python files: 0.94")
 semgrep: scope: 12 of 340 files
-$ semgrep -r -e 'auth code changed yesterday' src/
-semgrep: scope: changed since 2026-09-25 00:00 (git commits; the mtime for files git does not have committed) (from "yesterday")
+$ semgrep -r -e '昨日変えた箇所で認証を扱っている' src/
+semgrep: scope: modified since 2026-09-25 00:00 (from "what was changed yesterday: 0.91")
 semgrep: scope: 3 of 120 files
 ```
 
-- **Language or format**: "in Python", "Python code", "Python で", "Go 言語のコード", ".py ファイル", "YAML files",
-  "Rust or Kotlin implementations". Not "Python のような書き方", "port this to Go", "a Go-style error" or
-  "not in Python": those say nothing about the file. SQL, HTML, CSS, JSON and XML often sit inside other code, so
-  only "SQL files" / "SQL ファイル" scopes them, not "SQL のクエリ".
-- **Place**: test code ("テストコードで", "in the tests", "test files"), migrations, the README, the CHANGELOG,
-  documents ("ドキュメントに", "in the docs": `*.md *.rst *.adoc *.txt`, `docs/`), code (whatever is not a
-  document, so languages missing from the dictionary still count) and logs ("ログファイルに", "in the logs":
-  `*.log`, `logs/`), by the path conventions of JS, Python, Go, Java, Ruby, Rust and PHP. Rust keeps unit tests
-  inside the file, so test code includes every `*.rs`. Several places in one meaning are alternatives ("README
-  か CHANGELOG に"); a place listed with something else ("in the tests and fixtures") gives no scope. Not "テスト
-  している" or "README を生成する", which say what the code does, not where it is.
-- **Time of change**: a date or span next to a verb of change: "changed yesterday", "last week's commits",
-  "added since Sep 20", "昨日変えた", "ここ 3 日で修正した". In a repository, a committed file needs a commit at or
-  after that time (the committer date: a checkout sets every mtime to now, and a commit comes after the edit it
-  records); an uncommitted one, or any file outside a repository, needs a modification time at or after it. No
-  upper bound: yesterday's change may have been committed today. A date the line talks about ("the Sep 20
-  release", "logs from yesterday"), "before" / "until" and vague words ("recently", 「最近」) give no scope.
-- **Who and what state (git)**: "code I wrote", "自分が書いた", "Alice さんが書いた", "written by Alice" (git's
-  `--author`, mailmap applied: every file a commit of theirs touched; mine include uncommitted files; a name with
-  no commit gives no scope), "未コミットの", "uncommitted" (worktree and index against HEAD, and untracked files),
-  "ステージした", "staged", "未追跡の", "untracked", "このブランチで", "on this branch" (since it left `origin/HEAD`,
-  `main` or `master`, to the worktree), "未プッシュの", "not yet pushed" (`@{upstream}..HEAD`, or commits on no
-  remote branch). Outside a repository they narrow nothing. A file renamed after the author wrote it is missed.
-- **Per term.** `-e A -e B` still searches B in the files A's scope leaves out; within an AND term the scopes
-  intersect. Negated meanings (`-v`, `!`) give none. The meaning is sent unchanged.
-- Files named on the command line and stdin are never narrowed, as with `--include`. `--no-scope` turns it off.
+- **Language or format**: 26 candidates (Python, JavaScript, TypeScript, Go, Rust, Java, Kotlin, Ruby, PHP, C, C++,
+  C#, Swift, Scala, R, shell script, SQL, HTML, CSS, Markdown, YAML, JSON, TOML, XML, Dockerfile, Makefile), with
+  GitHub Linguist's extensions and file names. Several yes answers are alternatives ("JavaScript か TypeScript").
+- **Time of change**: 14 spans: the last minute, the last hour, today, yesterday, the last 1 / 2 / 3 / 7 / 30 days,
+  this month, last week, last month, the last year, this fiscal year (from April 1). The narrowest span answered
+  yes is taken, by its start only: a file changed yesterday may have been modified again today.
+- **Place**: test code (`tests/ test/ __tests__/ spec/ e2e/`, `test_*.py *_test.* *.test.* *.spec.* *Test.java
+  *_spec.rb`, and every `*.rs`: Rust keeps unit tests inside the file), database migrations (`*migrat*`, Flyway's
+  `V1__*.sql`), the README, the changelog (`CHANGELOG* CHANGES* HISTORY* NEWS*`), documentation (`*.md *.rst *.adoc
+  *.txt`, `docs/`), source code (whatever is not documentation, so languages missing from the dictionary still
+  count) and logs (`*.log *.log.N *.out *.err`, `logs/`), by the path conventions of JS, Python, Go, Java, Ruby, Rust
+  and PHP. Several places are alternatives ("README か CHANGELOG に").
+- **git**: in a repository, a time goes by commits: a committed file needs a commit at or after the start (the
+  committer date; a checkout sets every mtime to now), an uncommitted one its mtime. States: uncommitted (worktree
+  and index against HEAD, and untracked files), staged, untracked, this branch (since it left `origin/HEAD`, `main`
+  or `master`), not pushed (`@{upstream}..HEAD`, else commits on no remote branch), and mine (`user.email`'s
+  commits and the uncommitted files). Authors: the 30 with the most commits (`git shortlog`), each a candidate by
+  name and e-mail; a yes narrows to every file a commit of theirs touched. Outside a repository none of these is
+  asked, and a time goes by the mtime.
+- Jev reads the whole meaning, in any language: "案A、B、Cで比較" is not about C files, and a date quoted in a
+  comment is not when the file changed. Nothing is extracted from the text; the candidates are fixed.
+- **Per term.** `-e A -e B` still searches B in the files A's scope leaves out; within an AND term, and across
+  categories ("Python のテストコード"), the scopes intersect. Negated meanings (`-v`, `!`) are not asked. The
+  meaning is sent unchanged.
+- The question costs one small request per meaning, sent only when `-r` / `git semgrep` found something to
+  narrow, and after `-i`'s answer. `--dry-run` shows it as `[scope]`. Files named on the command line and stdin are
+  never narrowed, as with `--include`. `--no-auto-scope` turns it off (`--auto-scope` turns it back on).
 
 ### As a git subcommand (`git semgrep`)
 
@@ -618,7 +622,8 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                (with -r a file named on the command line is always searched; git semgrep's pathspecs are filtered)
   --changed-within=WHEN  with -r and git semgrep, only files modified within 30m / 2h / 7d / 2w, since a date
                or date-time, today, this-week or this-month
-  --no-scope   do not narrow those files by what a meaning says about them (see Scope from the meaning)
+  --no-auto-scope  do not narrow those files by what a meaning says about them (see Scope from the meaning);
+               --auto-scope turns it back on
   -l           print only the names of files with a match, not the lines
   -H, --with-filename  prefix file names even for a single file; --no-filename never prefixes them
   -A NUM       print NUM lines of trailing context after each match (context lines use - as separator)
