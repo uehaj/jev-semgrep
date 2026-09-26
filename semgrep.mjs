@@ -53,7 +53,7 @@ const OPTIONS = {
   include: { type: 'string', multiple: true }, // only names matching one of these globs
   exclude: { type: 'string', multiple: true }, // not names matching one of these globs
   'changed-within': { type: 'string' }, // only files modified within 30m / 2h / 7d / 2w, since a date, today, ...
-  scope: { type: 'boolean', default: true }, // narrow those files by what a meaning says about them; --no-scope: don't
+  'auto-scope': { type: 'boolean', default: true }, // narrow those files by what Jev says a meaning restricts to; --no-auto-scope: don't
   color: { type: 'string', default: 'auto' }, // auto / always / never
   // the API settings, each overriding its environment variable
   'sys1-model': { type: 'string' }, // SEMGREP_MODEL
@@ -120,7 +120,7 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
   --changed-within=WHEN  with -r and git semgrep, only files modified within WHEN: 30m, 2h, 7d, 2w;
                since a date or time (2026-09-01 is local midnight, 2026-09-01T09:00, ...Z); or today,
                this-week (from Monday) or this-month, in local time. By mtime, not git history
-  --no-scope   do not narrow the files -r and git semgrep find by what a meaning says about them. By default
+  --no-auto-scope  do not narrow the files -r and git semgrep find by what a meaning says about them. By default
                each meaning first asks Jev, in one small request, whether it restricts its matches to a
                language or format (Python files, YAML files, ...) or to what changed within a span (the last
                minute / hour, today, yesterday, the last 1 / 2 / 3 / 7 / 30 days, this month, last week, last
@@ -129,6 +129,7 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                (*.py *.pyi *.pyw; modified since then). Jev reads the whole meaning, so "案A、B、Cで" is not
                about C files. Per term: -e A -e B still searches B in the files A leaves out. Each scope goes
                to stderr as semgrep: scope: ...; files named on the command line are never narrowed
+  --auto-scope turn it back on after --no-auto-scope in SEMGREP_OPTS
   -l           print only the names of files with a match, not the lines
   -H, --with-filename  prefix each line (and -c count) with its file name, even for a single file
   --no-filename  never prefix file names, even with several files, -r or git semgrep
@@ -236,7 +237,7 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
   --changed-within=WHEN  -r と git semgrep で、WHEN 以内に更新したファイルだけを探す。30m / 2h / 7d / 2w、
                日付か日時以降 (2026-09-01 はその日のローカル時刻 0 時、2026-09-01T09:00、...Z)、
                または today / this-week (月曜から) / this-month (ローカル時刻)。git の履歴ではなく mtime で見る
-  --no-scope   意味の文面からファイルを絞り込まない。既定では意味ごとにまず Jev へ小さなリクエストを 1 つ
+  --no-auto-scope  意味の文面からファイルを絞り込まない。既定では意味ごとにまず Jev へ小さなリクエストを 1 つ
                送り、その意味が一致を言語・形式 (Python のファイル、YAML のファイル…) や変更時期 (1 分以内、
                1 時間以内、今日、昨日、1・2・3・7・30 日以内、今月、先週、先月、この 1 年、今年度) に限定して
                いるか、置き場所 (テストコード、マイグレーション、README、CHANGELOG、文書、ソースコード、ログ) に
@@ -244,6 +245,7 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                (*.py *.pyi *.pyw、それ以降に更新したもの) に絞る。Jev は意味全体を読むので、「案A、B、Cで」は
                C のファイルの話にならない。項ごとに効くので、-e A -e B は A が除いたファイルでも B を探す。
                絞り込みは semgrep: scope: ... として stderr に出す。コマンドラインで指定したファイルは絞らない
+  --auto-scope SEMGREP_OPTS の --no-auto-scope を打ち消して、絞り込みを有効に戻す
   -l           一致した行ではなくファイル名だけを表示
   -H, --with-filename  1 ファイルだけでも、各行 (と -c の件数) の前にファイル名を付ける
   --no-filename  複数ファイル・-r・git semgrep でもファイル名を付けない
@@ -443,7 +445,7 @@ const wanted = (path, st) => {
 // any language: "案A、B、Cで比較" is not about C files, a date quoted in a comment is not when the file changed. A
 // candidate counts at 0.7 or more, the threshold --dedup and --sentence use. Each scope is a literal of its meaning's
 // AND term, so -e A -e B still searches B in the files A's scope leaves out. Files named on the command line and
-// stdin are never narrowed, as with --include. --no-scope turns it off.
+// stdin are never narrowed, as with --include. --no-auto-scope turns it off.
 // A candidate: { key, cat, what (the end of the question), test(file, stat) }. Within a category the yes answers are
 // alternatives ("JavaScript か TypeScript"), except time, where the narrowest span is taken; across categories they
 // intersect ("Python のテストコード").
@@ -577,7 +579,7 @@ const gitFiles = () => [...new Set(lsFiles().split('\0'))] // a conflicted file 
   .map(p => (p === '-' ? './-' : p)); // a tracked file named -, not stdin
 const found = asGit ? gitFiles()
   : (files.length ? files : [opt.r ? '.' : '-']).flatMap(f => (f === '-' ? [f] : expand(f)));
-const narrowable = opt.scope && found.some(f => !named(f)); // -r or git semgrep found something scopes could leave out
+const narrowable = opt['auto-scope'] && found.some(f => !named(f)); // -r or git semgrep found something scopes could leave out
 // Standard input is read once: -i hands it to its dry run, and the search reads it again from here.
 const stdinBuf = found.includes('-') ? readFileSync(0) : null;
 // -i: run this same command once with --dry-run, show its files and totals on the terminal, and search only on a yes.
