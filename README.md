@@ -386,7 +386,7 @@ matching lines per file instead.
 ### Scope from the meaning
 
 A meaning that restricts its matches to some kind of file can only match in such files. With `-r` and
-`git semgrep`, each meaning first asks Jev, in one small request, a yes / no per candidate, and a yes at 0.7 or
+`git semgrep`, each meaning first asks Jev, in one small request, a yes / no per candidate, and a yes at 0.6 or
 more narrows the files before anything else is sent. The rest is never read or sent. Each scope is reported on
 stderr with Jev's answer, so a wrong one is visible:
 
