@@ -739,7 +739,11 @@ const pooled = async fn => { await acquire(); try { return await fn(); } finally
 // The scope questions go out only now, after -i's answer, and only when there is something to narrow.
 if (narrowable) CANDIDATES.push(...gitCandidates(found.filter(f => !named(f))));
 if (narrowable) await Promise.all(expr.flatMap(term => scoped(term).map(lit =>
-  pooled(() => post({ meaning: lit.text }, scopeQuestions(lit.text), `[scope] "${cut(lit.text, 40)}"`)).then(a => scopesOf(a).forEach(sc => addScope(term, sc))))));
+  pooled(() => post({ meaning: lit.text }, scopeQuestions(lit.text), `[scope] "${cut(lit.text, 40)}"`)).then(a => {
+    // --verbose: the answers worth a look, for tuning (tests/scope-eval.mjs reads this line)
+    if (opt.verbose && !dry) trace(`scope answers "${cut(lit.text, 40)}": ${Object.entries(a).filter(([, v]) => v.noul >= 0.2).sort((x, y) => y[1].noul - x[1].noul).map(([k, v]) => `${k}=${v.noul.toFixed(2)}`).join(' ') || '(none at 0.2 or more)'}`);
+    scopesOf(a).forEach(sc => addScope(term, sc));
+  }))));
 // A file no term admits is not read. Each scope is reported when it can narrow something (not with named files only),
 // with -q silent, and not again after -i showed it.
 const targets = found.filter(f => expr.some(term => admitted(term, f)));

@@ -1,0 +1,60 @@
+none	Pythonのような書き方をしている箇所を教えて
+none	最近直したバグに関係してそうな行
+none	設定ファイルに書いてあるタイムアウト値
+none	コピーライトの年が2020年になっている行
+none	去年より前に書かれた古いコードを探して
+none	Javaのような書き方をしているコードを探して
+none	テストする関数のリストを出して
+none	テストとフィクスチャの両方を確認したい
+none	ログを出している箇所を探して
+none	設定を変更する関数はどこ
+none	iOS対応のコードを見せて
+none	code written in a Go-like style
+none	functions that look like they were ported from Java
+none	config files mentioning retry counts
+none	comments referencing a release date in 2023
+none	code that generates the README
+none	places where we test error handling manually
+none	the copyright header year in each file
+none	a JSON blob embedded in a larger string literal
+time	昨日コミットした箇所でバリデーションを追加している行
+time	先週変更した箇所で認証まわりを触っている行
+time	9月20日以降に変更されたファイルでエラーハンドリングを追加している箇所
+time	今月中に変更されたファイルでログ出力を追加している箇所
+time	直近3日間で触ったところの見直しをしたい
+time	files changed since Tuesday that touch the cache layer
+time	anything modified in the last 3 days around the login flow
+time	what got edited this week that deals with error messages
+time	changes made yesterday afternoon to the API layer
+time	stuff changed since September 20 involving database calls
+lang:javascript	JavaScriptのファイルでPromiseチェーンを使っている行
+lang:go	Goのコードでgoroutineを使ってる箇所
+lang:ruby	Rubyでバリデーションを実装している箇所
+lang:yaml	YAMLの設定ファイルでポート番号を指定している行
+lang:swift	SwiftのコードでOptionalをアンラップしている箇所
+lang:rust	rust code that spawns async tasks
+lang:dockerfile	the Dockerfile lines that install dependencies
+lang:kotlin	kotlin classes implementing a repository pattern
+lang:php|ruby	PHP or Ruby files handling file uploads
+lang:sql	SQL scripts that create indexes
+role:test	テストコードで例外処理を検証している箇所
+role:migration	マイグレーションファイルでカラムを削除している箇所
+role:readme	READMEに書いてあるインストール手順
+role:changelog	CHANGELOGに書いてある破壊的変更の記述
+role:docs	ドキュメントに書いてあるAPIの使い方の説明
+role:log	ログファイルの中でタイムアウトエラーが出ている行
+role:test	test files that mock the database connection
+role:migration	the migration scripts that add a new table
+role:docs	the docs explaining how authentication works
+git:author	田中さんが書いたコードでSQLインジェクション対策してる箇所
+git:uncommitted	まだコミットしていない変更で未使用の変数が残っている行
+git:staged	ステージ済みの変更でconsole.logが残っている行
+git:untracked	files I haven't added to git yet with leftover debug code
+git:branch	changes on this branch that lack test coverage
+git:unpushed	commits that are local but not pushed yet with TODOs
+lang:python,time	先週Pythonで追加されたリトライ処理の行
+lang:typescript,role:test	TypeScriptのテストファイルでモックを使っている箇所
+git:author,lang:rust	自分が書いたRustのコードでunwrapを使っている箇所
+role:readme,time	先月更新されたREADMEの記述
+role:test,time	tests updated yesterday for the login flow
+lang:kotlin,role:migration	Kotlinのマイグレーションファイルでインデックスを追加している箇所

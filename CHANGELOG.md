@@ -14,6 +14,7 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   … this fiscal year, 14 of them); a yes at 0.6 or more searches only those files. Per term, reported on stderr as
   `semgrep: scope: …` with Jev's answer, silent with `-q`, asked only after `-i`'s answer; named files are never
   narrowed. `--no-auto-scope` turns it off, `--auto-scope` back on.
+  `--verbose` prints Jev's answers to the scope question (`semgrep: scope answers …`).
 - Auto-scope by place (#48): test code, migrations, the README, the changelog, documentation, source code (what is
   not documentation) and logs, by path conventions, asked of Jev with the other candidates.
 - Auto-scope from git (#46): in a repository a time goes by commits (uncommitted files by their mtime), and git
