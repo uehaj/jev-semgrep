@@ -1,11 +1,11 @@
 // Auto-scope accuracy (#44): runs semgrep --dry-run on every row of a corpus (EXPECTED<TAB>QUESTION) and compares
-// the scopes it reports with the expected ones. Sends nothing: --dry-run on a directory with one file.
+// the scopes it reports with the expected ones. Sends nothing: --dry-run on a small repository.
 //   node tests/scope-eval.mjs [FILE.tsv]           per-label table and the rows that differ (default: both corpora)
 //   node tests/scope-eval.mjs --check [FILE.tsv]   exit 1 if any row applies a scope it should not (a lost match)
 // scope-corpus.tsv was written blind to the rules and then used to tune them; scope-holdout.tsv was written blind
 // after the tuning and never tuned against, so its numbers are the honest ones.
 // A wrong scope loses matches without a trace, so "wrong" is the number that matters; a missed one only costs requests.
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 
@@ -25,7 +25,13 @@ function labels(line) {
   return langs.length ? [`lang:${[...new Set(langs)].sort().join('|')}`] : [`?:${what}`];
 }
 const dir = mkdtempSync(`${tmpdir()}/scope-eval-`);
+// A repository git can answer for: a commit by 田中 on main, one by user.email on a branch, no hooks. A git scope
+// git could not answer (no repository, an author with no commit, "this branch" on main) is not reported.
 writeFileSync(`${dir}/x.txt`, 'x\n'); // scopes are reported only when -r finds a file
+const git = (...a) => execFileSync('git', ['-C', dir, '-c', 'core.hooksPath=/dev/null', ...a], { stdio: 'ignore' });
+git('init', '-q', '-b', 'main'); git('config', 'user.email', 'me@x'); git('config', 'user.name', 'Me');
+git('add', 'x.txt'); git('commit', '-q', '--author=田中 <tanaka@x>', '-m', 'a');
+git('checkout', '-q', '-b', 'feat'); writeFileSync(`${dir}/y.txt`, 'y\n'); git('add', 'y.txt'); git('commit', '-q', '-m', 'b');
 const env = { ...process.env, SEMGREP_URL: 'http://127.0.0.1:1/v1', SEMGREP_OPTS: '', SEMGREP_API_KEY: '', TYPESAFE_API_KEY: '' };
 const stats = new Map(), diff = [];
 let wrongRows = 0, missedRows = 0;
