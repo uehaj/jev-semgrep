@@ -347,6 +347,14 @@ eq "$(gs 'g_mine @s:a_b_x')" "dirty.txt feat.txt new.txt staged.txt untr.txt " "
 eq "$(gs g_uncommitted)" "dirty.txt staged.txt untr.txt " "git scope: uncommitted"
 eq "$(gs g_staged)" "staged.txt " "git scope: staged"
 eq "$(gs g_untracked)" "untr.txt " "git scope: untracked"
+# No meaning to scope (a regex-only search, or negated meanings only): auto-scope runs no git of its own (#105)
+mkdir -p "$tmp/gitwrap"; printf '#!/bin/sh\necho "$*" >>"%s"\nexec %s "$@"\n' "$tmp/git.log" "$(command -v git)" >"$tmp/gitwrap/git"; chmod +x "$tmp/gitwrap/git"
+: >"$tmp/git.log"; PATH="$tmp/gitwrap:$PATH" $JI -r -c -e '/cat/' "$G" >/dev/null
+eq "$(grep -c shortlog "$tmp/git.log" || true)" "0" "auto-scope: no git for a regex-only search"
+: >"$tmp/git.log"; PATH="$tmp/gitwrap:$PATH" $JI -r -c -e '/cat/' -v 'a dog' "$G" >/dev/null
+eq "$(grep -c shortlog "$tmp/git.log" || true)" "0" "auto-scope: no git for negated meanings only"
+: >"$tmp/git.log"; PATH="$tmp/gitwrap:$PATH" $JI -r -c -e cat "$G" >/dev/null
+[ "$(grep -c shortlog "$tmp/git.log")" -ge 1 ] || fail "auto-scope: git asked when a meaning can scope"
 eq "$(gs g_branch)" "dirty.txt feat.txt staged.txt untr.txt " "git scope: this branch"
 eq "$(gs g_unpushed)" "dirty.txt feat.txt new.txt old.txt " "git scope: unpushed, no remote"
 eq "$(cd "$G" && $GS -l -e 'cat @s:g_staged' 2>/dev/null | tr '\n' ' ')" "staged.txt " "git scope: git semgrep"

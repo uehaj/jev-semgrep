@@ -746,7 +746,8 @@ const gitFiles = () => [...new Set(lsFiles().split('\0'))] // a conflicted file 
   .map(p => (p === '-' ? './-' : p)); // a tracked file named -, not stdin
 const found = asGit ? gitFiles()
   : (files.length ? files : [opt.r ? '.' : '-']).flatMap(f => (f === '-' ? [f] : expand(f)));
-const narrowable = opt['auto-scope'] && found.some(f => !named(f)); // -r or git semgrep found something scopes could leave out
+// -r or git semgrep found something scopes could leave out, and a meaning could scope it: else no git, no question (#105)
+const narrowable = opt['auto-scope'] && expr.some(term => scoped(term).length) && found.some(f => !named(f));
 // Standard input is read once: -i hands it to its dry run, and the search reads it again from here.
 const stdinBuf = found.includes('-') ? readFileSync(0) : null;
 // -i: run this same command once with --dry-run, show its files and totals on the terminal, and search only on a yes.
