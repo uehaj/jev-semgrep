@@ -344,6 +344,14 @@ M="$tmp/many"; mkdir -p "$M"; for i in 01 02 03 04 05 06 07 08 09 10 11 12; do e
 eq "$($JI -r -l --verbose -e 'cat @s:l_python' "$M" 2>&1 >/dev/null | grep '^sys1grep:   left out: ')" "sys1grep:   left out: $(for i in 01 02 03 04 05 06 07 08 09 10; do printf '%s ' "$M/$i.js"; done)… (+2 more)" "--verbose: 10 left out by name, the rest counted"
 eq "$($JI -r -q --verbose -e 'cat @s:l_python' "$S" 2>&1 | grep -cE 'searched by scope|left out: ' || true)" "0" "--verbose: neither line with -q"
 eq "$($JI -r --dry-run --verbose -e 'cat @s:l_python' "$S" 2>&1 | grep -cE 'searched by scope|left out: ' || true)" "0" "--verbose: neither line with --dry-run"
+# The note (#111): each judging request says which scopes all its lines got through, as the scope question named them
+nt() { $JI -r --verbose "$@" 2>&1 >/dev/null | grep '^sys1grep:   note: ' | sort -u; }
+eq "$(nt -e 'cat @s:l_python' "$S")" "sys1grep:   note: every line here is from Python files." "note: an applied scope"
+eq "$(nt -e 'a cat in .py files @s:l_python' "$S")" "sys1grep:   note: every line here is from .py files." "note: a language by the extension the meaning wrote"
+eq "$(nt -e 'cat @s:l_python @s:t_yesterday @s:t_day30' "$S")" "sys1grep:   note: every line here is from Python files, what was changed yesterday." "note: categories, the narrowest span"
+eq "$(nt -z -e 'cat @s:l_python' "$S")" "sys1grep:   note: every record here is from Python files." "note: the unit word"
+eq "$(nt -e cat "$S")" "" "note: none without a scope"
+eq "$(nt -e 'cat @s:l_python' "$S" "$S/b.js" | grep -c . || true)" "0" "note: a request with a named file (never narrowed) carries none"
 # git: time by commit (not the mtime a checkout sets), states and authors; not asked outside a repository
 G="$tmp/gitscope"; mkdir -p "$G"
 GM='cat @s:t_yesterday|cat @s:a_a_x|cat @s:g_mine|cat @s:g_mine @s:a_b_x|cat @s:g_uncommitted|cat @s:g_staged|cat @s:g_untracked|cat @s:g_branch|cat @s:g_unpushed'
@@ -368,6 +376,26 @@ eq "$(grep -c shortlog "$tmp/git.log" || true)" "0" "auto-scope: no git for a re
 eq "$(grep -c shortlog "$tmp/git.log" || true)" "0" "auto-scope: no git for negated meanings only"
 : >"$tmp/git.log"; PATH="$tmp/gitwrap:$PATH" $JI -r -c -e cat "$G" >/dev/null
 [ "$(grep -c shortlog "$tmp/git.log")" -ge 1 ] || fail "auto-scope: git asked when a meaning can scope"
+# -g: git log's commits, one record each; auto-scope becomes git log arguments. Every commit carries every meaning.
+L="$tmp/gitlog"; mkdir -p "$L"; LM=$(printf '%s\n' 'cat @s:t_today' 'cat @s:l_python' 'cat @s:a_a_x' 'cat @s:g_mine' 'cat @s:t_today @s:l_python')
+(cd "$L" && git init -q -b main && git config user.email b@x && git config user.name Bob && git config core.hooksPath /dev/null \
+  && echo 1 >a.py && git add a.py && GIT_AUTHOR_DATE=2020-01-01T00:00 GIT_COMMITTER_DATE=2020-01-01T00:00 git commit -q --author='Alice <a@x>' -m oldpy -m "$LM" \
+  && echo 2 >b.js && git add b.js && git commit -q -m newjs -m "$LM" && echo 3 >c.py && git add c.py && git commit -q -m newpy -m "$LM")
+gl() { (cd "$L" && $JI -g "$@" 2>/dev/null) | grep -aoE '^[0-9a-f]{7,} [0-9-]{10} [a-z]+' | awk '{print $3}' | tr '\n' ' '; }
+eq "$(gl -e cat)" "newpy newjs oldpy " "-g: a record per commit, newest first"
+eq "$(gl -e 'cat @s:t_today')" "newpy newjs " "-g: a time becomes --since"
+eq "$(gl -e 'cat @s:l_python')" "newpy oldpy " "-g: a language becomes pathspecs"
+eq "$(gl -e 'cat @s:a_a_x')" "oldpy " "-g: an author becomes --author"
+eq "$(gl -e 'cat @s:g_mine')" "newpy newjs " "-g: mine becomes --author with user.email"
+eq "$(gl -e 'cat @s:t_today @s:l_python')" "newpy " "-g: scopes of one meaning together"
+eq "$(gl -e 'cat @s:l_python' b.js)" "newjs " "-g: FILE is a pathspec, never narrowed"
+eq "$(gl --no-auto-scope -e 'cat @s:t_today')" "newpy newjs oldpy " "-g: --no-auto-scope"
+eq "$(cd "$L" && $JI -g --dry-run -e 'cat @s:l_python' -e dog | grep -c '\[scope\]' || true)" "0" "-g: no scope question with two terms"
+(cd "$L" && $JI -g -e 'cat @s:t_today @s:l_python' 2>&1 >/dev/null) | grep -qE "^sys1grep: git log .*--since=[0-9T:.-]+Z -- ':\(glob\)\*\*/\*\.py'" || fail "-g: the git log command on stderr"
+gn() { (cd "$L" && $JI -g --verbose "$@" 2>&1 >/dev/null) | grep '^sys1grep:   note: ' | sort -u; }
+eq "$(gn -e 'cat @s:t_today @s:l_python')" "sys1grep:   note: every record here is from Python files, what was changed today." "-g: the note names the scopes git log took"
+eq "$(gn -e 'cat @s:l_python' b.js)" "" "-g: no language in the note when FILE pathspecs replaced it"
+code 2 "-g with -r" -- sh -c "cd '$L' && $JI -g -r -e cat"
 eq "$(gs g_branch)" "dirty.txt feat.txt staged.txt untr.txt " "git scope: this branch"
 eq "$(gs g_unpushed)" "dirty.txt feat.txt new.txt old.txt " "git scope: unpushed, no remote"
 eq "$(cd "$G" && $GS -l -e 'cat @s:g_staged' 2>/dev/null | tr '\n' ' ')" "staged.txt " "git scope: git sys1grep"

@@ -66,6 +66,7 @@ const OPTIONS = {
   include: { type: 'string', multiple: true }, // only names matching one of these globs
   exclude: { type: 'string', multiple: true }, // not names matching one of these globs
   'changed-within': { type: 'string' }, // only files modified within 30m / 2h / 7d / 2w, since a date, today, ...
+  gitlog: { type: 'boolean', short: 'g', default: false }, // search git log's commits, one record each; auto-scope picks which
   'auto-scope': { type: 'boolean', default: true }, // narrow those files by what Jev says a meaning restricts to; --no-auto-scope: don't
   color: { type: 'string', default: 'auto' }, // auto / always / never
   summarize: { type: 'string' }, // pipe what would print to this LLM CLI and print its answer instead
@@ -150,6 +151,11 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                and the files left out); with -r a file named on the command line is never narrowed,
                git sys1grep's pathspecs are narrowed like the rest (as with --include)
   --auto-scope turn it back on after --no-auto-scope in SYS1GREP_OPTS
+  -g, --gitlog search the commits of git log, one record each (hash, date, subject, body), instead of
+               files. With one term, auto-scope becomes git log's arguments: a time --since, a language
+               pathspecs, an author or mine --author, this branch or not pushed a range; the command goes
+               to stderr. FILE arguments are pathspecs. Not with -r or git sys1grep
+                 sys1grep -g -e 'a performance fix to the .mjs files today'
   -l           print only the names of files with a match, not the lines
   -H, --with-filename  prefix each line (and -c count) with its file name, even for a single file
   --no-filename  never prefix file names, even with several files, -r or git sys1grep
@@ -281,6 +287,11 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                絞り込みと、除いたファイルも出す)。-r ではコマンドラインで指定したファイルは
                絞らない。git sys1grep の pathspec は他と同じく絞る (--include と同じ)
   --auto-scope SYS1GREP_OPTS の --no-auto-scope を打ち消して、絞り込みを有効に戻す
+  -g, --gitlog ファイルではなく git log のコミットを、1 コミット 1 レコード (ハッシュ、日付、件名、本文) で探す。
+               項が 1 つなら絞り込みを git log の引数にする: 時期は --since、言語は pathspec、作者と自分は
+               --author、このブランチと未プッシュは範囲。そのコマンドを stderr に出す。FILE は pathspec。
+               -r と git sys1grep とは併用できない
+                 sys1grep -g -Q '今日、.mjsにおこなった性能向上の修正'
   -l           一致した行ではなくファイル名だけを表示
   -H, --with-filename  1 ファイルだけでも、各行 (と -c の件数) の前にファイル名を付ける
   --no-filename  複数ファイル・-r・git sys1grep でもファイル名を付けない
@@ -466,6 +477,8 @@ if (tPos < 0 || tPos > 1 || tNeg < 0 || tNeg > 1) die('-t / -T must be between 0
 if (Number(opt.j) < 1) die('-j must be at least 1');
 if (opt.sentence !== undefined && !['jev', 'rules'].includes(opt.sentence)) die('--sentence must be jev or rules');
 if (!['auto', 'always', 'never'].includes(opt.color)) die('--color must be auto, always or never');
+if (opt.gitlog && (opt.r || globalThis.SYS1GREP_GIT)) die('-g searches commits, not files: it cannot be combined with -r or git sys1grep');
+if (opt.gitlog) opt.z = true; // a commit is a record
 // --summarize: what would print goes on stdin to an LLM CLI, which is asked about the meanings as they were written
 // (-Q as a question, not "the line answers: ..."), and its answer prints instead. Each TOOL runs with no tools and no
 // project settings, so a line that carries instructions can at worst mislead the summary.
@@ -619,10 +632,14 @@ const union = (...sets) => (sets.some(x => !x) ? null : new Set(sets.flatMap(x =
 const untracked = top => gitPaths(top, 'ls-files', '-z', '--others', '--exclude-standard');
 const uncommitted = top => union(gitPaths(top, 'diff', '--name-only', '-z', 'HEAD'), untracked(top)); // worktree and index against HEAD
 // The branch's own changes: from where it left the default branch (origin/HEAD, else main or master) to the worktree.
-function branchChanges(top) {
+function forkPoint(top) {
   const base = [gitOut(top, 'rev-parse', '--abbrev-ref', 'origin/HEAD'), 'main', 'master', 'origin/main', 'origin/master'].find(b => b && gitOut(top, 'rev-parse', '--verify', '-q', b));
   const fork = base && gitOut(top, 'merge-base', 'HEAD', base);
-  if (!fork || fork === gitOut(top, 'rev-parse', 'HEAD')) return null; // on the default branch itself: no branch of its own
+  return !fork || fork === gitOut(top, 'rev-parse', 'HEAD') ? null : fork; // on the default branch itself: no branch of its own
+}
+function branchChanges(top) {
+  const fork = forkPoint(top);
+  if (!fork) return null;
   return union(gitPaths(top, 'diff', '--name-only', '-z', fork), untracked(top));
 }
 // Commits not on the upstream; without one, commits on no remote branch.
@@ -664,18 +681,19 @@ function gitCandidates(found) {
     if (m) authors.set(m[3], { who: m[2], commits: (authors.get(m[3])?.commits ?? 0) + +m[1] });
   }
   for (const [email, { who }] of [...authors].sort((a, b) => b[1].commits - a[1].commits).slice(0, 30))
-    out.push({ key: `a_${email.replace(/\W/g, '_')}`, cat: 'author', what: `code written by ${who}`, label: `git-author files: by ${who}`, test: inGit(top => byAuthor(top, email)) });
+    out.push({ key: `a_${email.replace(/\W/g, '_')}`, cat: 'author', email, what: `code written by ${who}`, label: `git-author files: by ${who}`, test: inGit(top => byAuthor(top, email)) });
   return out;
 }
 const scopeQuestions = text => Object.fromEntries(CANDIDATES.map(c => [c.key, { type: 'noul', instructions: `Does the meaning "${text}" restrict its matches to ${c.what}?` }]));
 const SCOPE_AT = 0.6; // a candidate counts at this or more (see the top of auto-scope)
-// Jev's answers -> one scope per category that got a yes: { label, words, names, test } (names: for --verbose)
+// Jev's answers -> one scope per category that got a yes: { label, words, names, cs, test } (names: for --verbose;
+// cs: its candidates, for the judging requests' note and -g's git log arguments)
 function scopesOf(answers) {
   const yes = CANDIDATES.filter(c => answers[c.key].noul >= SCOPE_AT), out = [];
   for (const cat of new Set(yes.map(c => c.cat))) {
     let cs = yes.filter(c => c.cat === cat);
     if (cat === 'time') cs = [cs.reduce((a, b) => (b.from > a.from ? b : a))];
-    out.push({ label: [...new Set(cs.map(c => c.label))].join(' | '), words: cs.map(c => `${c.what}: ${answers[c.key].noul.toFixed(2)}`), names: cs.map(c => `${c.what} (${cut(c.label, 40)})`), test: (f, st) => cs.some(c => c.test(f, st)) });
+    out.push({ label: [...new Set(cs.map(c => c.label))].join(' | '), words: cs.map(c => `${c.what}: ${answers[c.key].noul.toFixed(2)}`), names: cs.map(c => `${c.what} (${cut(c.label, 40)})`), cs, test: (f, st) => cs.some(c => c.test(f, st)) });
   }
   return out;
 }
@@ -696,7 +714,8 @@ function traceScope(text, answers, pool) {
 }
 // Each scope goes into its meaning's AND term as { kind: 's', label, words, admits(file) }; negated meanings say
 // what a line is not, which says nothing about its file.
-const named = f => f === '-' || (!asGit && files.includes(f)); // stdin, or named on the command line: never narrowed
+const GITLOG = 'git log'; // -g's one source
+const named = f => f === '-' || f === GITLOG || (!asGit && files.includes(f)); // stdin, -g, or named on the command line: never narrowed
 const addScope = (term, sc) => {
   const seen = new Map(); // file -> admitted
   term.push({ kind: 's', ...sc, admits: f => named(f) || (seen.has(f) ? seen.get(f) : seen.set(f, sc.test(f, statSync(f))).get(f)) });
@@ -755,10 +774,11 @@ const gitFiles = () => [...new Set(lsFiles().split('\0'))] // a conflicted file 
     return st?.isFile() && wanted(p, st);
   })
   .map(p => (p === '-' ? './-' : p)); // a tracked file named -, not stdin
-const found = asGit ? gitFiles()
+const found = opt.gitlog ? [GITLOG] : asGit ? gitFiles()
   : (files.length ? files : [opt.r ? '.' : '-']).flatMap(f => (f === '-' ? [f] : expand(f)));
 // -r or git sys1grep found something scopes could leave out, and a meaning could scope it: else no git, no question (#105)
-const narrowable = opt['auto-scope'] && expr.some(term => scoped(term).length) && found.some(f => !named(f));
+// -g: the scopes become git log arguments, one set for the whole search, so only with one term.
+const narrowable = opt['auto-scope'] && expr.some(term => scoped(term).length) && (opt.gitlog ? expr.length === 1 : found.some(f => !named(f)));
 // Standard input is read once: -i hands it to its dry run, and the search reads it again from here.
 const stdinBuf = found.includes('-') ? readFileSync(0) : null;
 // -i: run this same command once with --dry-run, show its files and totals on the terminal, and search only on a yes.
@@ -793,6 +813,7 @@ function show(state, questions, label) {
   for (const q of Object.values(questions)) { const k = q.instructions.replace(/\bL\d{3}\b/g, 'Lnnn'); count.set(k, (count.get(k) ?? 0) + 1); }
   const n = Object.keys(questions).length, chars = Object.values(state).join('').length;
   trace(`request ${++traced} ${label}, ${n} question${n === 1 ? '' : 's'}, ${chars} chars`);
+  if (state.note) trace(`  ${cut(state.note, 110)}`);
   [...count].slice(0, 3).forEach(([q, k]) => trace(`  ${String(k).padStart(3)}× ${cut(q, 100)}`));
   if (count.size > 3) trace(`       (+${count.size - 3} more)`);
   tracedQuestions += n; tracedChars += chars; tracedBytes += Buffer.byteLength(JSON.stringify({ model, state, questions }));
@@ -838,23 +859,50 @@ const release = () => (running--, waiters.shift()?.());
 const pooled = async fn => { await acquire(); try { return await fn(); } finally { release(); } };
 
 // The scope questions go out only now, after -i's answer, and only when there is something to narrow.
-if (narrowable) CANDIDATES.push(...gitCandidates(found.filter(f => !named(f))));
+// -g: a commit has a time, files and an author; a place (a path pattern) and uncommitted, staged or untracked do not
+// become git log arguments.
+const LOGGED = ['time', 'language', 'author', 'git-branch', 'git-unpushed'];
+// ('./-': any path in the current directory, whose repository -g reads)
+if (narrowable) CANDIDATES.push(...gitCandidates(opt.gitlog ? ['./-'] : found.filter(f => !named(f))));
+if (narrowable && opt.gitlog) CANDIDATES.splice(0, Infinity, ...CANDIDATES.filter(c => LOGGED.includes(c.cat)));
 if (narrowable) spin.set('asking which files each meaning restricts to (auto-scope)');
 if (narrowable) await Promise.all(expr.flatMap(term => scoped(term).map(lit =>
   pooled(() => post({ meaning: lit.text }, scopeQuestions(lit.text), `[scope] "${cut(lit.text, 40)}"`)).then(a => {
     if (opt.verbose && !dry) traceScope(lit.text, a, found.filter(f => !named(f)));
-    scopesOf(a).forEach(sc => addScope(term, sc));
+    scopesOf(a).forEach(sc => addScope(term, { ...sc, meaning: lit.text }));
   }))));
 // A file no term admits is not read. Each scope is reported when it can narrow something (not with named files only),
 // with -q silent, and not again after -i showed it.
 const targets = found.filter(f => expr.some(term => admitted(term, f)));
 if (!opt.quiet && narrowable) {
   const lines = [...new Set(expr.flat().filter(lit => lit.kind === 's').map(lit => `sys1grep: scope: ${safe(lit.label)} (from ${lit.words.map(w => `"${safe(w)}"`).join(', ')})`))];
-  if (lines.length) lines.push(`sys1grep: scope: ${targets.length} of ${found.length} files`);
+  if (lines.length && !opt.gitlog) lines.push(`sys1grep: scope: ${targets.length} of ${found.length} files`);
   // --verbose: the files the scopes left out, the first 10 by name (#104)
   const kept = new Set(targets), out = found.filter(f => !kept.has(f));
   if (lines.length && opt.verbose && !dry && out.length) lines.push(`sys1grep:   left out: ${out.slice(0, 10).map(safe).join(' ')}${out.length > 10 ? ` … (+${out.length - 10} more)` : ''}`);
   for (const m of lines) if (!warned.includes(m)) { console.error(m); warned.push(m); }
+}
+// -g: git log over the commits the scopes of the one term admit. Within the term the scopes are ANDed: the latest
+// time, and the ranges together; languages and authors are each ORed (git's pathspecs and --author are).
+// ponytail: two meanings each naming a language OR them; AND them if that ever matters.
+function gitlogArgs() {
+  const cs = (expr.length === 1 ? expr[0] : []).filter(l => l.kind === 's').flatMap(l => l.cs), args = [], paths = [];
+  const since = Math.max(...cs.filter(c => c.cat === 'time').map(c => c.from));
+  if (since > -Infinity) args.push(`--since=${new Date(since).toISOString()}`);
+  const who = c => (c.key === 'g_mine' ? gitOut('.', 'config', 'user.email') : c.email);
+  for (const c of cs.filter(c => c.cat === 'author')) if (who(c)) args.push('-i', `--author=<${who(c).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}>`);
+  if (cs.some(c => c.key === 'g_branch') && forkPoint('.')) args.push(`${forkPoint('.')}..HEAD`);
+  if (cs.some(c => c.key === 'g_unpushed')) args.push(...(gitOut('.', 'rev-parse', '-q', '--verify', '@{upstream}') ? ['@{upstream}..HEAD'] : ['HEAD', '--not', '--remotes']));
+  if (!files.length) for (const c of cs.filter(c => c.cat === 'language')) paths.push(...c.label.split(' ').map(g => `:(glob)**/${g}`)); // named paths are never narrowed
+  return ['log', '-z', '--date=short', '--format=%h %ad %s%n%b', ...args, '--', ...files, ...paths];
+}
+let gitlogBuf = null;
+if (opt.gitlog) {
+  const args = gitlogArgs();
+  const cmd = `git ${args.map(a => (/^[\w@:.=/<>-]+$/.test(a) ? a : `'${a}'`)).join(' ')}`;
+  if (trace) trace(cmd); else if (!opt.quiet && expr[0]?.some(l => l.kind === 's')) console.error(`sys1grep: ${cmd}`);
+  try { gitlogBuf = execFileSync('git', args, { maxBuffer: Infinity, stdio: ['ignore', 'pipe', 'inherit'] }); }
+  catch (e) { if (e.status == null) die(`git log: ${e.message}`); process.exit(2); } // git exited non-zero: it has said why
 }
 
 // --sentence: the unit is a sentence. Lines are joined as wrapped prose, except where a newline cannot be inside
@@ -933,7 +981,7 @@ const allLines = [], unitCount = new Map();
 const read = new Map(); // file -> units as read (lines, or records with -z)
 for (const file of targets) {
   let buf;
-  try { buf = file === '-' ? stdinBuf : readFileSync(file); } catch (e) { warn(file, e); continue; }
+  try { buf = file === '-' ? stdinBuf : file === GITLOG ? gitlogBuf : readFileSync(file); } catch (e) { warn(file, e); continue; }
   // UTF-16 with a BOM is text though every ASCII character carries a NUL, so it skips the binary sniff.
   const utf16 = { fffe: 'utf-16le', feff: 'utf-16be' }[buf.subarray(0, 2).toString('hex')]; // its encoding, or undefined
   // With -z a NUL is the record terminator, so the binary sniff looks for other control bytes (ELF, images, archives).
@@ -1089,8 +1137,23 @@ const chunked = units => {
 };
 const chunks = chunked(sent);
 const id = i => `L${String(i).padStart(3, '0')}`;
+// The note (#111): the scopes every unit of a request got through, named as the scope question named them, or a
+// language by the extension its meaning wrote (".mjs files"). A line cannot show when it changed, where it lives or
+// who wrote it, so without the note the meaning's words for that pull Jev's verdicts down.
+const extIn = (x, text) => new RegExp(`${x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?!\\w)`, 'i').test(text);
+function noteOf(chunk) {
+  // -g's git log took the scopes as its arguments, all but a language when FILE pathspecs were given
+  const holds = (l, f) => (f === GITLOG ? !(files.length && l.cs.some(c => c.cat === 'language')) : !named(f) && l.admits(f));
+  const lits = [...new Set(expr.flat())].filter(l => l.kind === 's' && chunk.every(u => holds(l, u.file)));
+  const said = [...new Set(lits.map(l => l.cs.map(c => {
+    const exts = c.cat === 'language' ? [...new Set(c.label.split(' ').filter(g => g.startsWith('*.')).map(g => g.slice(1).toLowerCase()))].filter(x => extIn(x, l.meaning)) : [];
+    return exts.length ? `${exts.join(' or ')} files` : c.what;
+  }).join(' or ')))];
+  return said.length ? `note: every ${unitName.slice(0, -1)} here is from ${said.join(', ')}.` : null;
+}
 function requestOf(chunk) { // -> { state, questions }: one judging request; question i_k asks unit i its k-th meaning
-  const state = Object.fromEntries(chunk.map((l, i) => [id(i), l.text.slice(0, MAX_UNIT_CHARS)]));
+  const note = noteOf(chunk);
+  const state = { ...(note && { note }), ...Object.fromEntries(chunk.map((l, i) => [id(i), l.text.slice(0, MAX_UNIT_CHARS)])) };
   const questions = {};
   chunk.forEach((l, i) => [...asksByUnit.get(l).keys()].forEach((text, k) => {
     questions[`${id(i)}_${k}`] = { type: 'noul', instructions: `Does line ${id(i)} match the meaning: "${text}"?` };
@@ -1194,7 +1257,7 @@ let lastPrinted = null; // [file, line number]; used to print -- between context
 // --summarize collects the lines instead; -z's NULs become blank lines there, since an LLM reads text.
 const piped = [];
 const write = summarizer ? s => piped.push(s) : s => process.stdout.write(s);
-const EOL = summarizer && opt.z ? '\n\n' : SEP;
+const EOL = opt.gitlog ? '\n' : summarizer && opt.z ? '\n\n' : SEP; // -g: each commit ends in a newline, so a blank line between
 // --summarize --dedup (#98): a representative stands for its template, as it did for Jev: members share its answers
 // (the same Map), so each Map is piped once, with how many matching units it stands for: sentences, not the lines
 // they touch, so a sentence over two lines counts once.
