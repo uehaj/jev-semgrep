@@ -2,7 +2,7 @@
 // Jev, reads the answers to the scope question, and scores them against the expected scopes at several thresholds.
 // Each row sends one request, the scope question: the directory searched is a small repository whose files hold
 // only blank lines, which are never sent.
-//   node tests/scope-eval.mjs [FILE.tsv...]   a table per corpus (default: both), the rows that differ at 0.7
+//   node tests/scope-eval.mjs [FILE.tsv...]   a table per corpus (default: both), the rows that differ at 0.6 (semgrep's threshold)
 //   --at=0.6                                  list the rows that differ at another threshold
 // Needs the API key (as semgrep reads it) and costs one small request per row. Both corpora were written blind by
 // separate agents. Tune on scope-corpus.tsv only; scope-holdout.tsv gives the honest number.
@@ -21,7 +21,7 @@ import { promisify } from 'node:util';
 
 const here = new URL('.', import.meta.url).pathname;
 const files = process.argv.slice(2).filter(a => !a.startsWith('--'));
-const at = Number(process.argv.find(a => a.startsWith('--at='))?.slice(5) ?? 0.7);
+const at = Number(process.argv.find(a => a.startsWith('--at='))?.slice(5) ?? 0.6);
 const corpora = (files.length ? files : [`${here}scope-corpus.tsv`, `${here}scope-holdout.tsv`])
   .map(f => [f.split('/').at(-1), readFileSync(f, 'utf8').trim().split('\n').map(l => l.split('\t'))]);
 const THRESHOLDS = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8];
