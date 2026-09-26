@@ -523,6 +523,14 @@ eq "$($E PATH=$tmp/bin:$PATH SYS1GREP_OPTS='--summarize-prompt=x' SYS1GREP_URL=$
 $E PATH=$tmp/bin:$PATH SUM=$tmp/sum SYS1GREP_OPTS='--summarize-prompt=fromopts' SYS1GREP_URL=$base/v1 node ../sys1grep.mjs --summarize -e cat "$F" >/dev/null
 grep -qF 'The user adds: fromopts' "$tmp/sum.argv" || fail "--summarize-prompt in SYS1GREP_OPTS applies once --summarize is given"
 
+# --summarize=llm (#77): a fake llm on PATH, same shape as the fake claude
+printf '%s\n' '#!/bin/sh' 'for a in "$@"; do printf "%s\n" "$a"; done >"$SUM.argv"' 'cat >"$SUM.in"' 'echo SUMMARY' 'exit ${SUM_EXIT:-0}' >"$tmp/bin/llm"
+chmod +x "$tmp/bin/llm"
+eq "$($S --summarize=llm -n -e cat "$F")" "SUMMARY" "--summarize=llm prints the answer only"
+eq "$(cat "$tmp/sum.argv" | head -2 | tr '\n' ' ')" "-n -s " "--summarize=llm runs llm with -n -s PROMPT"
+eq "$($E PATH=$tmp/bin:$PATH SUM=$tmp/sum SYS1GREP_SUMMARIZER_MODEL=sonnet SYS1GREP_URL=$base/v1 node ../sys1grep.mjs --summarize=llm -e cat "$F" && tail -1 "$tmp/sum.argv")" "SUMMARY
+sonnet" "--summarize=llm -m MODEL"
+
 # --summarize=ollama / lmstudio / a URL (#76): an OpenAI-compatible server, sent by fetch, no CLI
 reset
 code 2 "--summarize=ollama needs SYS1GREP_SUMMARIZER_MODEL" -- $S --summarize=ollama -e cat "$F"

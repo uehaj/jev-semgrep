@@ -592,6 +592,7 @@ $ sys1grep -r -n --summarize --summarize-prompt="3 行以内で。どのファ�
 他の TOOL:
 
 ```sh
+$ sys1grep --summarize=llm -e "..." FILE            # Simon Willison 氏の llm、ツールなし (-T を渡さない)
 $ SYS1GREP_SUMMARIZER_MODEL=qwen3.5:9b sys1grep --summarize=ollama -e "..." FILE
 $ SYS1GREP_SUMMARIZER_MODEL=some-id sys1grep --summarize=lmstudio -e "..." FILE   # モデル id は GET /v1/models から
 $ SYS1GREP_SUMMARIZER_MODEL=some-id sys1grep --summarize=http://localhost:8080/v1 -e "..." FILE  # llama.cpp・vLLM・LocalAI・ゲートウェイ

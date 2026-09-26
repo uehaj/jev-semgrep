@@ -212,8 +212,8 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                the positive threshold, red below the negative one, yellow in between. NO_COLOR is honored
   --summarize[=TOOL]  pipe what would print (file names, -n, -A/-B/-C, -p) to TOOL, asked to summarize it as it
                bears on the meanings, and print TOOL's answer instead. TOOL: claude (default, or SYS1GREP_SUMMARIZER),
-               run as claude -p --model haiku with no tools and no settings; ollama or lmstudio (a local
-               OpenAI-compatible server, no CLI); or an http(s):// URL, the same
+               run as claude -p --model haiku with no tools and no settings; llm (Simon Willison's, likewise no
+               tools); ollama or lmstudio (a local OpenAI-compatible server, no CLI); or an http(s):// URL, the same
                request to any OpenAI-compatible server (llama.cpp, vLLM, LocalAI, a gateway). ollama, lmstudio and a
                URL need SYS1GREP_SUMMARIZER_MODEL: none has a default model. The matching lines are sent a second
                time, to TOOL's provider (nowhere a second time with ollama, lmstudio or a local URL). No match runs
@@ -356,7 +356,7 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                否定側の閾値未満を赤、あいだを黄で表示。NO_COLOR にも従う
   --summarize[=TOOL]  出力するはずの内容 (ファイル名・-n・-A/-B/-C・-p) を TOOL に渡し、意味に照らした要約を
                頼んで、その答えを代わりに表示する。TOOL: claude (既定。SYS1GREP_SUMMARIZER で変えられる)。
-               claude -p --model haiku をツールなし・設定なしで動かす。
+               claude -p --model haiku をツールなし・設定なしで動かす。llm (Simon Willison 氏の、同じくツールなし)。
                ollama・lmstudio (ローカルの OpenAI 互換サーバ、CLI なし)。または http(s):// URL、任意の
                OpenAI 互換サーバへ同じリクエストを送る (llama.cpp・vLLM・LocalAI・ゲートウェイ)。
                ollama・lmstudio・URL は SYS1GREP_SUMMARIZER_MODEL が要る (既定モデルが無い)。
@@ -509,6 +509,7 @@ const SUMMARY_MAX = 200 * 1024;
 // instruction and the matching lines go in as shown at each spawn site below.
 const SUMMARIZERS = {
   claude: p => ['claude', '-p', '--model', SYS1GREP_SUMMARIZER_MODEL || 'haiku', '--tools', '', '--setting-sources', '', '--strict-mcp-config', '--safe-mode', '--system-prompt', p],
+  llm: p => ['llm', '-n', '-s', p, ...(SYS1GREP_SUMMARIZER_MODEL ? ['-m', SYS1GREP_SUMMARIZER_MODEL] : [])], // Simon Willison's llm (#77); tools are off unless -T/--functions is given, which this never does
 };
 // OpenAI-compatible chat servers (#76), sent by fetch: no CLI, so the matching lines never leave the machine a
 // second time. ollama and lmstudio name a fixed base; any other http(s):// URL is its own base (llama-server,

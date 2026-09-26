@@ -610,6 +610,7 @@ It needs `--summarize`; empty TEXT is the same as leaving it out.
 Other TOOLs:
 
 ```sh
+$ sys1grep --summarize=llm -e "..." FILE            # Simon Willison's llm, tools off (no -T given)
 $ SYS1GREP_SUMMARIZER_MODEL=qwen3.5:9b sys1grep --summarize=ollama -e "..." FILE
 $ SYS1GREP_SUMMARIZER_MODEL=some-id sys1grep --summarize=lmstudio -e "..." FILE   # model id from GET /v1/models
 $ SYS1GREP_SUMMARIZER_MODEL=some-id sys1grep --summarize=http://localhost:8080/v1 -e "..." FILE  # llama.cpp, vLLM, LocalAI, a gateway

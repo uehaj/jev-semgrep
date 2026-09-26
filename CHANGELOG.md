@@ -30,6 +30,8 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   time with a local server (#76). All three need `SYS1GREP_SUMMARIZER_MODEL` (no default model);
   `SYS1GREP_SUMMARIZER_API_KEY` goes as `Authorization: Bearer` to a URL TOOL only, never `SYS1GREP_API_KEY`.
   `OLLAMA_HOST` moves `ollama`'s host.
+- `--summarize=llm` runs Simon Willison's `llm -n -s PROMPT` (`-m` too, with `SYS1GREP_SUMMARIZER_MODEL`); tools
+  stay off since sys1grep never passes `-T` / `--functions` (#77).
 - On a terminal, a one-line spinner on stderr while sys1grep waits for Jev (`12 of 149 requests`) or the summarizer,
   drawn after 300 ms and erased before any output (#89). Not with `-q`, `--dry-run`, `--verbose` or `TERM=dumb`,
   and never when stderr is not a terminal, so scripts see exactly what they saw before.
