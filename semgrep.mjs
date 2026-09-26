@@ -611,10 +611,14 @@ const AUTHOR = [ // -> the author named, or '' for me
   [/\b(?:written|authored|added|committed|changed|touched|made|introduced)\s+by\s+(me|myself|[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)?)/, m => (/^(me|myself)$/.test(m[1]) ? '' : m[1])],
   [/\bI\s+(?:wrote|added|committed|changed|touched|authored|introduced)\b|\bmy\s+(?:own\s+)?commits\b/i, () => ''],
 ];
-// A git scope admits a file when its repository's set holds it; no repository or no answer from git admits it.
-const inGit = files => f => { const abs = resolve(f), top = repoOf(dirname(abs)), set = top && files(top); return !set || set.has(abs); };
+// A git scope admits a file when its repository's set holds it; no repository or no answer from git admits it, and
+// a scope git answered for no file is not reported: it narrowed nothing.
+function inGit(files) {
+  const sets = new Map(), setOf = f => { const top = repoOf(dirname(resolve(f))); if (top && !sets.has(top)) sets.set(top, files(top)); return top && sets.get(top); };
+  return { test: f => { const set = setOf(f); return !set || set.has(resolve(f)); }, answered: f => !!setOf(f) };
+}
 function gitScopes(text) {
-  const out = GIT_STATES.map(([name, phrase, files]) => { const m = phrase.exec(text); return m && { label: `git-${name} files`, words: [m[0]], test: inGit(files) }; });
+  const out = GIT_STATES.map(([name, phrase, files]) => { const m = phrase.exec(text); return m && { label: `git-${name} files`, words: [m[0]], ...inGit(files) }; });
   for (const [re, who] of AUTHOR) {
     const m = re.exec(text);
     if (!m) continue;
@@ -622,7 +626,7 @@ function gitScopes(text) {
     if (/^\p{Script=Hiragana}{0,3}(?:よう|みたい|風|っぽ)/u.test(text.slice(m.index + m[0].length))
       || /\b(?:like|style\s+of|similar\s+to)\s+(?:\S+\s+){0,3}$/i.test(text.slice(0, m.index))) break;
     const name = who(m);
-    out.push({ label: `git-author files: by ${name || 'me (user.email)'}`, words: [m[0]], test: inGit(top => byAuthor(top, name || null)) });
+    out.push({ label: `git-author files: by ${name || 'me (user.email)'}`, words: [m[0]], ...inGit(top => byAuthor(top, name || null)) });
     break;
   }
   return out.filter(Boolean);
@@ -754,7 +758,7 @@ const found = asGit ? gitFiles()
 // with -q silent; the -i dry run does not repeat it.
 const targets = found.filter(f => expr.some(term => admitted(term, f)));
 if (!opt.quiet && found.some(f => !named(f))) {
-  const scoped = [...new Set(expr.flat().filter(lit => lit.kind === 's').map(lit => `semgrep: scope: ${safe(lit.label)} (from ${lit.words.map(w => `"${safe(w)}"`).join(', ')})`))];
+  const scoped = [...new Set(expr.flat().filter(lit => lit.kind === 's' && (!lit.answered || found.some(f => !named(f) && lit.answered(f)))).map(lit => `semgrep: scope: ${safe(lit.label)} (from ${lit.words.map(w => `"${safe(w)}"`).join(', ')})`))];
   if (scoped.length) scoped.push(`semgrep: scope: ${targets.length} of ${found.length} files`);
   for (const m of scoped) { console.error(m); warned.push(m); }
 }

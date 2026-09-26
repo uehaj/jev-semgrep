@@ -303,6 +303,7 @@ gs() { $JI -r -l -e "$1" "$G" 2>/dev/null | sed "s|$G/||" | tr '\n' ' '; }
 eq "$(gs '昨日変えた cat')" "dirty.txt feat.txt new.txt staged.txt untr.txt " "git scope: time by commit, old.txt's fresh mtime aside"
 eq "$(gs 'Alice さんが書いた cat')" "dirty.txt old.txt " "git scope: author"
 eq "$(gs 'Carol さんが書いた cat' | wc -w | tr -d ' ')" "6" "git scope: an author with no commit gives no scope"
+eq "$($JI -r -l -e 'Carol さんが書いた cat' "$G" 2>&1 | grep -c 'scope:' || true)" "0" "git scope: an author with no commit is not reported"
 eq "$($JI -r -l -e 'Alice さんが書いたような cat' "$G" 2>&1 | grep -c 'scope:' || true)" "0" "git scope: no author from a likeness"
 eq "$($JI -r -l -e 'like code written by Alice cat' "$G" 2>&1 | grep -c 'scope:' || true)" "0" "git scope: no author from like ... by"
 eq "$(gs '自分が書いた cat')" "dirty.txt feat.txt new.txt staged.txt untr.txt " "git scope: me, uncommitted files included"
@@ -311,6 +312,7 @@ eq "$(gs 'ステージした cat')" "staged.txt " "git scope: staged"
 eq "$(gs '未追跡の cat')" "untr.txt " "git scope: untracked"
 eq "$(gs 'このブランチで変えた cat')" "dirty.txt feat.txt staged.txt untr.txt " "git scope: this branch"
 eq "$(cd "$G" && $GS -l -e 'ステージした cat' 2>/dev/null | tr '\n' ' ')" "staged.txt " "git scope: git semgrep"
+eq "$($JI -r --dry-run -e '未プッシュの cat' "$G" 2>&1 | sed -n "s|^semgrep: file $G/\([^:]*\):.*|\1|p" | tr '\n' ' ')" "dirty.txt feat.txt new.txt old.txt " "git scope: unpushed, no remote"
 # path roles: several in one meaning are alternatives; one listed with an unknown noun gives no scope
 W="$tmp/roles"; mkdir -p "$W/tests" "$W/src" "$W/docs"
 for f in tests/x.js src/y.js README.md docs/guide.txt app.log; do
@@ -320,6 +322,7 @@ eq "$($JI -r -l -e 'テストコードで cat' "$W" 2>/dev/null | tr '\n' ' ')" 
 eq "$($JI -r -l -e 'README か CHANGELOG に cat' "$W" 2>/dev/null | tr '\n' ' ')" "$W/README.md " "scope: README or CHANGELOG"
 eq "$($JI -r -l -e 'in the code cat' "$W" 2>/dev/null | tr '\n' ' ')" "$W/app.log $W/src/y.js $W/tests/x.js " "scope: code is what is not a document"
 eq "$($JI -r -l -e 'in the tests and fixtures cat' "$W" 2>/dev/null | grep -c .)" "5" "no scope when a role is listed with something else"
+eq "$($JI -r -l -e '未追跡の cat' "$W" 2>&1 | grep -c 'scope:' || true)" "0" "git scope: outside a repository, not reported"
 for q in 'テストでもいいので cat' 'README にも書いてある cat' '仕様書でも触れている cat' '実装でもいいので cat'; do
   eq "$($JI -r -l -e "$q" "$W" 2>&1 | grep -c 'scope:' || true)" "0" "no scope from also / even: $q"
 done
