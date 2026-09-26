@@ -598,6 +598,15 @@ $0.094 to $0.013, with the same answer (#69). It pays when the answer sits in a 
 - More than 200 KB (about 50k tokens) is not sent at all: exit 2, with the size, before the TOOL is paid.
   It is never cut short, since a summary of the first part would read as a summary of all of it.
 
+`--summarize-prompt=TEXT` adds your own instruction after the fixed one (how long, what to focus on):
+
+```sh
+$ sys1grep -r -n --summarize --summarize-prompt="3 lines or fewer, just which file to fix" \
+    -e "the API key is read from a file" .
+```
+
+It needs `--summarize`; empty TEXT is the same as leaving it out.
+
 ## Use it from Claude Code
 
 There is a Claude Code skill that runs sys1grep for you: describe what you are looking for in plain words
