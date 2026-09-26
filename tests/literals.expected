@@ -1,0 +1,12 @@
+/ at (?<t>\d\d:\d\d)/	[" at "]
+/AB/	null
+/B.{5}/	null
+/YZ/	null
+/a/	null
+/cat/	["cat"]
+/dog/	["dog"]
+/o/	null
+/owl/	["owl"]
+/sat/	["sat"]
+/usage 9\d%/	["usage 9"]
+/猫/	null

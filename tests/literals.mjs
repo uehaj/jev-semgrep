@@ -1,6 +1,7 @@
 // Required literals (#80): every line a regex matches must contain one of its literals, folded as rg -i folds
 // (Unicode simple case folding, which 'iu' is), so rg -F never drops a line the JS regex would match.
 // Fixed cases, then random regexes and lines from a fixed seed. Exits 1 with the first counterexample.
+import { readFileSync, writeFileSync } from 'node:fs';
 import { requiredLiterals, prefilterLiterals } from '../literals.mjs';
 
 const fail = msg => { console.error(`FAIL: ${msg}`); process.exit(1); };
@@ -34,6 +35,7 @@ eq(/abc+?d/, ['abc']); // lazy: +? keeps the c, then the run ends
 eq(/abcd??e/, ['abc']); // ?? is optional, the second ? only makes it lazy
 eq(/abc{2}d/, ['abc']);
 eq(/abcd{0,2}/, ['abc']);
+eq(/abcx{0,99999999999999999999999}def/, ['abc']); // a long {n,m} is still a quantifier, not text
 eq(/écoles/i, ['coles']); // non-ASCII under i ends the run
 eq(/écoles/, ['écoles']);
 eq(/abc/v, null);
@@ -51,6 +53,15 @@ if (pf([[r(/ab/), r(/longest/)]]) !== '{"literals":["longest"],"icase":false}') 
 if (pf([[r(/timeout/)], [m]]) !== 'null') fail('a meaning-only term leaves no prefilter');
 if (pf([[r(/timeout/, true), m]]) !== 'null') fail('a negated regex is no prefilter');
 
+// What each regex term in offline.sh gives, against tests/literals.expected, so a change in selectivity shows up
+// in review. After an intended change: UPDATE_LITERALS=1 node tests/literals.mjs, and commit the file.
+const dir = new URL('.', import.meta.url);
+const terms = [...new Set([...readFileSync(new URL('offline.sh', dir), 'utf8').matchAll(/(?:^|\s)-[eav]\s+(['"])!?(\/.*?\/[dgimsuvy]*)\1/gm)].map(m => m[2]))].sort();
+const got = terms.map(t => { const [, p, f] = /^\/(.*)\/(\w*)$/s.exec(t); return `${t}\t${JSON.stringify(requiredLiterals(new RegExp(p, f)))}`; }).join('\n') + '\n';
+const expected = new URL('literals.expected', dir);
+if (process.env.UPDATE_LITERALS) writeFileSync(expected, got);
+else if (got !== readFileSync(expected, 'utf8')) fail(`the literals of offline.sh's regex terms changed; if intended, UPDATE_LITERALS=1 node tests/literals.mjs\n${got}`);
+
 // Random regexes and lines, fixed seed (mulberry32)
 let seed = 70;
 const rand = () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t ^= t + Math.imul(t ^ (t >>> 7), 61 | t); return ((t ^ (t >>> 14)) >>> 0) / 2 ** 32; };
@@ -59,7 +70,7 @@ const CHARS = ['a', 'b', 'c', 'A', 'é', 'É', 'k', 'K', 'K', 's', 'ſ', ' ', 
 const ATOMS = ['a', 'b', 'c', 'ab', 'abc', 'é', 'k', 's', ' ', '-', '\\.', '\\-', '\\d', '\\w', '\\W', '\\s', '\\b', '\\B', '.', '^', '$',
   '[ab]', '[^a]', '[a&&b]', '[\\]a]', '\\x61', '\\u0061', '\\1', '(?=a)', '(?!b)'];
 const WORDS = ['abc', 'cab', 'kab', 'ssa', 'éab', 'a.b', 'a\\.b', 'K-a'];
-const QUANT = ['', '', '', '?', '*', '+', '{2}', '{0,2}', '{1,}', '??', '*?', '+?'];
+const QUANT = ['', '', '', '?', '*', '+', '{2}', '{0,2}', '{1,}', '??', '*?', '+?', '{0,99999999999999999999999}', '{1,99999999999999999999999}'];
 function gen(depth) {
   // A group takes only ?: a repeated group of repeated atoms backtracks exponentially on a line that almost matches
   const seq = () => Array.from({ length: 1 + Math.floor(rand() * 5) }, () => (depth < 2 && rand() < 0.15

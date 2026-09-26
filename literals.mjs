@@ -51,7 +51,7 @@ export function requiredLiterals(re) {
     }
     // A quantifier: ? * {0,…} make the atom optional; + {n,…} keep it once, then the run ends. A lazy ? after it is
     // read next as an opaque character, which ends the run again: nothing to do.
-    const q = /^(?:[?*+]|\{(\d+)(?:,\d*)?\})/.exec(src.slice(i, i + 24));
+    const q = /^(?:[?*+]|\{(\d+)(?:,\d*)?\})/.exec(src.slice(i)); // the whole rest: a {n,m} can be any length
     if (q) {
       i += q[0].length;
       if (ch !== null && (q[0] === '+' || +q[1] >= 1)) run += ch;
