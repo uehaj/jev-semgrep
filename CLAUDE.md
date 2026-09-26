@@ -4,7 +4,7 @@
 
 | command | what | needs |
 |---|---|---|
-| `npm run test:offline` | `tests/offline.sh`: semgrep against a fake Jev (`tests/fake-jev.mjs`). Expression, output shapes, `-A/-B/-C`, `--level`/`-t`/`-T`, `-p`, `--color`, `--chunk`, `-j`, `-q` (including the stop at the first match), `-Q`, auto-scope and `--no-scope`, `SEMGREP_URL` and the auth header, `--help` | node, curl. No key, no network, same result every run, ~15s |
+| `npm run test:offline` | `tests/offline.sh`: semgrep against a fake Jev (`tests/fake-jev.mjs`). Expression, output shapes, `-A/-B/-C`, `--level`/`-t`/`-T`, `-p`, `--color`, `--chunk`, `-j`, `-q` (including the stop at the first match), `-Q`, auto-scope and `--no-auto-scope`, `SEMGREP_URL` and the auth header, `--help` | node, curl. No key, no network, same result every run, ~15s |
 | `npm test` | `test:offline`, then `tests/check.sh`: the same options against real Jev on the fixtures | `SEMGREP_API_KEY` (env, `./.env` or `~/.config/semgrep/.env`); sends the fixtures to Jev, costs a little |
 | `npm run judge` | `tests/judge.mts`: accuracy (P / R / F1 over a threshold sweep) against Claude's verdicts, written to `tests/report.md` | the key above and `claude -p`; slow, not pass/fail |
 

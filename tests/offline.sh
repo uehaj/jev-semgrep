@@ -280,7 +280,8 @@ for f in a.py old.py sub/c.py; do printf '%s\n' "$PY" "$T" "$PT" >"$S/$f"; done
 printf '%s\n' "$PY" dog "$T" "$PT" >"$S/b.js"; touch -t 202001010000 "$S/old.py"
 eq "$($JI -r -l -e "$PY" "$S" 2>/dev/null | tr '\n' ' ')" "$S/a.py $S/old.py $S/sub/c.py " "scope: a language"
 eq "$($JI -r -l -e "$PY" "$S" 2>&1 >/dev/null | tr '\n' '|')" 'semgrep: scope: *.py *.pyi *.pyw (from "Python files: 0.90")|semgrep: scope: 3 of 4 files|' "scope: reported on stderr"
-eq "$($JI -r -l --no-scope -e "$PY" "$S" 2>&1 | grep -c .)" "4" "--no-scope"
+eq "$($JI -r -l --no-auto-scope -e "$PY" "$S" 2>&1 | grep -c .)" "4" "--no-auto-scope"
+eq "$($E SEMGREP_URL=$base/v1 SEMGREP_OPTS=--no-auto-scope node $SG -r -l --auto-scope -e "$PY" "$S" 2>/dev/null | grep -c .)" "3" "--auto-scope undoes SEMGREP_OPTS"
 eq "$($JI -r -l -e 'Python で cat' "$S" 2>&1 | grep -c 'semgrep: scope:' || true)" "0" "no scope when Jev says no"
 eq "$($JI -r -l -e "$T" "$S" 2>/dev/null | tr '\n' ' ')" "$S/a.py $S/b.js $S/sub/c.py " "scope: a time span, by mtime"
 eq "$($JI -r -l -e "$T" "$S" 2>&1 >/dev/null | grep -c 'since .* (from "what was changed yesterday: 0.90")')" "1" "scope: the narrowest span"
@@ -288,7 +289,7 @@ eq "$($JI -r -l -e 'cat @s:l_javascript @s:l_typescript' "$S" 2>&1 >/dev/null | 
 eq "$($JI -r -l -e "$PT" "$S" 2>/dev/null | tr '\n' ' ')" "$S/a.py $S/sub/c.py " "scope: categories intersect"
 eq "$($JI -r --dry-run -e "$T" -e dog "$S" | grep -c '\[scope\]')" "2" "scope: one question request per meaning"
 eq "$($JI --dry-run -e "$T" "$S/a.py" | grep -c '\[scope\]' || true)" "0" "scope: no question for named files only"
-eq "$($JI -r --no-scope --dry-run -e "$T" "$S" | grep -c '\[scope\]' || true)" "0" "scope: no question with --no-scope"
+eq "$($JI -r --no-auto-scope --dry-run -e "$T" "$S" | grep -c '\[scope\]' || true)" "0" "scope: no question with --no-auto-scope"
 # git: time by commit (not the mtime a checkout sets), states and authors; not asked outside a repository
 G="$tmp/gitscope"; mkdir -p "$G"
 GM='cat @s:t_yesterday|cat @s:a_a_x|cat @s:g_mine|cat @s:g_mine @s:a_b_x|cat @s:g_uncommitted|cat @s:g_staged|cat @s:g_untracked|cat @s:g_branch|cat @s:g_unpushed'
