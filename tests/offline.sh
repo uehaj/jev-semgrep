@@ -331,6 +331,14 @@ M="$tmp/many"; mkdir -p "$M"; for i in 01 02 03 04 05 06 07 08 09 10 11 12; do e
 eq "$($JI -r -l --verbose -e 'cat @s:l_python' "$M" 2>&1 >/dev/null | grep '^semgrep:   left out: ')" "semgrep:   left out: $(for i in 01 02 03 04 05 06 07 08 09 10; do printf '%s ' "$M/$i.js"; done)… (+2 more)" "--verbose: 10 left out by name, the rest counted"
 eq "$($JI -r -q --verbose -e 'cat @s:l_python' "$S" 2>&1 | grep -cE 'searched by scope|left out: ' || true)" "0" "--verbose: neither line with -q"
 eq "$($JI -r --dry-run --verbose -e 'cat @s:l_python' "$S" 2>&1 | grep -cE 'searched by scope|left out: ' || true)" "0" "--verbose: neither line with --dry-run"
+# The note (#111): each judging request says which scopes all its lines got through, as the scope question named them
+nt() { $JI -r --verbose "$@" 2>&1 >/dev/null | grep '^semgrep:   note: ' | sort -u; }
+eq "$(nt -e 'cat @s:l_python' "$S")" "semgrep:   note: every line here is from Python files." "note: an applied scope"
+eq "$(nt -e 'a cat in .py files @s:l_python' "$S")" "semgrep:   note: every line here is from .py files." "note: a language by the extension the meaning wrote"
+eq "$(nt -e 'cat @s:l_python @s:t_yesterday @s:t_day30' "$S")" "semgrep:   note: every line here is from Python files, what was changed yesterday." "note: categories, the narrowest span"
+eq "$(nt -z -e 'cat @s:l_python' "$S")" "semgrep:   note: every record here is from Python files." "note: the unit word"
+eq "$(nt -e cat "$S")" "" "note: none without a scope"
+eq "$(nt -e 'cat @s:l_python' "$S" "$S/b.js" | grep -c . || true)" "0" "note: a request with a named file (never narrowed) carries none"
 # git: time by commit (not the mtime a checkout sets), states and authors; not asked outside a repository
 G="$tmp/gitscope"; mkdir -p "$G"
 GM='cat @s:t_yesterday|cat @s:a_a_x|cat @s:g_mine|cat @s:g_mine @s:a_b_x|cat @s:g_uncommitted|cat @s:g_staged|cat @s:g_untracked|cat @s:g_branch|cat @s:g_unpushed'

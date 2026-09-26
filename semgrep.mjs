@@ -658,13 +658,14 @@ function gitCandidates(found) {
 }
 const scopeQuestions = text => Object.fromEntries(CANDIDATES.map(c => [c.key, { type: 'noul', instructions: `Does the meaning "${text}" restrict its matches to ${c.what}?` }]));
 const SCOPE_AT = 0.6; // a candidate counts at this or more (see the top of auto-scope)
-// Jev's answers -> one scope per category that got a yes: { label, words, names, test } (names: for --verbose)
+// Jev's answers -> one scope per category that got a yes: { label, words, names, cs, test } (names: for --verbose;
+// cs: its candidates, for the judging requests' note)
 function scopesOf(answers) {
   const yes = CANDIDATES.filter(c => answers[c.key].noul >= SCOPE_AT), out = [];
   for (const cat of new Set(yes.map(c => c.cat))) {
     let cs = yes.filter(c => c.cat === cat);
     if (cat === 'time') cs = [cs.reduce((a, b) => (b.from > a.from ? b : a))];
-    out.push({ label: [...new Set(cs.map(c => c.label))].join(' | '), words: cs.map(c => `${c.what}: ${answers[c.key].noul.toFixed(2)}`), names: cs.map(c => `${c.what} (${cut(c.label, 40)})`), test: (f, st) => cs.some(c => c.test(f, st)) });
+    out.push({ label: [...new Set(cs.map(c => c.label))].join(' | '), words: cs.map(c => `${c.what}: ${answers[c.key].noul.toFixed(2)}`), names: cs.map(c => `${c.what} (${cut(c.label, 40)})`), cs, test: (f, st) => cs.some(c => c.test(f, st)) });
   }
   return out;
 }
@@ -782,6 +783,7 @@ function show(state, questions, label) {
   for (const q of Object.values(questions)) { const k = q.instructions.replace(/\bL\d{3}\b/g, 'Lnnn'); count.set(k, (count.get(k) ?? 0) + 1); }
   const n = Object.keys(questions).length, chars = Object.values(state).join('').length;
   trace(`request ${++traced} ${label}, ${n} question${n === 1 ? '' : 's'}, ${chars} chars`);
+  if (state.note) trace(`  ${cut(state.note, 110)}`);
   [...count].slice(0, 3).forEach(([q, k]) => trace(`  ${String(k).padStart(3)}× ${cut(q, 100)}`));
   if (count.size > 3) trace(`       (+${count.size - 3} more)`);
   tracedQuestions += n; tracedChars += chars; tracedBytes += Buffer.byteLength(JSON.stringify({ model, state, questions }));
@@ -832,7 +834,7 @@ if (narrowable) spin.set('asking which files each meaning restricts to (auto-sco
 if (narrowable) await Promise.all(expr.flatMap(term => scoped(term).map(lit =>
   pooled(() => post({ meaning: lit.text }, scopeQuestions(lit.text), `[scope] "${cut(lit.text, 40)}"`)).then(a => {
     if (opt.verbose && !dry) traceScope(lit.text, a, found.filter(f => !named(f)));
-    scopesOf(a).forEach(sc => addScope(term, sc));
+    scopesOf(a).forEach(sc => addScope(term, { ...sc, meaning: lit.text }));
   }))));
 // A file no term admits is not read. Each scope is reported when it can narrow something (not with named files only),
 // with -q silent, and not again after -i showed it.
@@ -1078,8 +1080,21 @@ const chunked = units => {
 };
 const chunks = chunked(sent);
 const id = i => `L${String(i).padStart(3, '0')}`;
+// The note (#111): the scopes every unit of a request got through, named as the scope question named them, or a
+// language by the extension its meaning wrote (".mjs files"). A line cannot show when it changed, where it lives or
+// who wrote it, so without the note the meaning's words for that pull Jev's verdicts down.
+const extIn = (x, text) => new RegExp(`${x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?!\\w)`, 'i').test(text);
+function noteOf(chunk) {
+  const lits = [...new Set(expr.flat())].filter(l => l.kind === 's' && chunk.every(u => !named(u.file) && l.admits(u.file)));
+  const said = [...new Set(lits.map(l => l.cs.map(c => {
+    const exts = c.cat === 'language' ? [...new Set(c.label.split(' ').filter(g => g.startsWith('*.')).map(g => g.slice(1).toLowerCase()))].filter(x => extIn(x, l.meaning)) : [];
+    return exts.length ? `${exts.join(' or ')} files` : c.what;
+  }).join(' or ')))];
+  return said.length ? `note: every ${unitName.slice(0, -1)} here is from ${said.join(', ')}.` : null;
+}
 function requestOf(chunk) { // -> { state, questions }: one judging request; question i_k asks unit i its k-th meaning
-  const state = Object.fromEntries(chunk.map((l, i) => [id(i), l.text.slice(0, MAX_UNIT_CHARS)]));
+  const note = noteOf(chunk);
+  const state = { ...(note && { note }), ...Object.fromEntries(chunk.map((l, i) => [id(i), l.text.slice(0, MAX_UNIT_CHARS)])) };
   const questions = {};
   chunk.forEach((l, i) => [...asksByUnit.get(l).keys()].forEach((text, k) => {
     questions[`${id(i)}_${k}`] = { type: 'noul', instructions: `Does line ${id(i)} match the meaning: "${text}"?` };
