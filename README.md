@@ -591,6 +591,10 @@ $0.094 to $0.013, with the same answer (#69). It pays when the answer sits in a 
 - `-n`, `-A/-B/-C`, `-p` and file names go in as they would print; colors never do. No match runs nothing (exit 1).
 - `SEMGREP_SUMMARIZER` picks the TOOL of a bare `--summarize` (only `claude` so far), `SEMGREP_SUMMARIZER_MODEL` its model.
 - `-q`, `-l` and `-c` print no lines, so they cannot be combined with it.
+- With `--dedup`, the TOOL gets what Jev got: each template's representative once, marked `(×N like it)`,
+  not every line its answer was reused for.
+- More than 200 KB (about 50k tokens) is not sent at all: exit 2, with the size, before the TOOL is paid.
+  It is never cut short, since a summary of the first part would read as a summary of all of it.
 
 ## Use it from Claude Code
 

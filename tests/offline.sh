@@ -418,6 +418,17 @@ rm -f "$tmp/sum.in"; $S --summarize --dry-run -e cat "$F" | grep -q '^semgrep: s
 [ ! -e "$tmp/sum.in" ] || fail "--dry-run runs the summarizer"
 out=$(asking "$S -i --summarize -e cat '$F'" n)
 echo "$out" | grep -q 'then the matching lines to claude? \[y/N\]' || fail "-i says the lines go to the summarizer: $out"
+# #98: with --dedup the TOOL gets each representative once, with its count; over 200 KB nothing is spawned, exit 2
+printf 'cat 1\ncat 2\ncat 3\ndog 4\n' >"$tmp/dd.txt"
+eq "$($S --summarize --dedup -e cat "$tmp/dd.txt")" "SUMMARY" "--summarize --dedup"
+eq "$(cat "$tmp/sum.in")" "cat 1   (×3 like it)" "--summarize --dedup: a representative and its count"
+grep -q 'stands for N matching lines' "$tmp/sum.argv" || fail "--summarize --dedup: the prompt says what ×N is"
+$S --summarize -e cat "$tmp/dd.txt" >/dev/null; grep -q 'like it' "$tmp/sum.argv" && fail "--summarize without --dedup: no ×N in the prompt"
+node -e "for (let i = 0; i < 3000; i++) console.log('cat ' + 'x'.repeat(80) + ' ' + i)" >"$tmp/big.txt"
+rm -f "$tmp/sum.in"; code 2 "--summarize over 200 KB" -- $S --summarize -e '/cat/' "$tmp/big.txt"
+[ ! -e "$tmp/sum.in" ] || fail "--summarize over 200 KB runs the summarizer"
+$S --summarize -e '/cat/' "$tmp/big.txt" 2>&1 >/dev/null | grep -q '^semgrep: --summarize: 3000 matching lines (2[0-9][0-9] KB) are more than the 200 KB to summarize; narrow the expression or add --dedup$' || fail "--summarize over 200 KB: the message: $($S --summarize -e '/cat/' "$tmp/big.txt" 2>&1 >/dev/null)"
+$S --summarize --dry-run -e cat "$F" | grep -q '^semgrep: summarize: .* (stops over 200 KB)$' || fail "--dry-run shows the limit"
 
 # the spinner (#89): on a terminal, one line on stderr while waiting, erased before the output; never when not a terminal
 printf 'cat @slow\ndog\n' >"$tmp/slow.txt"

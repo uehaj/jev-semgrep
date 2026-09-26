@@ -10,6 +10,8 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   prints its answer instead of the lines (#69, #75). TOOL is `claude` (`claude -p --model haiku` with no tools and
   no settings); `SEMGREP_SUMMARIZER` picks the TOOL of a bare `--summarize`, `SEMGREP_SUMMARIZER_MODEL` its
   model. The matching lines are sent a second time, to the TOOL's provider. `--dry-run` shows the command.
+  With `--dedup` the TOOL gets each template's representative once, marked `(×N like it)`; more than 200 KB is
+  not sent at all (exit 2), never cut short (#98).
 - On a terminal, a one-line spinner on stderr while semgrep waits for Jev (`12 of 149 requests`) or the summarizer,
   drawn after 300 ms and erased before any output (#89). Not with `-q`, `--dry-run`, `--verbose` or `TERM=dumb`,
   and never when stderr is not a terminal, so scripts see exactly what they saw before.
