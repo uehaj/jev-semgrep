@@ -5,6 +5,11 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 
 ## [Unreleased]
 
+### Added
+- The `--dry-run` summary line (also shown by `-i`) estimates the input tokens and, for TypeSafe itself, the price:
+  `…, 2315 chars, ~3178 input tokens, ~$0.000133; nothing sent`. The estimate is 650 tokens a request plus 0.21 a
+  request-body byte, fitted on real requests in English and Japanese; it was within -8% to +12% of what Jev billed.
+
 ## [0.4.0] - 2026-09-26
 
 ### Security
