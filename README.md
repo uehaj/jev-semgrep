@@ -172,7 +172,9 @@ to the narrowest:
 - **How many times.** [`--dedup`](#one-line-per-template---dedup) judges one line per template: lines that
   differ only in ids, numbers, times or paths share one answer.
 - **Check before paying.** `--dry-run` sends nothing and prints the files, how many lines each would send and
-  every request with its questions. `-i` shows the same totals on the terminal and sends only after `y`.
+  every request with its questions. Its last line estimates the input tokens and, for TypeSafe itself, the price
+  (`~3178 input tokens, ~$0.000133`; within about 10%). `-i` shows the same totals on the terminal and sends only
+  after `y`.
 
 ```sh
 $ semgrep --dry-run -r --include='*.log' --changed-within=today -e '/ERROR|FATAL/' -a 'a customer is affected' logs/
