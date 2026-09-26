@@ -1,15 +1,15 @@
-# semgrep
+# sys1grep
 
 ## Tests
 
 | command | what | needs |
 |---|---|---|
-| `npm run test:offline` | `tests/offline.sh`: semgrep against a fake Jev (`tests/fake-jev.mjs`). Expression, output shapes, `-A/-B/-C`, `--level`/`-t`/`-T`, `-p`, `--color`, `--chunk`, `-j`, `-q` (including the stop at the first match), `-Q`, auto-scope and `--no-auto-scope`, `SEMGREP_URL` and the auth header, `--help` | node, curl. No key, no network, same result every run, ~15s |
-| `npm test` | `test:offline`, then `tests/check.sh`: the same options against real Jev on the fixtures | `SEMGREP_API_KEY` (env, `./.env` or `~/.config/semgrep/.env`); sends the fixtures to Jev, costs a little |
+| `npm run test:offline` | `tests/offline.sh`: sys1grep against a fake Jev (`tests/fake-jev.mjs`). Expression, output shapes, `-A/-B/-C`, `--level`/`-t`/`-T`, `-p`, `--color`, `--chunk`, `-j`, `-q` (including the stop at the first match), `-Q`, auto-scope and `--no-auto-scope`, `SYS1GREP_URL` and the auth header, `--help` | node, curl. No key, no network, same result every run, ~15s |
+| `npm test` | `test:offline`, then `tests/check.sh`: the same options against real Jev on the fixtures | `SYS1GREP_API_KEY` (env, `./.env` or `~/.config/sys1grep/.env`); sends the fixtures to Jev, costs a little |
 | `npm run scope-eval` | `tests/scope-eval.mjs`: auto-scope against real Jev on `tests/scope-corpus.tsv` (tune on this) and `tests/scope-holdout.tsv` (never tune on it): wrong / missed scopes per threshold, and the rows that differ | the key above; one small request per row (160), about 20 s |
 | `npm run judge` | `tests/judge.mts`: accuracy (P / R / F1 over a threshold sweep) against Claude's verdicts, written to `tests/report.md` | the key above and `claude -p`; slow, not pass/fail |
 
-Run `npm run test:offline` after every change to `semgrep.mjs`; run `npm test` before a push.
+Run `npm run test:offline` after every change to `sys1grep.mjs`; run `npm test` before a push.
 
 - The fake scores a line 0.9 when it contains the meaning verbatim, `N` when the line also carries `@N`, else 0.05.
   It understands the judging question (`Does line L000 match the meaning: "…"?`) and the auto-scope question
@@ -25,7 +25,7 @@ Run `npm run test:offline` after every change to `semgrep.mjs`; run `npm test` b
 
 ### Issue tracker
 
-Issues live in GitHub Issues for uehaj/jev-semgrep, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues live in GitHub Issues for uehaj/sys1grep, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

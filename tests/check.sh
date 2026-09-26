@@ -4,18 +4,18 @@
 set -e
 cd "$(dirname "$0")"
 # API key comes from the environment or from .env at the repo root
-J="node --env-file-if-exists=../.env ../semgrep.mjs"
+J="node --env-file-if-exists=../.env ../sys1grep.mjs"
 
-# SEMGREP_OPTS, offline: empty input sends nothing
-SEMGREP_OPTS='--level bogus' $J -e x </dev/null 2>&1 | grep -qx 'semgrep: --level must be one of loose, normal, strict'
-SEMGREP_OPTS='--level bogus' $J --level strict -e x </dev/null 2>/dev/null || [ $? = 1 ]   # the command line wins
-SEMGREP_OPTS='-n' $J --no-n -e x </dev/null 2>/dev/null || [ $? = 1 ]                     # --no-X clears a default
+# SYS1GREP_OPTS, offline: empty input sends nothing
+SYS1GREP_OPTS='--level bogus' $J -e x </dev/null 2>&1 | grep -qx 'sys1grep: --level must be one of loose, normal, strict'
+SYS1GREP_OPTS='--level bogus' $J --level strict -e x </dev/null 2>/dev/null || [ $? = 1 ]   # the command line wins
+SYS1GREP_OPTS='-n' $J --no-n -e x </dev/null 2>/dev/null || [ $? = 1 ]                     # --no-X clears a default
 for bad in '-e refund' 'file.txt' '--' '--nope'; do
-  SEMGREP_OPTS="$bad" $J -e x </dev/null 2>&1 | grep -q '^semgrep: SEMGREP_OPTS: '
+  SYS1GREP_OPTS="$bad" $J -e x </dev/null 2>&1 | grep -q '^sys1grep: SYS1GREP_OPTS: '
 done
 
-# git semgrep: pathspecs relative to the current directory, tracked files only
-G="node --env-file-if-exists=../.env ../git-semgrep.mjs"
+# git sys1grep: pathspecs relative to the current directory, tracked files only
+G="node --env-file-if-exists=../.env ../git-sys1grep.mjs"
 $G -e x -- no-such-path 2>/dev/null || [ $? = 1 ]   # offline: nothing tracked there, nothing sent
 [ "$($G -l -e 'customer is asking for a refund' fixture.txt tickets 2>/dev/null | sort | tr '\n' ' ')" = "fixture.txt tickets/a.txt tickets/sub/b.txt " ]
 $G -n -e 'customer is asking for a refund' fixture.txt 2>/dev/null | grep -q '^fixture.txt:7:'   # a file name even for one file
@@ -112,7 +112,7 @@ if $J --dedup -e 'a request failed' "$T/ids" 2>/dev/null | od -An -c | grep -q '
 # The grouping key itself, offline: which lines share a key once Jev has named the kinds to keep.
 # (Through the API these hide behind Jev's answer: when it keeps numbers too, the bugs below never show.)
 node --input-type=module -e "
-const src = (await import('node:fs')).readFileSync('../semgrep.mjs', 'utf8');
+const src = (await import('node:fs')).readFileSync('../sys1grep.mjs', 'utf8');
 const { MASK, templateKey } = new Function(src.slice(src.indexOf('const DATE ='), src.indexOf('// Regex terms are never folded')) + 'return { MASK, templateKey };')();
 const key = (t, keep) => templateKey(t, MASK.filter(([k]) => keep.includes(k)), MASK.filter(([k]) => !keep.includes(k)));
 const check = (a, b, keep, same) => { if ((key(a, keep) === key(b, keep)) !== same) { console.error('dedup key:', a, '|', b, keep); process.exit(1); } };
@@ -123,7 +123,7 @@ check('Thu Sep 10 20:33:51 done', 'Fri Oct 17 21:00:00 done', [], true);   // sy
 check('Thu Sep 10 20:33:51 done', 'Thu Sep 17 20:33:51 done', ['time'], false); // a kept date keeps its day
 check('primary https://a/500 secondary https://a/fixed', 'primary https://a/fixed secondary https://a/500', ['num'], false); // the URL mask kept the mark
 "
-# scripts/dedup-measure.mjs uses the same masks (it slices them out of semgrep.mjs, so this breaks if they move)
+# scripts/dedup-measure.mjs uses the same masks (it slices them out of sys1grep.mjs, so this breaks if they move)
 node ../scripts/dedup-measure.mjs "$T/ids" | tail -1 | grep -q " | 4 | 2 | "   # 4 lines, 2 templates
 # empty input asks nothing
 [ "$(printf '' | $J --dedup -c -e 'about cats' 2>/dev/null)" = "0" ]
@@ -131,9 +131,9 @@ node ../scripts/dedup-measure.mjs "$T/ids" | tail -1 | grep -q " | 4 | 2 | "   #
 printf 'The job 3fa9c1e27b failed. The job 88d0e41a5c failed.\n' > "$T/sent"
 [ "$(sent --sentence=rules -e "'a job failed'" "$T/sent")" = "1 sent to Jev (1 folded" ]
 # -e '/regex/': matched locally, no Jev involved. NOKEY proves it: no key, no .env, still runs.
-# $NJ skips $J's --env-file (a ../.env would bring the key back), SEMGREP_OPTS= drops the user's defaults.
-NOKEY="env -u TYPESAFE_API_KEY -u SEMGREP_API_KEY -u SEMGREP_URL SEMGREP_OPTS= HOME=/nonexistent-semgrep-test-home"
-NJ="node ../semgrep.mjs"
+# $NJ skips $J's --env-file (a ../.env would bring the key back), SYS1GREP_OPTS= drops the user's defaults.
+NOKEY="env -u TYPESAFE_API_KEY -u SYS1GREP_API_KEY -u SEMGREP_API_KEY -u SYS1GREP_URL -u SEMGREP_URL SYS1GREP_OPTS= HOME=/nonexistent-sys1grep-test-home"
+NJ="node ../sys1grep.mjs"
 [ "$($NOKEY $NJ -n -e '/ERROR|FATAL/' fixture.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "4 6 13 28 " ]
 [ -z "$(printf 'TIMEOUT here\nfine\n' | $NOKEY $NJ -e '/timeout/' 2>/dev/null)" ]           # without -i, case matters
 [ "$(printf 'TIMEOUT here\nfine\n' | $NOKEY $NJ -e '/timeout/i' 2>/dev/null)" = "TIMEOUT here" ]  # flags
@@ -142,8 +142,8 @@ NJ="node ../semgrep.mjs"
 [ "$($NOKEY $NJ -n -e '/ERROR/' -e '/lookup/' fixture.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "4 6 13 14 28 " ]  # OR
 [ "$($NOKEY $NJ -n -e '/ERROR/' -a '/timeout/' fixture.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "6 " ]           # AND
 [ "$($NOKEY $NJ -n -e '/ERROR/' -v '/timeout/' fixture.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "4 13 28 " ]     # AND NOT
-# a regex with no closing / is still a meaning: with no key this errors on "SEMGREP_API_KEY is not set", a real regex term wouldn't
-$NOKEY $NJ -e '/etc 以下のファイルを変更している' fixture.txt 2>&1 >/dev/null | grep -qx 'semgrep: SEMGREP_API_KEY is not set. Export it or put it in ~/.config/semgrep/.env'
+# a regex with no closing / is still a meaning: with no key this errors on "SYS1GREP_API_KEY is not set", a real regex term wouldn't
+$NOKEY $NJ -e '/etc 以下のファイルを変更している' fixture.txt 2>&1 >/dev/null | grep -qx 'sys1grep: SYS1GREP_API_KEY is not set. Export it or put it in ~/.config/sys1grep/.env'
 # an invalid pattern exits 2, one line, like grep
 if $NOKEY $NJ -e '/(/' fixture.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 ]; then exit 1; fi
 [ "$($NOKEY $NJ -e '/(/' fixture.txt 2>&1 | wc -l | tr -d ' ')" = "1" ]
@@ -153,8 +153,8 @@ if $NOKEY $NJ -e A -v '/(?<t>\d+)/' -a '$<t>' fixture.txt >/dev/null 2>&1; then 
 # so is $1 when only a negated regex has a group 1
 if $NOKEY $NJ -e '!/(x)/' -a '$1 is valid' fixture.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 ]; then exit 1; fi
 # -p over a term whose regex failed: its meaning is 0.00, not a crash (it read the failed match's captures).
-# Nothing is sent: the only line fails /A/. SEMGREP_URL only gets past the missing-key check.
-[ "$(printf 'B\n' | $NOKEY SEMGREP_URL=http://127.0.0.1:1 $NJ -p -e '/A/' -a 'a meaning' -e '/B/' 2>/dev/null)" = "$(printf 'B\t[0.00 0.00 1.00]')" ]
+# Nothing is sent: the only line fails /A/. SYS1GREP_URL only gets past the missing-key check.
+[ "$(printf 'B\n' | $NOKEY SYS1GREP_URL=http://127.0.0.1:1 $NJ -p -e '/A/' -a 'a meaning' -e '/B/' 2>/dev/null)" = "$(printf 'B\t[0.00 0.00 1.00]')" ]
 # --sentence=rules (no extra Jev calls) and -z apply regex terms per unit
 [ "$($NOKEY $NJ -n --sentence=rules -e '/mistake/i' prose.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 2 3 " ]
 [ "$(printf 'usage 95%%\0usage 10%%\0' | $NOKEY $NJ -z -c -e '/usage 9\d%/' 2>/dev/null)" = "1" ]
@@ -162,14 +162,14 @@ if $NOKEY $NJ -e '!/(x)/' -a '$1 is valid' fixture.txt >/dev/null 2>&1; then exi
 [ "$($NOKEY $NJ -p -e '/ERROR/' fixture.txt 2>/dev/null | grep -c '\[1.00\]')" = "4" ]
 [ "$(printf 'plain\n' | $NOKEY $NJ -p -v '/ERROR/' 2>/dev/null)" = "$(printf 'plain\t[0.00]')" ]
 
-# Nothing is sent where no term can hold: SEMGREP_URL points at a closed port, so any request would fail with exit 2.
-DEAD="$NOKEY SEMGREP_URL=http://127.0.0.1:1 $NJ"
+# Nothing is sent where no term can hold: SYS1GREP_URL points at a closed port, so any request would fail with exit 2.
+DEAD="$NOKEY SYS1GREP_URL=http://127.0.0.1:1 $NJ"
 [ "$(printf 'plain line\n' | $DEAD -c -e '/re/' -a 'anything' 2>/dev/null || echo "exit $?")" = "$(printf '0\nexit 1')" ]  # 1: no match, 2 would be a failed request
 [ "$(printf 'has re in it\n' | $DEAD -c -e '/re/' 2>/dev/null)" = "1" ]
 
 # Captures, offline: the expansion function itself ($<name>, $$, $&, $n with two digits or one, $9 with no group).
 node --input-type=module -e "
-const src = (await import('node:fs')).readFileSync('../semgrep.mjs', 'utf8');
+const src = (await import('node:fs')).readFileSync('../sys1grep.mjs', 'utf8');
 const cut = (a, b) => src.slice(src.indexOf(a), src.indexOf(b));
 const expandCaptures = new Function(cut('const SUBST =', 'for (const term of expr)') + cut('// A capture is text from the searched file', '// asksByUnit') + 'return expandCaptures;')();
 const m = /(?<t>\d\d:\d\d) (\w+)/.exec('at 03:12 alert fired');
@@ -207,8 +207,8 @@ printf '2026-09-19 03:12 alert fired\n2026-09-19 14:40 alert fired\n' > "$T/nigh
 [ "$(printf '名前は\nタマである\n' | $J --sentence=rules -o -Q '猫の名前' 2>/dev/null)" = "名前はタマである" ]
 # -Q needs its argument
 if $J -Q '' intent.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 ]; then exit 1; fi
-# SEMGREP_OPTS rejects -Q / --question, like -e / -a / -v
-SEMGREP_OPTS='-Q x' $J -e y </dev/null 2>&1 | grep -q '^semgrep: SEMGREP_OPTS: '
+# SYS1GREP_OPTS rejects -Q / --question, like -e / -a / -v
+SYS1GREP_OPTS='-Q x' $J -e y </dev/null 2>&1 | grep -q '^sys1grep: SYS1GREP_OPTS: '
 
 # -q / --quiet: nothing on stdout, the answer is the exit status; a match wins over an unreadable file (grep -q)
 [ -z "$($J -q -Q "the cat's name" intent.txt 2>/dev/null)" ]

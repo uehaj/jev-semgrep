@@ -1,9 +1,9 @@
 // LLM-as-judge: for each case in cases.json, Claude (claude -p) decides which lines truly match each meaning.
-// Those verdicts are the ground truth. We then sweep the thresholds (-t positive / -T negative) over semgrep's
+// Those verdicts are the ground truth. We then sweep the thresholds (-t positive / -T negative) over sys1grep's
 // per-line probabilities and report the best pair. The boolean expression is evaluated here on the per-meaning
 // verdicts; the judge never sees the expression. Verdicts are cached in verdicts.json keyed by meaning text; --rejudge rebuilds.
 //   npm run judge [-- --model MODEL] [--rejudge]   (Node 23.6+ runs .mts as is; the key comes from the environment,
-//   ~/.config/semgrep/.env, or ./.env passed by the npm script with --env-file: semgrep itself never reads ./.env)
+//   ~/.config/sys1grep/.env, or ./.env passed by the npm script with --env-file: sys1grep itself never reads ./.env)
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
@@ -52,10 +52,10 @@ Answer with ONLY a JSON object mapping "M0", "M1", ... to arrays of line numbers
   writeFileSync(cachePath, JSON.stringify(cache, null, 1));
 }
 
-// Run semgrep once with a zero threshold to get every line's probabilities; the threshold sweep never calls the API.
+// Run sys1grep once with a zero threshold to get every line's probabilities; the threshold sweep never calls the API.
 function probabilities(meanings: string[]): Map<number, number[]> {
   // Listing every meaning as a positive -e with -t 0 prints every line, and -p gives the probability per meaning.
-  const out = execFileSync('node', [`${dir}../semgrep.mjs`, '-n', '-p', '-t', '0', ...meanings.flatMap(m => ['-e', m]), `${dir}corpus.txt`],
+  const out = execFileSync('node', [`${dir}../sys1grep.mjs`, '-n', '-p', '-t', '0', ...meanings.flatMap(m => ['-e', m]), `${dir}corpus.txt`],
     { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
   return new Map(out.split('\n').filter(Boolean).map(l => {
     const [, no, probs] = l.match(/^(\d+):.*\t\[(.*)\]$/)!;
@@ -100,11 +100,11 @@ const rows = prepared.map(x => {
   const fp = actual.filter(n => !x.expected.has(n)), fn = [...x.expected].filter(n => !actual.includes(n));
   const show = (ns: number[]) => ns.map(n => `  - L${n}: ${corpus[n - 1]}`).join('\n');
   return `| ${x.c.name} | \`${x.c.args.join(' ')}\` | ${x.expected.size} | ${actual.length} | ${s.P.toFixed(2)} | ${s.R.toFixed(2)} |`
-    + (fp.length ? `\n\n  semgrep のみ (judge は不一致):\n${show(fp)}\n` : '')
-    + (fn.length ? `\n\n  judge のみ (semgrep は見逃し):\n${show(fn)}\n` : '');
+    + (fp.length ? `\n\n  sys1grep のみ (judge は不一致):\n${show(fp)}\n` : '')
+    + (fn.length ? `\n\n  judge のみ (sys1grep は見逃し):\n${show(fn)}\n` : '');
 });
 
-const report = `# semgrep LLM-as-judge report
+const report = `# sys1grep LLM-as-judge report
 
 judge: claude -p --model ${opt.model} / corpus: ${corpus.length} lines / cases: ${cases.length} / ${new Date().toISOString().slice(0, 10)}
 
@@ -121,7 +121,7 @@ ${sweep.slice(0, 8).map(s => `| ${s.tPos} | ${s.tNeg} | ${s.P.toFixed(2)} | ${s.
 
 ## ケース別 (最良の閾値で評価)
 
-| case | args | judge | semgrep | P | R |
+| case | args | judge | sys1grep | P | R |
 |---|---|---|---|---|---|
 ${rows.join('\n')}
 `;

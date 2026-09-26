@@ -1,7 +1,7 @@
 #!/bin/sh
 # Offline self-check against tests/fake-jev.mjs: no API key, no network, the same answer every run.
 # The fake scores a line 0.9 when it contains the meaning verbatim ("@N" in the line sets N instead), else 0.05,
-# so these checks are about semgrep itself: the expression, output shapes, options, requests and exit codes.
+# so these checks are about sys1grep itself: the expression, output shapes, options, requests and exit codes.
 set -e
 unset FORCE_COLOR # node would color the numbers it prints (the fake's port, the counts read back)
 cd "$(dirname "$0")"
@@ -12,8 +12,8 @@ trap 'kill $fake 2>/dev/null; wait $fake 2>/dev/null || true; rm -rf "$tmp"' EXI
 i=0; while [ ! -s "$tmp/port" ]; do i=$((i + 1)); [ $i -lt 200 ] || { echo "FAIL: fake-jev did not start" >&2; exit 1; }; sleep 0.05; done
 base="http://127.0.0.1:$(cat "$tmp/port")"
 # No key from the environment, and a HOME and cwd without .env, so nothing real is read or sent
-E="env -u SEMGREP_API_KEY -u TYPESAFE_API_KEY -u SEMGREP_MODEL -u NO_COLOR -u LC_ALL -u LC_MESSAGES HOME=$tmp SEMGREP_OPTS="
-J="$E SEMGREP_URL=$base/v1 node ../semgrep.mjs"
+E="env -u SYS1GREP_API_KEY -u SEMGREP_API_KEY -u TYPESAFE_API_KEY -u SYS1GREP_MODEL -u SEMGREP_MODEL -u SEMGREP_URL -u SEMGREP_SUMMARIZER -u SEMGREP_SUMMARIZER_MODEL -u NO_COLOR -u LC_ALL -u LC_MESSAGES HOME=$tmp SYS1GREP_OPTS="
+J="$E SYS1GREP_URL=$base/v1 node ../sys1grep.mjs"
 stat() { curl -s "$base" | node -pe "JSON.parse(require('fs').readFileSync(0)).$1"; }
 reset() { curl -s "$base/reset" >/dev/null; }
 nums() { cut -d: -f1 | tr '\n' ' '; }
@@ -62,8 +62,8 @@ eq "$($J --no-filename -n -e cat "$F" "$F" | head -1)" "1:cat" "--no-filename on
 eq "$($J --no-filename -c -e cat "$F" "$F" | tr '\n' ' ')" "2 2 " "--no-filename with -c"
 eq "$($J -H --no-filename -e cat "$F" | head -1)" "cat" "--no-filename after -H wins"
 eq "$($J --no-filename -H -e cat "$F" | head -1)" "$F:cat" "-H after --no-filename wins"
-eq "$($E SEMGREP_URL=$base/v1 SEMGREP_OPTS=-H node ../semgrep.mjs -e cat "$F" | head -1)" "$F:cat" "-H in SEMGREP_OPTS"
-eq "$($E SEMGREP_URL=$base/v1 SEMGREP_OPTS=-H node ../semgrep.mjs --no-filename -e cat "$F" | head -1)" "cat" "--no-filename overrides SEMGREP_OPTS"
+eq "$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS=-H node ../sys1grep.mjs -e cat "$F" | head -1)" "$F:cat" "-H in SYS1GREP_OPTS"
+eq "$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS=-H node ../sys1grep.mjs --no-filename -e cat "$F" | head -1)" "cat" "--no-filename overrides SYS1GREP_OPTS"
 eq "$($J -n -e cat "$F" "$F" | head -1)" "$F:1:cat" "file prefix with two files"
 
 # context: -A and -B alone, groups apart are split by --, blank lines count as context
@@ -125,16 +125,16 @@ code 2 "--chunk 0" -- $J --chunk 0 -e cat "$F"
 
 # --dry-run: the files and requests on stdout, nothing sent, exit 0 even with no match; --verbose: the same on stderr
 reset; out=$($J --dry-run --chunk 4 -e cat -v '!dog' "$F"); eq "$(stat count)" "0" "--dry-run sends nothing"
-eq "$(echo "$out" | grep -c '^semgrep: request .* \[judge\]')" "2" "--dry-run lists each request"
-echo "$out" | grep -q "^semgrep: file $F: 8 lines, 7 to send" || fail "--dry-run lists the file"
+eq "$(echo "$out" | grep -c '^sys1grep: request .* \[judge\]')" "2" "--dry-run lists each request"
+echo "$out" | grep -q "^sys1grep: file $F: 8 lines, 7 to send" || fail "--dry-run lists the file"
 echo "$out" | grep -q '4× Does line Lnnn match the meaning: "cat"?' || fail "--dry-run groups questions"
 code 0 "--dry-run, no match" -- $J --dry-run -e nothing "$F"
-reset; eq "$($J --dry-run -q -v cat "$F" | tail -1 | cut -d, -f1)" "semgrep: dry run: 1 request" "--dry-run ignores -q"
-$J --dry-run -e cat "$F" | tail -1 | grep -Eq ' chars, ~[0-9]+ input tokens; nothing sent$' || fail "--dry-run estimates tokens, no price for SEMGREP_URL"
-$E SEMGREP_API_KEY=unused node ../semgrep.mjs --dry-run -e cat "$F" | tail -1 | grep -Eq ' chars, ~[0-9]+ input tokens, ~\$0\.[0-9]{6}; nothing sent$' || fail "--dry-run estimates the price for TypeSafe"
+reset; eq "$($J --dry-run -q -v cat "$F" | tail -1 | cut -d, -f1)" "sys1grep: dry run: 1 request" "--dry-run ignores -q"
+$J --dry-run -e cat "$F" | tail -1 | grep -Eq ' chars, ~[0-9]+ input tokens; nothing sent$' || fail "--dry-run estimates tokens, no price for SYS1GREP_URL"
+$E SYS1GREP_API_KEY=unused node ../sys1grep.mjs --dry-run -e cat "$F" | tail -1 | grep -Eq ' chars, ~[0-9]+ input tokens, ~\$0\.[0-9]{6}; nothing sent$' || fail "--dry-run estimates the price for TypeSafe"
 reset; eq "$($J --verbose -n -e cat "$F" 2>/dev/null | nums)" "1 4 " "--verbose keeps stdout"
 eq "$(stat count)" "1" "--verbose sends"
-eq "$($J --verbose -e cat "$F" 2>&1 >/dev/null | grep -c '^semgrep: request 1 \[judge\]')" "1" "--verbose on stderr"
+eq "$($J --verbose -e cat "$F" 2>&1 >/dev/null | grep -c '^sys1grep: request 1 \[judge\]')" "1" "--verbose on stderr"
 # The summary line says what its numbers are (#91); its total counts every line read, also those a regex left out (#79)
 eq "$($J --verbose -e cat "$F" 2>&1 >/dev/null | tail -1)" "2 of 8 lines matched; 7 sent to Jev in 1 request, 1 input token" "summary line"
 eq "$($J --verbose -e /cat/ "$F" 2>&1 >/dev/null | tail -1)" "2 of 8 lines matched; nothing sent" "summary line, regex only"
@@ -171,34 +171,47 @@ eq "$(stat asked)" "6" "--dedup: those two lines are still one group for the mea
 reset; eq "$($J -c --dedup -e '/cat/' "$F")" "2" "--dedup, regex terms only"
 eq "$(stat count)" "0" "--dedup, regex terms only: no requests, no pre-question"
 
-# SEMGREP_URL: a compatible endpoint; the key goes there as a bearer token, no key means no header
+# SYS1GREP_URL: a compatible endpoint; the key goes there as a bearer token, no key means no header
 reset; $J -e cat "$F" >/dev/null; eq "$(stat auth)" "null" "no key, no authorization header"
-reset; $E SEMGREP_URL=$base/v1 SEMGREP_API_KEY=k1 node ../semgrep.mjs -e cat "$F" >/dev/null; eq "$(stat auth)" "Bearer k1" "SEMGREP_API_KEY"
-reset; $E SEMGREP_URL=$base/v1 TYPESAFE_API_KEY=k2 node ../semgrep.mjs -e cat "$F" >/dev/null; eq "$(stat auth)" "Bearer k2" "TYPESAFE_API_KEY fallback"
-code 2 "SEMGREP_URL not a URL" -- $E SEMGREP_URL=nope node ../semgrep.mjs -e cat "$F"
-code 2 "the TypeSafe default needs a key" -- $E node ../semgrep.mjs -e cat "$F"
+reset; $E SYS1GREP_URL=$base/v1 SYS1GREP_API_KEY=k1 node ../sys1grep.mjs -e cat "$F" >/dev/null; eq "$(stat auth)" "Bearer k1" "SYS1GREP_API_KEY"
+reset; $E SYS1GREP_URL=$base/v1 TYPESAFE_API_KEY=k2 node ../sys1grep.mjs -e cat "$F" >/dev/null; eq "$(stat auth)" "Bearer k2" "TYPESAFE_API_KEY fallback"
+code 2 "SYS1GREP_URL not a URL" -- $E SYS1GREP_URL=nope node ../sys1grep.mjs -e cat "$F"
+code 2 "the TypeSafe default needs a key" -- $E node ../sys1grep.mjs -e cat "$F"
 # --sys1-*: each overrides its environment variable
-reset; $E SEMGREP_URL=nope node ../semgrep.mjs --sys1-url=$base/v1 -e cat "$F" >/dev/null; eq "$(stat count)" "1" "--sys1-url over SEMGREP_URL"
+reset; $E SYS1GREP_URL=nope node ../sys1grep.mjs --sys1-url=$base/v1 -e cat "$F" >/dev/null; eq "$(stat count)" "1" "--sys1-url over SYS1GREP_URL"
 code 2 "--sys1-url not a URL" -- $J --sys1-url=nope -e cat "$F"
-reset; $E SEMGREP_URL=$base/v1 SEMGREP_API_KEY=k1 node ../semgrep.mjs --sys1-api-key=k3 -e cat "$F" >/dev/null; eq "$(stat auth)" "Bearer k3" "--sys1-api-key over SEMGREP_API_KEY"
-code 1 "--sys1-api-key satisfies the TypeSafe default" -- $E node ../semgrep.mjs --sys1-api-key=k3 -e cat </dev/null
-reset; $E SEMGREP_URL=$base/v1 SEMGREP_MODEL=m1 node ../semgrep.mjs -e cat "$F" >/dev/null; eq "$(stat model)" "m1" "SEMGREP_MODEL"
-reset; $E SEMGREP_URL=$base/v1 SEMGREP_MODEL=m1 node ../semgrep.mjs --sys1-model=m2 -e cat "$F" >/dev/null; eq "$(stat model)" "m2" "--sys1-model over SEMGREP_MODEL"
-reset; $E SEMGREP_URL=$base/v1 SEMGREP_OPTS=--sys1-model=m3 node ../semgrep.mjs -e cat "$F" >/dev/null; eq "$(stat model)" "m3" "--sys1-model in SEMGREP_OPTS"
-# ./.env is never read (an untrusted checkout could redirect the key); ~/.config/semgrep/.env is
-mkdir -p "$tmp/checkout" "$tmp/.config/semgrep"
-printf 'SEMGREP_URL=%s/v1\nSEMGREP_OPTS=-c\n' "$base" >"$tmp/checkout/.env"
-reset; code 2 "./.env is not read" -- sh -c "cd '$tmp/checkout' && $E node '$PWD/../semgrep.mjs' -e cat '$F'"
+reset; $E SYS1GREP_URL=$base/v1 SYS1GREP_API_KEY=k1 node ../sys1grep.mjs --sys1-api-key=k3 -e cat "$F" >/dev/null; eq "$(stat auth)" "Bearer k3" "--sys1-api-key over SYS1GREP_API_KEY"
+code 1 "--sys1-api-key satisfies the TypeSafe default" -- $E node ../sys1grep.mjs --sys1-api-key=k3 -e cat </dev/null
+reset; $E SYS1GREP_URL=$base/v1 SYS1GREP_MODEL=m1 node ../sys1grep.mjs -e cat "$F" >/dev/null; eq "$(stat model)" "m1" "SYS1GREP_MODEL"
+reset; $E SYS1GREP_URL=$base/v1 SYS1GREP_MODEL=m1 node ../sys1grep.mjs --sys1-model=m2 -e cat "$F" >/dev/null; eq "$(stat model)" "m2" "--sys1-model over SYS1GREP_MODEL"
+reset; $E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS=--sys1-model=m3 node ../sys1grep.mjs -e cat "$F" >/dev/null; eq "$(stat model)" "m3" "--sys1-model in SYS1GREP_OPTS"
+# SEMGREP_* falls back for one minor release (#93), each use printing a deprecation line; SYS1GREP_* wins when both are set
+reset; $E SEMGREP_URL=$base/v1 SEMGREP_API_KEY=k4 node ../sys1grep.mjs -e cat "$F" >/dev/null; eq "$(stat auth)" "Bearer k4" "SEMGREP_API_KEY falls back"
+eq "$($E SEMGREP_URL=$base/v1 SEMGREP_API_KEY=k4 node ../sys1grep.mjs -e cat "$F" 2>&1 >/dev/null | grep -c '^sys1grep: SEMGREP_.*is deprecated; use SYS1GREP_')" "2" "SEMGREP_URL and SEMGREP_API_KEY each print a deprecation line"
+reset; $E SEMGREP_URL=nope SYS1GREP_URL=$base/v1 SEMGREP_API_KEY=old SYS1GREP_API_KEY=new node ../sys1grep.mjs -e cat "$F" >/dev/null; eq "$(stat auth)" "Bearer new" "SYS1GREP_API_KEY wins over SEMGREP_API_KEY"
+eq "$($E SEMGREP_URL=nope SYS1GREP_URL=$base/v1 SEMGREP_API_KEY=old SYS1GREP_API_KEY=new node ../sys1grep.mjs -e cat "$F" 2>&1 >/dev/null)" "" "no deprecation line once SYS1GREP_* is set"
+# ./.env is never read (an untrusted checkout could redirect the key); ~/.config/sys1grep/.env is
+mkdir -p "$tmp/checkout" "$tmp/.config/sys1grep"
+printf 'SYS1GREP_URL=%s/v1\nSYS1GREP_OPTS=-c\n' "$base" >"$tmp/checkout/.env"
+reset; code 2 "./.env is not read" -- sh -c "cd '$tmp/checkout' && $E node '$PWD/../sys1grep.mjs' -e cat '$F'"
 eq "$(stat count)" "0" "./.env sends nothing"
-printf 'SEMGREP_URL=%s/v1\n' "$base" >"$tmp/.config/semgrep/.env"
-reset; eq "$(cd "$tmp/checkout" && $E node "$OLDPWD/../semgrep.mjs" -n -e cat "$F" | nums)" "1 4 " "~/.config/semgrep/.env is read"
-rm "$tmp/.config/semgrep/.env"
-# -r and git semgrep skip files that usually hold secrets, whatever their case
+printf 'SYS1GREP_URL=%s/v1\n' "$base" >"$tmp/.config/sys1grep/.env"
+reset; eq "$(cd "$tmp/checkout" && $E node "$OLDPWD/../sys1grep.mjs" -n -e cat "$F" | nums)" "1 4 " "~/.config/sys1grep/.env is read"
+rm "$tmp/.config/sys1grep/.env"
+# ~/.config/semgrep/.env falls back for one minor release, with a deprecation line; the new path wins when both exist
+mkdir -p "$tmp/.config/semgrep"
+printf 'SYS1GREP_URL=%s/v1\n' "$base" >"$tmp/.config/semgrep/.env"
+reset; eq "$(cd "$tmp/checkout" && $E node "$OLDPWD/../sys1grep.mjs" -n -e cat "$F" | nums)" "1 4 " "~/.config/semgrep/.env falls back"
+eq "$(cd "$tmp/checkout" && $E node "$OLDPWD/../sys1grep.mjs" -e cat "$F" 2>&1 >/dev/null)" "sys1grep: ~/.config/semgrep/.env is deprecated; use ~/.config/sys1grep/.env" "~/.config/semgrep/.env prints a deprecation line"
+mkdir -p "$tmp/.config/sys1grep"; printf 'SYS1GREP_URL=%s/v1\n' "$base" >"$tmp/.config/sys1grep/.env"
+reset; eq "$(cd "$tmp/checkout" && $E node "$OLDPWD/../sys1grep.mjs" -e cat "$F" 2>&1 >/dev/null)" "" "~/.config/sys1grep/.env wins over ~/.config/semgrep/.env, no deprecation line"
+rm -rf "$tmp/.config/semgrep" "$tmp/.config/sys1grep"
+# -r and git sys1grep skip files that usually hold secrets, whatever their case
 mkdir -p "$tmp/sec/.kube" "$tmp/sec/.docker"
 for f in .envrc .env-local .env_prod .ENV .netrc .npmrc .pypirc .pgpass .git-credentials id_rsa_work x.JKS .kube/config .docker/config.json ok.txt; do printf 'cat\n' >"$tmp/sec/$f"; done
 eq "$($J -r -l -e cat "$tmp/sec")" "$tmp/sec/ok.txt" "-r skips credential files"
 
-# the response and the error body come from whatever server SEMGREP_URL names
+# the response and the error body come from whatever server SYS1GREP_URL names
 printf 'cat @drop\n' >"$tmp/drop"
 code 2 "a missing answer is an error, not 0 (which would make -v match)" -- $J -v cat "$tmp/drop"
 printf 'cat @err\n' >"$tmp/err"
@@ -221,15 +234,15 @@ code 0 "-o -n without --sentence" -- $J -o -n -e cat "$F"
 code 2 "-A takes a whole number" -- $J -A 1.5 -e cat "$F"
 reset; code 2 "--color=bogus" -- $J --color=bogus -e cat "$F"; eq "$(stat count)" "0" "--color is checked before any request"
 # a key over plain http gets a warning, except to this machine
-$E SEMGREP_URL=http://example.invalid/v1 SEMGREP_API_KEY=k node ../semgrep.mjs -e cat /dev/null 2>&1 | grep -q 'over plain http' || fail "plain http warning"
-eq "$($E SEMGREP_URL=$base/v1 SEMGREP_API_KEY=k node ../semgrep.mjs -e cat "$F" 2>&1 >/dev/null)" "" "no warning for 127.0.0.1"
+$E SYS1GREP_URL=http://example.invalid/v1 SYS1GREP_API_KEY=k node ../sys1grep.mjs -e cat /dev/null 2>&1 | grep -q 'over plain http' || fail "plain http warning"
+eq "$($E SYS1GREP_URL=$base/v1 SYS1GREP_API_KEY=k node ../sys1grep.mjs -e cat "$F" 2>&1 >/dev/null)" "" "no warning for 127.0.0.1"
 # -z: NUL ends a record, so a binary is told by its other control bytes; a named binary is reported
 printf '\177ELF\001\002\003cat\000' >"$tmp/bin.dat"
-reset; eq "$($J -z -e cat "$tmp/bin.dat" 2>&1)" "semgrep: $tmp/bin.dat: binary file skipped" "-z skips a binary"
+reset; eq "$($J -z -e cat "$tmp/bin.dat" 2>&1)" "sys1grep: $tmp/bin.dat: binary file skipped" "-z skips a binary"
 eq "$(stat count)" "0" "-z sends nothing from a binary"
 # a PDF is binary even when its first NUL is past 8 KB; UTF-16 with a BOM is text, though it is full of NULs
 printf '%%PDF-1.5\ncat\n' >"$tmp/doc.pdf"
-reset; eq "$($J -e cat "$tmp/doc.pdf" 2>&1)" "semgrep: $tmp/doc.pdf: binary file skipped" "a PDF is skipped"
+reset; eq "$($J -e cat "$tmp/doc.pdf" 2>&1)" "sys1grep: $tmp/doc.pdf: binary file skipped" "a PDF is skipped"
 eq "$(stat count)" "0" "nothing is sent from a PDF"
 node -e 'const le = Buffer.from("﻿cat\ndog\n", "utf16le"); require("fs").writeFileSync(process.argv[1], le); require("fs").writeFileSync(process.argv[2], Buffer.from(le).swap16())' "$tmp/le.txt" "$tmp/be.txt"
 eq "$($J -n -e cat "$tmp/le.txt")" "1:cat" "UTF-16LE is read"
@@ -239,32 +252,32 @@ eq "$($J -z -c -e cat "$tmp/le.txt")" "1" "-z with UTF-16: no NUL character, so 
 printf '猫がいる\n犬もいる\n' >"$tmp/ja"   # unpunctuated Japanese: the breaks --sentence=jev would ask about
 reset; $J --sentence -c -e '/猫/' "$tmp/ja" >/dev/null; eq "$(stat count)" "0" "--sentence with regex terms only sends nothing"
 
-# git semgrep: tracked files only, pathspecs relative to the current directory, never stdin
-R="$tmp/repo" GS="$E SEMGREP_URL=$base/v1 node $PWD/../git-semgrep.mjs" SG="$PWD/../semgrep.mjs"
+# git sys1grep: tracked files only, pathspecs relative to the current directory, never stdin
+R="$tmp/repo" GS="$E SYS1GREP_URL=$base/v1 node $PWD/../git-sys1grep.mjs" SG="$PWD/../sys1grep.mjs"
 mkdir -p "$R/sub" "$tmp/plain"
 printf 'cat\n' >"$R/a.txt"; printf 'cat\n' >"$R/sub/b.txt"; printf 'cat\n' >"$R/ignored.txt"; printf 'cat\n' >"$R/.env.sample"
 echo ignored.txt >"$R/.gitignore"
 (cd "$R" && git init -q && git add a.txt sub/b.txt .gitignore .env.sample)
-eq "$(cd "$R" && $GS -l -e cat | tr '\n' ' ')" "a.txt sub/b.txt " "git semgrep: tracked files, not ignored ones or the skip list"
-eq "$(cd "$R/sub" && $GS -l -e cat)" "b.txt" "git semgrep: under the current directory"
-eq "$(cd "$R" && $GS -n -e cat a.txt)" "a.txt:1:cat" "git semgrep: pathspec, file name even for one file"
-code 1 "git semgrep: never stdin" -- sh -c "cd '$R' && echo cat | $GS -e cat -- nothing"
+eq "$(cd "$R" && $GS -l -e cat | tr '\n' ' ')" "a.txt sub/b.txt " "git sys1grep: tracked files, not ignored ones or the skip list"
+eq "$(cd "$R/sub" && $GS -l -e cat)" "b.txt" "git sys1grep: under the current directory"
+eq "$(cd "$R" && $GS -n -e cat a.txt)" "a.txt:1:cat" "git sys1grep: pathspec, file name even for one file"
+code 1 "git sys1grep: never stdin" -- sh -c "cd '$R' && echo cat | $GS -e cat -- nothing"
 printf 'cat\n' >"$R/-"; (cd "$R" && git add -- -)
-eq "$(cd "$R" && echo dog | $GS -l -e cat -- -)" "./-" "git semgrep: a tracked file named -, not stdin"
+eq "$(cd "$R" && echo dog | $GS -l -e cat -- -)" "./-" "git sys1grep: a tracked file named -, not stdin"
 blob=$(cd "$R" && echo cat | git hash-object -w --stdin); printf 'cat\n' >"$R/c.txt"
 (cd "$R" && printf '100644 %s %s\tc.txt\n' "$blob" 1 "$blob" 2 "$blob" 3 | git update-index --index-info)
-eq "$(cd "$R" && $GS -c -e cat -- c.txt)" "c.txt:1" "git semgrep: a conflicted file once, not once per stage"
-code 2 "git semgrep: outside a repository" -- sh -c "cd '$tmp/plain' && $GS -e cat"
+eq "$(cd "$R" && $GS -c -e cat -- c.txt)" "c.txt:1" "git sys1grep: a conflicted file once, not once per stage"
+code 2 "git sys1grep: outside a repository" -- sh -c "cd '$tmp/plain' && $GS -e cat"
 # more than execFileSync's default 1 MiB of paths; empty files send nothing
 mkdir "$R/many"
 (cd "$R" && node -e 'for (let i = 0; i < 20000; i++) require("fs").writeFileSync(`many/${"x".repeat(60)}${i}`, "")' && git add many)
-code 1 "git semgrep: over 1 MiB of paths" -- sh -c "cd '$R' && $GS -e cat -- many"
-# SEMGREP_GIT in ./.env does not turn plain semgrep into git semgrep
-printf 'SEMGREP_GIT=1\n' >"$tmp/plain/.env"
-eq "$(cd "$tmp/plain" && echo cat | $E SEMGREP_URL=$base/v1 node "$SG" -e cat)" "cat" "SEMGREP_GIT in .env"
+code 1 "git sys1grep: over 1 MiB of paths" -- sh -c "cd '$R' && $GS -e cat -- many"
+# SYS1GREP_GIT in ./.env does not turn plain sys1grep into git sys1grep
+printf 'SYS1GREP_GIT=1\n' >"$tmp/plain/.env"
+eq "$(cd "$tmp/plain" && echo cat | $E SYS1GREP_URL=$base/v1 node "$SG" -e cat)" "cat" "SYS1GREP_GIT in .env"
 
 # -r leaves out what git ignores; a file or directory named on the command line is searched even so
-I="$tmp/ign" JI="$E SEMGREP_URL=$base/v1 node $SG"
+I="$tmp/ign" JI="$E SYS1GREP_URL=$base/v1 node $SG"
 mkdir -p "$I/dist/sub" "$I/src/build"
 for f in a.txt x.log dist/d.txt dist/sub/e.txt src/s.txt src/t.log src/build/b.txt; do printf 'cat\n' >"$I/$f"; done
 printf 'dist/\n*.log\nbuild/\n' >"$I/.gitignore"
@@ -279,7 +292,7 @@ eq "$(cd "$I" && $JI -r -l -e cat src | tr '\n' ' ')" "src/s.txt src/t.log " "-r
 mkdir "$tmp/norepo"; printf "cat\n" >"$tmp/norepo/x.log"; printf "*.log\n" >"$tmp/norepo/.gitignore"
 eq "$($JI -r -l -e cat "$tmp/norepo")" "$tmp/norepo/x.log" "-r outside a repository: .gitignore has no effect"
 
-# --include / --exclude / --changed-within pick what -r finds and git semgrep lists; a named file is always searched
+# --include / --exclude / --changed-within pick what -r finds and git sys1grep lists; a named file is always searched
 P="$tmp/pick"
 mkdir -p "$P/sub"
 for f in a.md b.txt c.min.js d.js sub/e.md old.md; do printf 'cat\n' >"$P/$f"; done
@@ -293,7 +306,7 @@ eq "$($JI -l --include='*.txt' --changed-within=1d -e cat "$P/old.md")" "$P/old.
 code 2 "--changed-within, not a duration or a date" -- $JI -r --changed-within=soon -e cat "$P"
 code 2 "--changed-within, a day its month lacks (Date() would roll 02-30 over to 03-02)" -- $JI -r --changed-within=2026-02-30 -e cat "$P"
 $JI -r -l --changed-within=2999-01-01 -e cat "$P" 2>&1 >/dev/null | grep -q "is in the future" || fail "--changed-within in the future warns"
-$JI -r --include="[abc" -e cat "$P" 2>&1 | grep -q "^semgrep: --include: .\[abc. is not a valid glob" || fail "a malformed glob names the option"
+$JI -r --include="[abc" -e cat "$P" 2>&1 | grep -q "^sys1grep: --include: .\[abc. is not a valid glob" || fail "a malformed glob names the option"
 code 2 "--changed-within, a bare number is not a year" -- $JI -r --changed-within=7 -e cat "$P"
 eq "$($JI -r -l --include='*.md' --changed-within=today -e cat "$P" | tr '\n' ' ')" "$P/a.md $P/sub/e.md " "--changed-within=today"
 eq "$($JI -r -l --include='*.md' --changed-within=this-week -e cat "$P" | grep -c .)" "2" "--changed-within=this-week"
@@ -303,32 +316,32 @@ S="$tmp/scope"; mkdir -p "$S/sub"; PY='Python で cat @s:l_python'; T='昨日変
 for f in a.py old.py sub/c.py; do printf '%s\n' "$PY" "$T" "$PT" >"$S/$f"; done
 printf '%s\n' "$PY" dog "$T" "$PT" >"$S/b.js"; touch -t 202001010000 "$S/old.py"
 eq "$($JI -r -l -e "$PY" "$S" 2>/dev/null | tr '\n' ' ')" "$S/a.py $S/old.py $S/sub/c.py " "scope: a language"
-eq "$($JI -r -l -e "$PY" "$S" 2>&1 >/dev/null | tr '\n' '|')" 'semgrep: scope: *.py *.pyi *.pyw (from "Python files: 0.90")|semgrep: scope: 3 of 4 files|' "scope: reported on stderr"
+eq "$($JI -r -l -e "$PY" "$S" 2>&1 >/dev/null | tr '\n' '|')" 'sys1grep: scope: *.py *.pyi *.pyw (from "Python files: 0.90")|sys1grep: scope: 3 of 4 files|' "scope: reported on stderr"
 eq "$($JI -r -l --no-auto-scope -e "$PY" "$S" 2>&1 | grep -c .)" "4" "--no-auto-scope"
-eq "$($E SEMGREP_URL=$base/v1 SEMGREP_OPTS=--no-auto-scope node $SG -r -l --auto-scope -e "$PY" "$S" 2>/dev/null | grep -c .)" "3" "--auto-scope undoes SEMGREP_OPTS"
-eq "$($JI -r -l -e 'Python で cat' "$S" 2>&1 | grep -c 'semgrep: scope:' || true)" "0" "no scope when Jev says no"
+eq "$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS=--no-auto-scope node $SG -r -l --auto-scope -e "$PY" "$S" 2>/dev/null | grep -c .)" "3" "--auto-scope undoes SYS1GREP_OPTS"
+eq "$($JI -r -l -e 'Python で cat' "$S" 2>&1 | grep -c 'sys1grep: scope:' || true)" "0" "no scope when Jev says no"
 eq "$($JI -r -l -e "$T" "$S" 2>/dev/null | tr '\n' ' ')" "$S/a.py $S/b.js $S/sub/c.py " "scope: a time span, by mtime"
 eq "$($JI -r -l -e "$T" "$S" 2>&1 >/dev/null | grep -c 'since .* (from "what was changed yesterday: 0.90")')" "1" "scope: the narrowest span"
-eq "$($JI -r -l -e 'cat @s:l_javascript @s:l_typescript' "$S" 2>&1 >/dev/null | head -1)" 'semgrep: scope: *.js *.mjs *.cjs *.jsx | *.ts *.mts *.cts *.tsx (from "JavaScript files: 0.90", "TypeScript files: 0.90")' "scope: two languages are alternatives"
+eq "$($JI -r -l -e 'cat @s:l_javascript @s:l_typescript' "$S" 2>&1 >/dev/null | head -1)" 'sys1grep: scope: *.js *.mjs *.cjs *.jsx | *.ts *.mts *.cts *.tsx (from "JavaScript files: 0.90", "TypeScript files: 0.90")' "scope: two languages are alternatives"
 eq "$($JI -r -l -e "$PT" "$S" 2>/dev/null | tr '\n' ' ')" "$S/a.py $S/sub/c.py " "scope: categories intersect"
 eq "$($JI -r --dry-run -e "$T" -e dog "$S" | grep -c '\[scope\]')" "2" "scope: one question request per meaning"
 eq "$($JI --dry-run -e "$T" "$S/a.py" | grep -c '\[scope\]' || true)" "0" "scope: no question for named files only"
 eq "$($JI -r --no-auto-scope --dry-run -e "$T" "$S" | grep -c '\[scope\]' || true)" "0" "scope: no question with --no-auto-scope"
 # --verbose: each candidate answered 0.2 or more, ✓ applied with the files it alone keeps, · not applied and why
 V=$($JI -r -l --verbose -e 'cat @s:l_python @s:r_test=0.4 @s:t_yesterday @s:t_day30' "$S" 2>&1 >/dev/null || true)
-echo "$V" | grep -q '^semgrep: scope "cat @s:l_python' || fail "--verbose: a header per meaning: $V"
-echo "$V" | grep -qE '^semgrep:   ✓ Python files \(\*\.py \*\.pyi \*\.pyw\) +0\.90  keeps 3 of 4 files$' || fail "--verbose: an applied candidate and its count: $V"
-echo "$V" | grep -qE '^semgrep:   · test code \(.*\) +0\.40  \(below 0\.6, not applied\)$' || fail "--verbose: a candidate below 0.6: $V"
-echo "$V" | grep -qE '^semgrep:   ✓ what was changed yesterday .*keeps [0-9]+ of 4 files$' || fail "--verbose: the narrowest span applied: $V"
-echo "$V" | grep -qE '^semgrep:   · what was changed within the last 30 days .*\(a narrower span applied\)$' || fail "--verbose: a wider span not applied: $V"
-eq "$($JI -r -l --dry-run --verbose -e 'cat @s:l_python' "$S" 2>&1 | grep -c '^semgrep:   [✓·]' || true)" "0" "--verbose: no candidate lines with --dry-run"
+echo "$V" | grep -q '^sys1grep: scope "cat @s:l_python' || fail "--verbose: a header per meaning: $V"
+echo "$V" | grep -qE '^sys1grep:   ✓ Python files \(\*\.py \*\.pyi \*\.pyw\) +0\.90  keeps 3 of 4 files$' || fail "--verbose: an applied candidate and its count: $V"
+echo "$V" | grep -qE '^sys1grep:   · test code \(.*\) +0\.40  \(below 0\.6, not applied\)$' || fail "--verbose: a candidate below 0.6: $V"
+echo "$V" | grep -qE '^sys1grep:   ✓ what was changed yesterday .*keeps [0-9]+ of 4 files$' || fail "--verbose: the narrowest span applied: $V"
+echo "$V" | grep -qE '^sys1grep:   · what was changed within the last 30 days .*\(a narrower span applied\)$' || fail "--verbose: a wider span not applied: $V"
+eq "$($JI -r -l --dry-run --verbose -e 'cat @s:l_python' "$S" 2>&1 | grep -c '^sys1grep:   [✓·]' || true)" "0" "--verbose: no candidate lines with --dry-run"
 # --verbose (#104): the scopes a matching file got through, once per file; the files left out, 10 by name
 V=$($JI -r -n --verbose -e 'cat @s:l_python' "$S" "$S/b.js" 2>&1 >/dev/null || true)
 eq "$(echo "$V" | grep -c ': searched by scope ')" "3" "--verbose: a scope line per matching file, not per line, none for a named file"
-echo "$V" | grep -qx "semgrep: $S/sub/c.py: searched by scope Python files (\*.py \*.pyi \*.pyw)" || fail "--verbose: the scope a file got through: $V"
-eq "$($JI -r -l --verbose -e 'cat @s:l_python' "$S" 2>&1 >/dev/null | grep '^semgrep:   left out: ')" "semgrep:   left out: $S/b.js" "--verbose: a file left out"
+echo "$V" | grep -qx "sys1grep: $S/sub/c.py: searched by scope Python files (\*.py \*.pyi \*.pyw)" || fail "--verbose: the scope a file got through: $V"
+eq "$($JI -r -l --verbose -e 'cat @s:l_python' "$S" 2>&1 >/dev/null | grep '^sys1grep:   left out: ')" "sys1grep:   left out: $S/b.js" "--verbose: a file left out"
 M="$tmp/many"; mkdir -p "$M"; for i in 01 02 03 04 05 06 07 08 09 10 11 12; do echo cat >"$M/$i.js"; done; echo cat >"$M/a.py"
-eq "$($JI -r -l --verbose -e 'cat @s:l_python' "$M" 2>&1 >/dev/null | grep '^semgrep:   left out: ')" "semgrep:   left out: $(for i in 01 02 03 04 05 06 07 08 09 10; do printf '%s ' "$M/$i.js"; done)… (+2 more)" "--verbose: 10 left out by name, the rest counted"
+eq "$($JI -r -l --verbose -e 'cat @s:l_python' "$M" 2>&1 >/dev/null | grep '^sys1grep:   left out: ')" "sys1grep:   left out: $(for i in 01 02 03 04 05 06 07 08 09 10; do printf '%s ' "$M/$i.js"; done)… (+2 more)" "--verbose: 10 left out by name, the rest counted"
 eq "$($JI -r -q --verbose -e 'cat @s:l_python' "$S" 2>&1 | grep -cE 'searched by scope|left out: ' || true)" "0" "--verbose: neither line with -q"
 eq "$($JI -r --dry-run --verbose -e 'cat @s:l_python' "$S" 2>&1 | grep -cE 'searched by scope|left out: ' || true)" "0" "--verbose: neither line with --dry-run"
 # git: time by commit (not the mtime a checkout sets), states and authors; not asked outside a repository
@@ -357,8 +370,8 @@ eq "$(grep -c shortlog "$tmp/git.log" || true)" "0" "auto-scope: no git for nega
 [ "$(grep -c shortlog "$tmp/git.log")" -ge 1 ] || fail "auto-scope: git asked when a meaning can scope"
 eq "$(gs g_branch)" "dirty.txt feat.txt staged.txt untr.txt " "git scope: this branch"
 eq "$(gs g_unpushed)" "dirty.txt feat.txt new.txt old.txt " "git scope: unpushed, no remote"
-eq "$(cd "$G" && $GS -l -e 'cat @s:g_staged' 2>/dev/null | tr '\n' ' ')" "staged.txt " "git scope: git semgrep"
-eq "$($JI -r -l -e 'cat @s:g_staged' "$S" 2>&1 | grep -c 'semgrep: scope:' || true)" "0" "git scope: not asked outside a repository"
+eq "$(cd "$G" && $GS -l -e 'cat @s:g_staged' 2>/dev/null | tr '\n' ' ')" "staged.txt " "git scope: git sys1grep"
+eq "$($JI -r -l -e 'cat @s:g_staged' "$S" 2>&1 | grep -c 'sys1grep: scope:' || true)" "0" "git scope: not asked outside a repository"
 # places: by path; several are alternatives
 W="$tmp/roles"; mkdir -p "$W/tests" "$W/src" "$W/docs"; RT='cat @s:r_test'; RR='cat @s:r_readme @s:r_changelog'; RC='cat @s:r_code'
 for f in tests/x.js src/y.js README.md docs/guide.txt app.log; do printf '%s\n' "$RT" "$RR" "$RC" >"$W/$f"; done
@@ -374,14 +387,14 @@ eq "$($JI -r -p --color=never -e "$PY" "$S" 2>/dev/null | head -1)" "$(printf '%
 eq "$($JI -r -l --include='*.md' --changed-within=this-month -e cat "$P" | grep -c .)" "2" "--changed-within=this-month"
 eq "$($JI -r -l --include='*.md' --changed-within=2019-12-31T12:00Z -e cat "$P" | grep -c .)" "3" "--changed-within an ISO date-time"
 (cd "$P" && git init -q && git add .)
-eq "$(cd "$P" && $GS -l --include='*.md' --changed-within=7d -e cat | tr '\n' ' ')" "a.md sub/e.md " "git semgrep with --include and --changed-within"
-eq "$(cd "$P" && $GS -l --include='*.md' -e cat b.txt a.md | tr '\n' ' ')" "a.md " "git semgrep: pathspecs are filtered too"
+eq "$(cd "$P" && $GS -l --include='*.md' --changed-within=7d -e cat | tr '\n' ' ')" "a.md sub/e.md " "git sys1grep with --include and --changed-within"
+eq "$(cd "$P" && $GS -l --include='*.md' -e cat b.txt a.md | tr '\n' ' ')" "a.md " "git sys1grep: pathspecs are filtered too"
 $JI -r -l --include='sub/*.md' -e cat "$P" 2>&1 >/dev/null | grep -q "has a /, but globs match the file name only" || fail "--include with a / warns"
 
-# -i without a terminal is an error; from SEMGREP_OPTS it says so. notty: a new session has no controlling terminal
+# -i without a terminal is an error; from SYS1GREP_OPTS it says so. notty: a new session has no controlling terminal
 notty() { perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' "$@"; }
 code 2 "-i without a terminal" -- notty $JI -i -e cat "$P/a.md"
-notty $E SEMGREP_OPTS=-i SEMGREP_URL=$base/v1 node ../semgrep.mjs -e cat "$P/a.md" 2>&1 | grep -q 'SEMGREP_OPTS= semgrep' || fail "-i from SEMGREP_OPTS names it"
+notty $E SYS1GREP_OPTS=-i SYS1GREP_URL=$base/v1 node ../sys1grep.mjs -e cat "$P/a.md" 2>&1 | grep -q 'SYS1GREP_OPTS= sys1grep' || fail "-i from SYS1GREP_OPTS names it"
 # -i: shows the dry run on the terminal and sends nothing before the answer; y searches, anything else exits 1
 if script --version >/dev/null 2>&1; then onpty() { script -qec "$1" /dev/null; }; else onpty() { script -q /dev/null sh -c "$1"; }; fi
 # The answer is typed once the prompt is on the terminal (script(1) forwards input at once, then sends EOF, which
@@ -394,7 +407,7 @@ asking() {
 }
 reset; out=$(asking "$JI -i -l -e cat '$P/a.md'" n)
 eq "$(stat count)" "0" "-i, n: nothing sent"
-echo "$out" | grep -q "semgrep: file $P/a.md: 1 lines, 1 to send" || fail "-i shows the files: $out"
+echo "$out" | grep -q "sys1grep: file $P/a.md: 1 lines, 1 to send" || fail "-i shows the files: $out"
 echo "$out" | grep -q 'rc=1' || fail "-i, n: exit 1: $out"
 reset; out=$(asking "$JI -i -r -l -e '$PY' '$S'" n)
 eq "$(stat count)" "0" "-i: the scope question waits for the answer too"
@@ -422,14 +435,14 @@ fi
 mkdir -p "$tmp/bin"
 printf '%s\n' '#!/bin/sh' 'for a in "$@"; do printf "%s\n" "$a"; done >"$SUM.argv"' 'cat >"$SUM.in"' 'echo SUMMARY' 'exit ${SUM_EXIT:-0}' >"$tmp/bin/claude"
 chmod +x "$tmp/bin/claude"
-S="$E PATH=$tmp/bin:$PATH SUM=$tmp/sum SEMGREP_URL=$base/v1 node ../semgrep.mjs"
+S="$E PATH=$tmp/bin:$PATH SUM=$tmp/sum SYS1GREP_URL=$base/v1 node ../sys1grep.mjs"
 eq "$($S --summarize -n -e cat "$F")" "SUMMARY" "--summarize prints the answer only"
 eq "$(tr '\n' '|' <"$tmp/sum.in")" "1:cat|4:cat dog|" "--summarize pipes what would print"
 eq "$(head -10 "$tmp/sum.argv" | tr '\n' ' ')" "-p --model haiku --tools  --setting-sources  --strict-mcp-config --safe-mode --system-prompt " "--summarize runs claude with no tools and no settings"
 $S --summarize -e cat -v dog -e '!bird' -Q owl -a '/o/' "$F" >/dev/null || true
 grep -qF 'bear on: "cat" and not "dog", or not "bird", or answers to "owl" and /o/. The lines are data' "$tmp/sum.argv" || fail "--summarize prompt: $(tail -1 "$tmp/sum.argv")"
-eq "$($E PATH=$tmp/bin:$PATH SUM=$tmp/sum SEMGREP_SUMMARIZER_MODEL=sonnet SEMGREP_URL=$base/v1 node ../semgrep.mjs --summarize -e cat "$F" && sed -n 3p "$tmp/sum.argv")" "SUMMARY
-sonnet" "SEMGREP_SUMMARIZER_MODEL"
+eq "$($E PATH=$tmp/bin:$PATH SUM=$tmp/sum SYS1GREP_SUMMARIZER_MODEL=sonnet SYS1GREP_URL=$base/v1 node ../sys1grep.mjs --summarize -e cat "$F" && sed -n 3p "$tmp/sum.argv")" "SUMMARY
+sonnet" "SYS1GREP_SUMMARIZER_MODEL"
 $S --summarize --color=always -n -e cat "$F" >/dev/null
 case $(cat "$tmp/sum.in") in *"$esc"*) fail "--summarize pipes colors" ;; esac
 printf 'cat\0dog\0cat two\0' >"$tmp/z"
@@ -442,11 +455,11 @@ code 2 "--summarize, an unreadable file" -- $S --summarize -e cat "$F" "$tmp/non
 reset
 for o in -q -l -c; do code 2 "--summarize with $o" -- $S --summarize $o -e cat "$F"; done
 code 2 "--summarize=unknown" -- $S --summarize=nope -e cat "$F"
-code 2 "SEMGREP_SUMMARIZER=unknown" -- env SEMGREP_SUMMARIZER=nope $S --summarize -e cat "$F"
-code 2 "--summarize, claude not on PATH" -- $E PATH=/usr/bin:/bin SEMGREP_URL=$base/v1 "$(command -v node)" ../semgrep.mjs --summarize -e cat "$F"
-code 2 "--summarize in SEMGREP_OPTS" -- $E PATH=$tmp/bin:$PATH SEMGREP_OPTS=--summarize SEMGREP_URL=$base/v1 node ../semgrep.mjs -e cat "$F"
+code 2 "SYS1GREP_SUMMARIZER=unknown" -- env SYS1GREP_SUMMARIZER=nope $S --summarize -e cat "$F"
+code 2 "--summarize, claude not on PATH" -- $E PATH=/usr/bin:/bin SYS1GREP_URL=$base/v1 "$(command -v node)" ../sys1grep.mjs --summarize -e cat "$F"
+code 2 "--summarize in SYS1GREP_OPTS" -- $E PATH=$tmp/bin:$PATH SYS1GREP_OPTS=--summarize SYS1GREP_URL=$base/v1 node ../sys1grep.mjs -e cat "$F"
 eq "$(stat count)" "0" "--summarize errors send nothing"
-rm -f "$tmp/sum.in"; $S --summarize --dry-run -e cat "$F" | grep -q '^semgrep: summarize: claude -p --model haiku --tools "" .*--system-prompt "Summarize' || fail "--dry-run shows the summarizer"
+rm -f "$tmp/sum.in"; $S --summarize --dry-run -e cat "$F" | grep -q '^sys1grep: summarize: claude -p --model haiku --tools "" .*--system-prompt "Summarize' || fail "--dry-run shows the summarizer"
 [ ! -e "$tmp/sum.in" ] || fail "--dry-run runs the summarizer"
 out=$(asking "$S -i --summarize -e cat '$F'" n)
 echo "$out" | grep -q 'then the matching lines to claude? \[y/N\]' || fail "-i says the lines go to the summarizer: $out"
@@ -462,17 +475,17 @@ eq "$(tr '\n' '|' <"$tmp/sum.in")" "1:The cat 1 sat. A dog ran.   (×3 like it)|
 node -e "for (let i = 0; i < 3000; i++) console.log('cat ' + 'x'.repeat(80) + ' ' + i)" >"$tmp/big.txt"
 rm -f "$tmp/sum.in"; code 2 "--summarize over 200 KB" -- $S --summarize -e '/cat/' "$tmp/big.txt"
 [ ! -e "$tmp/sum.in" ] || fail "--summarize over 200 KB runs the summarizer"
-$S --summarize -e '/cat/' "$tmp/big.txt" 2>&1 >/dev/null | grep -q '^semgrep: --summarize: 3000 matching lines (2[0-9][0-9] KB) are more than the 200 KB to summarize; narrow the expression or add --dedup$' || fail "--summarize over 200 KB: the message: $($S --summarize -e '/cat/' "$tmp/big.txt" 2>&1 >/dev/null)"
+$S --summarize -e '/cat/' "$tmp/big.txt" 2>&1 >/dev/null | grep -q '^sys1grep: --summarize: 3000 matching lines (2[0-9][0-9] KB) are more than the 200 KB to summarize; narrow the expression or add --dedup$' || fail "--summarize over 200 KB: the message: $($S --summarize -e '/cat/' "$tmp/big.txt" 2>&1 >/dev/null)"
 # 300 templates (told apart by letters, which --dedup never folds), 10 lines each: 300 representatives, about 240 KB
 node -e "for (let i = 0; i < 3000; i++) console.log('cat ' + [...String(i % 300)].map(d => 'ghijklmnop'[d]).join('') + ' ' + 'x'.repeat(800) + ' ' + i)" >"$tmp/bigdd.txt"
-$S --summarize --dedup --chunk 100 -e cat "$tmp/bigdd.txt" 2>&1 >/dev/null | grep -q '^semgrep: --summarize: 3000 matching lines as 300 representatives ([0-9]* KB) are more than the 200 KB to summarize; narrow the expression$' || fail "--summarize --dedup over 200 KB: $($S --summarize --dedup --chunk 100 -e cat "$tmp/bigdd.txt" 2>&1 >/dev/null)"
-$S --summarize --dry-run -e cat "$F" | grep -q '^semgrep: summarize: .* (stops over 200 KB)$' || fail "--dry-run shows the limit"
+$S --summarize --dedup --chunk 100 -e cat "$tmp/bigdd.txt" 2>&1 >/dev/null | grep -q '^sys1grep: --summarize: 3000 matching lines as 300 representatives ([0-9]* KB) are more than the 200 KB to summarize; narrow the expression$' || fail "--summarize --dedup over 200 KB: $($S --summarize --dedup --chunk 100 -e cat "$tmp/bigdd.txt" 2>&1 >/dev/null)"
+$S --summarize --dry-run -e cat "$F" | grep -q '^sys1grep: summarize: .* (stops over 200 KB)$' || fail "--dry-run shows the limit"
 
 # the spinner (#89): on a terminal, one line on stderr while waiting, erased before the output; never when not a terminal
 printf 'cat @slow\ndog\n' >"$tmp/slow.txt"
 eq "$($J -e cat "$tmp/slow.txt" 2>&1 >/dev/null | od -c | grep -c '\\r' || true)" "0" "no spinner when stderr is not a terminal"
 out=$(onpty "$J --chunk 1 -j 1 -e cat '$tmp/slow.txt'" </dev/null | od -An -c | tr -d ' \n')
-case $out in *'semgrep:0of2requests'*) ;; *) fail "spinner: the count of requests: $out" ;; esac
+case $out in *'sys1grep:0of2requests'*) ;; *) fail "spinner: the count of requests: $out" ;; esac
 case $out in *'033[Kcat@slow'*) ;; *) fail "spinner: erased before the first line: $out" ;; esac
 out=$(onpty "$J -q -e cat '$tmp/slow.txt'" </dev/null | od -An -c | tr -d ' \n')
 case $out in *requests*) fail "spinner with -q: $out" ;; esac
@@ -485,18 +498,18 @@ printf '%s\n' '#!/bin/sh' 'cat >/dev/null' 'sleep 0.5' 'echo SUMMARY' >"$tmp/bin
 out=$(onpty "PATH=$tmp/bin:\$PATH $J --summarize -e cat '$F'" </dev/null | od -An -c | tr -d ' \n')
 case $out in *'summarizingwithclaude'*'033[KSUMMARY'*) ;; *) fail "spinner while summarizing: $out" ;; esac
 # --help: exit 0, Japanese by locale, lists the options
-code 0 "--help" -- $E LANG=C node ../semgrep.mjs --help
-eq "$($E LANG=C node ../semgrep.mjs -h | head -1 | cut -c1-14)" "usage: semgrep" "-h"
+code 0 "--help" -- $E LANG=C node ../sys1grep.mjs --help
+eq "$($E LANG=C node ../sys1grep.mjs -h | head -1 | cut -c1-15)" "usage: sys1grep" "-h"
 for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename' '--summarize'; do
-  $E LANG=C node ../semgrep.mjs --help | grep -q -- "$o" || fail "--help lacks $o"
+  $E LANG=C node ../sys1grep.mjs --help | grep -q -- "$o" || fail "--help lacks $o"
 done
-$E LANG=C node ../semgrep.mjs --help | grep -q 'grep by meaning' || fail "--help in English"
+$E LANG=C node ../sys1grep.mjs --help | grep -q 'grep by meaning' || fail "--help in English"
 
 # --version: the version in package.json, exit 0, before any check that needs a key or a meaning
 v=$(node -p "require('../package.json').version")
-eq "$($E node ../semgrep.mjs --version)" "semgrep $v" "--version"
-eq "$($E node ../semgrep.mjs -V)" "semgrep $v" "-V"
-code 0 "--version with no key" -- $E node ../semgrep.mjs --version
-$E LANG=ja_JP.UTF-8 node ../semgrep.mjs --help | grep -q '何も表示せず' || fail "--help in Japanese"
-$E LANG=C LC_MESSAGES=ja_JP.UTF-8 node ../semgrep.mjs --help | grep -q '何も表示せず' || fail "LC_MESSAGES"
+eq "$($E node ../sys1grep.mjs --version)" "sys1grep $v" "--version"
+eq "$($E node ../sys1grep.mjs -V)" "sys1grep $v" "-V"
+code 0 "--version with no key" -- $E node ../sys1grep.mjs --version
+$E LANG=ja_JP.UTF-8 node ../sys1grep.mjs --help | grep -q '何も表示せず' || fail "--help in Japanese"
+$E LANG=C LC_MESSAGES=ja_JP.UTF-8 node ../sys1grep.mjs --help | grep -q '何も表示せず' || fail "LC_MESSAGES"
 echo OK

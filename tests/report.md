@@ -1,4 +1,4 @@
-# semgrep LLM-as-judge report
+# sys1grep LLM-as-judge report
 
 judge: claude -p --model sonnet / corpus: 51 lines / cases: 10 / 2026-09-19
 
@@ -22,34 +22,34 @@ judge: claude -p --model sonnet / corpus: 51 lines / cases: 10 / 2026-09-19
 
 ## ケース別 (最良の閾値で評価)
 
-| case | args | judge | semgrep | P | R |
+| case | args | judge | sys1grep | P | R |
 |---|---|---|---|---|---|
 | single/ja-meaning | `-e ネットワークやリモート接続の障害` | 6 | 8 | 0.75 | 1.00 |
 
-  semgrep のみ (judge は不一致):
+  sys1grep のみ (judge は不一致):
   - L5: 2026-09-19 08:02:31 INFO  retrying payment-gateway request (attempt 2/3)
   - L30: except ConnectionError as e:
 
 | single/abstract | `-e the writer expresses gratitude or satisfaction` | 3 | 4 | 0.75 | 1.00 |
 
-  semgrep のみ (judge は不一致):
+  sys1grep のみ (judge は不一致):
   - L47: ぼくのなつやすみは楽しかったです
 
 | single/angry-customer | `-e customer is angry or frustrated` | 5 | 5 | 1.00 | 1.00 |
 | or/refund-or-address | `-e customer is asking for a refund -e customer wants to change a delivery address` | 4 | 4 | 1.00 | 1.00 |
 | and/net-and-retry | `-e ネットワークやリモート接続の障害 -a a retry is happening or was attempted` | 0 | 1 | 0.00 | 0.00 |
 
-  semgrep のみ (judge は不一致):
+  sys1grep のみ (judge は不一致):
   - L5: 2026-09-19 08:02:31 INFO  retrying payment-gateway request (attempt 2/3)
 
 | andnot/error-not-network | `-e a server log line reporting an error or fatal condition -v the problem is about network connectivity` | 4 | 5 | 0.80 | 1.00 |
 
-  semgrep のみ (judge は不一致):
+  sys1grep のみ (judge は不一致):
   - L11: 2026-09-19 09:00:00 ERROR SSL handshake failed: certificate expired
 
 | ornot/code-or-not-english | `-e source code or SQL -e !written in English` | 23 | 25 | 0.92 | 1.00 |
 
-  semgrep のみ (judge は不一致):
+  sys1grep のみ (judge は不一致):
   - L3: 2026-09-19 08:01:15 WARN  slow query took 3200ms: SELECT * FROM orders
   - L49: API keys must never be committed to the repository.
 

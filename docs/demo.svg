@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="920" height="420" viewBox="0 0 920 420" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
-<title>semgrep demo: Ask in one language, find every language / Propositions, not topics / -Q finds the answer</title>
+<title>sys1grep demo: Ask in one language, find every language / Propositions, not topics / -Q finds the answer</title>
 <style>
 .a{opacity:0}
 .l0{animation:l0 30.75s linear infinite}@keyframes l0{0%,0.000%{opacity:0}0.488%,28.943%{opacity:1}29.919%,100%{opacity:0}}
@@ -43,11 +43,11 @@
 <rect width="100%" height="100%" rx="10" fill="#1e1e2e"/>
 <rect width="100%" height="28" rx="10" fill="#181825"/><rect y="18" width="100%" height="10" fill="#181825"/>
 <circle cx="18" cy="14" r="5" fill="#ff5f57"/><circle cx="36" cy="14" r="5" fill="#febc2e"/><circle cx="54" cy="14" r="5" fill="#28c840"/>
-<text x="74" y="18" fill="#6c7086" font-size="12">semgrep — real runs · full demo: uehaj.github.io/jev-semgrep</text>
+<text x="74" y="18" fill="#6c7086" font-size="12">sys1grep — real runs · full demo: uehaj.github.io/sys1grep</text>
 <text class="a l0 s0" x="18" y="44" xml:space="preserve"><tspan fill="#ffffff" font-weight="700" font-family="system-ui,sans-serif" font-size="15">Ask in one language, find every language</tspan></text>
 <text class="a l1 s0" x="18" y="64" xml:space="preserve"><tspan fill="#6c7086">One Japanese meaning, “the customer is asking for a refund”, finds refund requests in French, Russian, German,</tspan></text>
 <text class="a l2 s0" x="18" y="84" xml:space="preserve"><tspan fill="#6c7086">Spanish, Chinese and Korean — and skips the thank-you notes.</tspan></text>
-<text class="a l3 s0" x="18" y="124" xml:space="preserve"><tspan fill="#6c7086">$ </tspan><tspan fill="#cdd6f4">semgrep -n -p -e "顧客が返金を求めている" tests/multi.txt</tspan></text>
+<text class="a l3 s0" x="18" y="124" xml:space="preserve"><tspan fill="#6c7086">$ </tspan><tspan fill="#cdd6f4">sys1grep -n -p -e "顧客が返金を求めている" tests/multi.txt</tspan></text>
 <text class="a l4 s0" x="18" y="144" xml:space="preserve"><tspan fill="#8ce99a">1</tspan><tspan fill="#66d9e8">:</tspan><tspan fill="#cdd6f4">Je veux être remboursé, le produit est arrivé cassé.</tspan><tspan fill="#8ce99a">  [0.98]</tspan></text>
 <text class="a l5 s0" x="18" y="164" xml:space="preserve"><tspan fill="#8ce99a">3</tspan><tspan fill="#66d9e8">:</tspan><tspan fill="#cdd6f4">Я требую вернуть деньги, товар не работает.</tspan><tspan fill="#8ce99a">  [0.97]</tspan></text>
 <text class="a l6 s0" x="18" y="184" xml:space="preserve"><tspan fill="#8ce99a">5</tspan><tspan fill="#66d9e8">:</tspan><tspan fill="#cdd6f4">Ich möchte mein Geld zurück, das Gerät ist defekt.</tspan><tspan fill="#8ce99a">  [0.97]</tspan></text>
@@ -57,7 +57,7 @@
 <text class="a l10" x="18" y="44" xml:space="preserve"><tspan fill="#ffffff" font-weight="700" font-family="system-ui,sans-serif" font-size="15">Propositions, not topics</tspan></text>
 <text class="a l11" x="18" y="64" xml:space="preserve"><tspan fill="#6c7086">Six of these lines are “about a refund”. Only two are a customer asking for one. Vector search sees six</tspan></text>
 <text class="a l12" x="18" y="84" xml:space="preserve"><tspan fill="#6c7086">neighbours; Jev sees two true statements.</tspan></text>
-<text class="a l13" x="18" y="124" xml:space="preserve"><tspan fill="#6c7086">$ </tspan><tspan fill="#cdd6f4">semgrep -n -p -t 0 -e "customer is asking for a refund" tests/contrast.en.txt</tspan></text>
+<text class="a l13" x="18" y="124" xml:space="preserve"><tspan fill="#6c7086">$ </tspan><tspan fill="#cdd6f4">sys1grep -n -p -t 0 -e "customer is asking for a refund" tests/contrast.en.txt</tspan></text>
 <text class="a l14" x="18" y="144" xml:space="preserve"><tspan fill="#8ce99a">1</tspan><tspan fill="#66d9e8">:</tspan><tspan fill="#cdd6f4">I want a refund. The item was broken.</tspan><tspan fill="#8ce99a">  [0.99]</tspan></text>
 <text class="a l15" x="18" y="164" xml:space="preserve"><tspan fill="#8ce99a">2</tspan><tspan fill="#66d9e8">:</tspan><tspan fill="#cdd6f4">The refund has been processed. Please check your account.</tspan><tspan fill="#ff6b6b">  [0.11]</tspan></text>
 <text class="a l16" x="18" y="184" xml:space="preserve"><tspan fill="#8ce99a">3</tspan><tspan fill="#66d9e8">:</tspan><tspan fill="#cdd6f4">Our refund policy is within 30 days of purchase.</tspan><tspan fill="#ff6b6b">  [0.09]</tspan></text>
@@ -70,13 +70,13 @@
 <text class="a l23" x="18" y="44" xml:space="preserve"><tspan fill="#ffffff" font-weight="700" font-family="system-ui,sans-serif" font-size="15">-Q finds the answer</tspan></text>
 <text class="a l24" x="18" y="64" xml:space="preserve"><tspan fill="#6c7086">Ask the question as you would ask it. -e X finds lines that say X; -Q X finds lines that answer X. “The job</tspan></text>
 <text class="a l25" x="18" y="84" xml:space="preserve"><tspan fill="#6c7086">failed.” does not say the job succeeded, but it answers whether it did: no.</tspan></text>
-<text class="a l26" x="18" y="124" xml:space="preserve"><tspan fill="#6c7086">$ </tspan><tspan fill="#cdd6f4">echo "The job failed." | semgrep -n -e "Did the job succeed?"</tspan></text>
-<text class="a l27" x="18" y="164" xml:space="preserve"><tspan fill="#6c7086">$ </tspan><tspan fill="#cdd6f4">echo "The job failed." | semgrep -n -Q "Did the job succeed?"</tspan></text>
+<text class="a l26" x="18" y="124" xml:space="preserve"><tspan fill="#6c7086">$ </tspan><tspan fill="#cdd6f4">echo "The job failed." | sys1grep -n -e "Did the job succeed?"</tspan></text>
+<text class="a l27" x="18" y="164" xml:space="preserve"><tspan fill="#6c7086">$ </tspan><tspan fill="#cdd6f4">echo "The job failed." | sys1grep -n -Q "Did the job succeed?"</tspan></text>
 <text class="a l28" x="18" y="184" xml:space="preserve"><tspan fill="#8ce99a">1</tspan><tspan fill="#66d9e8">:</tspan><tspan fill="#cdd6f4">The job failed.</tspan></text>
-<text class="a l29" x="18" y="224" xml:space="preserve"><tspan fill="#6c7086">$ </tspan><tspan fill="#cdd6f4">semgrep -n -e "how to get a refund" tests/intent.txt</tspan></text>
+<text class="a l29" x="18" y="224" xml:space="preserve"><tspan fill="#6c7086">$ </tspan><tspan fill="#cdd6f4">sys1grep -n -e "how to get a refund" tests/intent.txt</tspan></text>
 <text class="a l30" x="18" y="244" xml:space="preserve"><tspan fill="#8ce99a">12</tspan><tspan fill="#66d9e8">:</tspan><tspan fill="#cdd6f4">Email support with your order number to receive a refund.</tspan></text>
 <text class="a l31" x="18" y="264" xml:space="preserve"><tspan fill="#8ce99a">13</tspan><tspan fill="#66d9e8">:</tspan><tspan fill="#cdd6f4">How do I get a refund?</tspan></text>
-<text class="a l32" x="18" y="304" xml:space="preserve"><tspan fill="#6c7086">$ </tspan><tspan fill="#cdd6f4">semgrep -n -Q "how to get a refund" tests/intent.txt</tspan></text>
+<text class="a l32" x="18" y="304" xml:space="preserve"><tspan fill="#6c7086">$ </tspan><tspan fill="#cdd6f4">sys1grep -n -Q "how to get a refund" tests/intent.txt</tspan></text>
 <text class="a l33" x="18" y="324" xml:space="preserve"><tspan fill="#8ce99a">12</tspan><tspan fill="#66d9e8">:</tspan><tspan fill="#cdd6f4">Email support with your order number to receive a refund.</tspan></text>
 <text class="a l34" x="18" y="364" xml:space="preserve"><tspan fill="#6c7086">A “no” answers a yes/no question too; a line that asks it (13) answers nothing. -Q X is shorthand for -e "the</tspan></text>
 <text class="a l35" x="18" y="384" xml:space="preserve"><tspan fill="#6c7086">line answers: X".</tspan></text>

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// semgrep: grep by meaning, scored line by line with Jev (TypeSafe System One).
-//   semgrep -e "network failure" -a "already retried" -e "customer wants a refund" FILE...
-//   semgrep -Q "why the job failed" FILE...   # -Q X is -e "the line answers: X": answering lines, not asking ones
+// sys1grep: grep by meaning, scored line by line with Jev (TypeSafe System One).
+//   sys1grep -e "network failure" -a "already retried" -e "customer wants a refund" FILE...
+//   sys1grep -Q "why the job failed" FILE...   # -Q X is -e "the line answers: X": answering lines, not asking ones
 //   -e / -Q terms are OR'd; -a / -v attach AND / AND NOT to the preceding term: (A and B and not C) or D.
 //   A leading ! negates just that meaning: -e A -e '!B' is A or not B.
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
@@ -11,19 +11,30 @@ import { dirname, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
 // Errors are one line plus exit code 2, like grep. No stack traces.
-const die = (msg, hint = true) => { console.error(`semgrep: ${msg}${hint ? "\nTry 'semgrep --help' for more information." : ''}`); process.exit(2); };
+const die = (msg, hint = true) => { console.error(`sys1grep: ${msg}${hint ? "\nTry 'sys1grep --help' for more information." : ''}`); process.exit(2); };
 process.on('uncaughtException', e => die(e.message));
 
-// Settings come from the environment; ~/.config/semgrep/.env fills in what it lacks. Never ./.env: the current
-// directory may be an untrusted checkout, and its .env could point SEMGREP_URL at a server that collects the key.
-const userEnv = `${homedir()}/.config/semgrep/.env`;
-if (existsSync(userEnv)) process.loadEnvFile(userEnv); // never overrides variables already set
-const { SEMGREP_URL, SEMGREP_MODEL, SEMGREP_API_KEY, TYPESAFE_API_KEY, SEMGREP_OPTS = '', SEMGREP_SUMMARIZER, SEMGREP_SUMMARIZER_MODEL } = process.env;
+// Settings come from the environment; ~/.config/sys1grep/.env fills in what it lacks. Never ./.env: the current
+// directory may be an untrusted checkout, and its .env could point SYS1GREP_URL at a server that collects the key.
+// For one minor release (removed in 1.0.0, see #93): fall back to the old SEMGREP_* names and
+// ~/.config/semgrep/.env, printing one deprecation line to stderr each time a fallback is actually used.
+const deprecated = (was, now) => console.error(`sys1grep: ${was} is deprecated; use ${now}`);
+const newUserEnv = `${homedir()}/.config/sys1grep/.env`;
+const oldUserEnv = `${homedir()}/.config/semgrep/.env`;
+if (existsSync(newUserEnv)) process.loadEnvFile(newUserEnv); // never overrides variables already set
+else if (existsSync(oldUserEnv)) { process.loadEnvFile(oldUserEnv); deprecated('~/.config/semgrep/.env', '~/.config/sys1grep/.env'); }
+const fromEnv = name => { // SYS1GREP_<name>, falling back to SEMGREP_<name>
+  if (process.env[`SYS1GREP_${name}`] === undefined && process.env[`SEMGREP_${name}`] !== undefined) deprecated(`SEMGREP_${name}`, `SYS1GREP_${name}`);
+  return process.env[`SYS1GREP_${name}`] ?? process.env[`SEMGREP_${name}`];
+};
+const SYS1GREP_URL = fromEnv('URL'), SYS1GREP_MODEL = fromEnv('MODEL'), SYS1GREP_API_KEY = fromEnv('API_KEY'),
+  SYS1GREP_OPTS = fromEnv('OPTS') ?? '', SYS1GREP_SUMMARIZER = fromEnv('SUMMARIZER'), SYS1GREP_SUMMARIZER_MODEL = fromEnv('SUMMARIZER_MODEL');
+const { TYPESAFE_API_KEY } = process.env;
 
 // A bare --color means --color=auto (as in grep); parseArgs cannot express an optional value, so fill it in first.
 // --no-filename is grep's name for --no-with-filename.
 const fill = a => (a === '--color' ? '--color=auto' : a === '--sentence' ? '--sentence=jev' : a === '--null-data' ? '-z' : a === '--no-filename' ? '--no-with-filename'
-  : a === '--summarize' ? `--summarize=${SEMGREP_SUMMARIZER || 'claude'}` : a);
+  : a === '--summarize' ? `--summarize=${SYS1GREP_SUMMARIZER || 'claude'}` : a);
 const OPTIONS = {
   e: { type: 'string', multiple: true },
   a: { type: 'string', multiple: true },
@@ -51,7 +62,7 @@ const OPTIONS = {
   'dry-run': { type: 'boolean', default: false }, // print the files and requests, send nothing
   verbose: { type: 'boolean', default: false }, // print the files and requests to stderr while searching
   interactive: { type: 'boolean', short: 'i', default: false }, // show what --dry-run would send, search on a yes
-  // which files -r finds and git semgrep lists; with -r a file named on the command line is always searched
+  // which files -r finds and git sys1grep lists; with -r a file named on the command line is always searched
   include: { type: 'string', multiple: true }, // only names matching one of these globs
   exclude: { type: 'string', multiple: true }, // not names matching one of these globs
   'changed-within': { type: 'string' }, // only files modified within 30m / 2h / 7d / 2w, since a date, today, ...
@@ -59,23 +70,23 @@ const OPTIONS = {
   color: { type: 'string', default: 'auto' }, // auto / always / never
   summarize: { type: 'string' }, // pipe what would print to this LLM CLI and print its answer instead
   // the API settings, each overriding its environment variable
-  'sys1-model': { type: 'string' }, // SEMGREP_MODEL
-  'sys1-url': { type: 'string' }, // SEMGREP_URL
-  'sys1-api-key': { type: 'string' }, // SEMGREP_API_KEY / TYPESAFE_API_KEY
+  'sys1-model': { type: 'string' }, // SYS1GREP_MODEL
+  'sys1-url': { type: 'string' }, // SYS1GREP_URL
+  'sys1-api-key': { type: 'string' }, // SYS1GREP_API_KEY / TYPESAFE_API_KEY
   help: { type: 'boolean', short: 'h', default: false },
   version: { type: 'boolean', short: 'V', default: false },
 };
-// SEMGREP_OPTS holds default options only: no meanings, no files, no --. It goes in front of the arguments, so the
+// SYS1GREP_OPTS holds default options only: no meanings, no files, no --. It goes in front of the arguments, so the
 // command line wins (a later value counts; --no-X clears a flag).
-const defaults = SEMGREP_OPTS.split(/\s+/).filter(Boolean).map(fill);
-let optsInteractive = false; // -i from SEMGREP_OPTS: a script without a terminal is told where it came from
+const defaults = SYS1GREP_OPTS.split(/\s+/).filter(Boolean).map(fill);
+let optsInteractive = false; // -i from SYS1GREP_OPTS: a script without a terminal is told where it came from
 try {
   const { tokens: t } = parseArgs({ args: defaults, options: OPTIONS, allowPositionals: true, allowNegative: true, tokens: true });
   optsInteractive = t.some(k => k.name === 'interactive' && !k.rawName.startsWith('--no-'));
-  // --summarize has no --no- form to turn it off again for -l / -c: SEMGREP_SUMMARIZER picks its TOOL instead.
+  // --summarize has no --no- form to turn it off again for -l / -c: SYS1GREP_SUMMARIZER picks its TOOL instead.
   const bad = t.find(k => k.kind !== 'option' || ['e', 'a', 'v', 'question', 'summarize'].includes(k.name));
-  if (bad) die(`SEMGREP_OPTS: ${bad.kind !== 'option' ? `'${bad.value ?? '--'}' is not an option` : bad.name === 'summarize' ? '--summarize is not allowed (set SEMGREP_SUMMARIZER to pick its TOOL)' : `${bad.name.length > 1 ? '--' : '-'}${bad.name} is not allowed (meanings go on the command line)`}`);
-} catch (e) { die(`SEMGREP_OPTS: ${e.message}`); }
+  if (bad) die(`SYS1GREP_OPTS: ${bad.kind !== 'option' ? `'${bad.value ?? '--'}' is not an option` : bad.name === 'summarize' ? '--summarize is not allowed (set SYS1GREP_SUMMARIZER to pick its TOOL)' : `${bad.name.length > 1 ? '--' : '-'}${bad.name} is not allowed (meanings go on the command line)`}`);
+} catch (e) { die(`SYS1GREP_OPTS: ${e.message}`); }
 const { values: opt, positionals: files, tokens } = parseArgs({
   args: [...defaults, ...process.argv.slice(2).map(fill)],
   options: OPTIONS,
@@ -84,9 +95,9 @@ const { values: opt, positionals: files, tokens } = parseArgs({
   tokens: true,
 });
 // --help: Japanese when the locale starts with ja, English otherwise
-const HELP_EN = `usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
+const HELP_EN = `usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
 grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is omitted.
-As git semgrep, FILE arguments are pathspecs and every tracked file is searched, like git grep.
+As git sys1grep, FILE arguments are pathspecs and every tracked file is searched, like git grep.
 
   -e MEANING   lines matching this meaning (several -e are OR'd)
   -Q, --question QUESTION  lines that answer QUESTION, not lines asking it; the same as
@@ -117,14 +128,14 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                .netrc, .npmrc, .git-credentials, *.pem, *.key, id_rsa*...). Every searched line is sent
                to the TypeSafe API. Inside a git repository, what git ignores (.gitignore) is skipped
                too; a file or directory named on the command line is searched even so
-  --include=GLOB, --exclude=GLOB  with -r and git semgrep, only files whose name matches GLOB (* ? [...]),
+  --include=GLOB, --exclude=GLOB  with -r and git sys1grep, only files whose name matches GLOB (* ? [...]),
                or not; both can be repeated. With -r a file named on the command line is always
-               searched; git semgrep's pathspecs are filtered like the rest.
+               searched; git sys1grep's pathspecs are filtered like the rest.
                * also matches a leading dot (*.md matches .notes.md), as in rg --glob
-  --changed-within=WHEN  with -r and git semgrep, only files modified within WHEN: 30m, 2h, 7d, 2w;
+  --changed-within=WHEN  with -r and git sys1grep, only files modified within WHEN: 30m, 2h, 7d, 2w;
                since a date or time (2026-09-01 is local midnight, 2026-09-01T09:00, ...Z); or today,
                this-week (from Monday) or this-month, in local time. By mtime, not git history
-  --no-auto-scope  do not narrow the files -r and git semgrep find by what a meaning says about them. By default
+  --no-auto-scope  do not narrow the files -r and git sys1grep find by what a meaning says about them. By default
                each meaning first asks Jev, in one small request, whether it restricts its matches to a
                language or format (Python files, YAML files, ...) or to what changed within a span (the last
                minute / hour, today, yesterday, the last 1 / 2 / 3 / 7 / 30 days, this month, last week, last
@@ -135,13 +146,13 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                commit since then, an uncommitted one its mtime
                (*.py *.pyi *.pyw; modified since then). Jev reads the whole meaning, so "案A、B、Cで" is not
                about C files. Per term: -e A -e B still searches B in the files A leaves out. Each scope goes
-               to stderr as semgrep: scope: ... (with --verbose, also the scopes each matching file got through
+               to stderr as sys1grep: scope: ... (with --verbose, also the scopes each matching file got through
                and the files left out); with -r a file named on the command line is never narrowed,
-               git semgrep's pathspecs are narrowed like the rest (as with --include)
-  --auto-scope turn it back on after --no-auto-scope in SEMGREP_OPTS
+               git sys1grep's pathspecs are narrowed like the rest (as with --include)
+  --auto-scope turn it back on after --no-auto-scope in SYS1GREP_OPTS
   -l           print only the names of files with a match, not the lines
   -H, --with-filename  prefix each line (and -c count) with its file name, even for a single file
-  --no-filename  never prefix file names, even with several files, -r or git semgrep
+  --no-filename  never prefix file names, even with several files, -r or git sys1grep
   -A NUM       print NUM lines of trailing context after each match (context lines use - as separator)
   -B NUM       print NUM lines of leading context before each match
   -C NUM       print NUM lines of context before and after (-A NUM -B NUM)
@@ -156,7 +167,7 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                several lines. Matching records are printed NUL-terminated too (as in grep -z); file names
                and counts stay on newlines. -n numbers records, -A/-B/-C count records, --chunk counts
                records. Pairs with tools that already emit records: git log -z, find -print0, xargs -0
-                 git log -z --format='%h %s %b' | semgrep -z -e "the change alters user-visible behaviour"
+                 git log -z --format='%h %s %b' | sys1grep -z -e "the change alters user-visible behaviour"
   --sentence[=HOW] judge each sentence instead of each line. Output is still the lines a matching sentence
                touches, with the sentence in bold yellow. Wrapped lines are joined before splitting,
                except at a blank line, next to brackets or ; (JSON, code), or before a line starting with
@@ -192,34 +203,34 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                file and line number use grep's colors; with -p, probabilities are green at or above
                the positive threshold, red below the negative one, yellow in between. NO_COLOR is honored
   --summarize[=TOOL]  pipe what would print (file names, -n, -A/-B/-C, -p) to TOOL, asked to summarize it as it
-               bears on the meanings, and print TOOL's answer instead. TOOL: claude (default, or SEMGREP_SUMMARIZER),
+               bears on the meanings, and print TOOL's answer instead. TOOL: claude (default, or SYS1GREP_SUMMARIZER),
                run as claude -p --model haiku with no tools and no settings. The matching lines are sent a second
                time, to TOOL's provider. No match runs nothing (exit 1); TOOL failing is exit 2. Not with -q, -l, -c.
                With --dedup, each template's representative goes once, marked (×N like it). Over 200 KB nothing
                is sent to TOOL (exit 2): narrow the expression or add --dedup
   --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
-               the API settings, overriding SEMGREP_MODEL, SEMGREP_URL, SEMGREP_API_KEY below.
-               A key on the command line shows up in ps and shell history; prefer ~/.config/semgrep/.env
+               the API settings, overriding SYS1GREP_MODEL, SYS1GREP_URL, SYS1GREP_API_KEY below.
+               A key on the command line shows up in ps and shell history; prefer ~/.config/sys1grep/.env
   -h, --help   this help (Japanese when LANG / LC_ALL / LC_MESSAGES starts with ja)
   -V, --version  print the version and exit
 
 Exit status: 0 matched / 1 no match / 2 error
 
-Environment (read from the environment, else from ~/.config/semgrep/.env; ./.env is never read):
-  SEMGREP_API_KEY    API key. Falls back to TYPESAFE_API_KEY. Get one at https://console.typesafe.ai/
-  SEMGREP_URL        endpoint (default https://api.typesafe.ai/v1/systemone). Any TypeSafe-compatible
+Environment (read from the environment, else from ~/.config/sys1grep/.env; ./.env is never read):
+  SYS1GREP_API_KEY    API key. Falls back to TYPESAFE_API_KEY. Get one at https://console.typesafe.ai/
+  SYS1GREP_URL        endpoint (default https://api.typesafe.ai/v1/systemone). Any TypeSafe-compatible
                      /v1/systemone works, e.g. https://openrouter.ai/api/v1/systemone
-  SEMGREP_MODEL      model id (default jev-latest)
-  SEMGREP_SUMMARIZER  the TOOL of a bare --summarize (default claude); it does not turn --summarize on
-  SEMGREP_SUMMARIZER_MODEL  the summarizer's model instead of its default (haiku for claude)
-  SEMGREP_OPTS       default options, split on spaces and put before the command line, which wins;
+  SYS1GREP_MODEL      model id (default jev-latest)
+  SYS1GREP_SUMMARIZER  the TOOL of a bare --summarize (default claude); it does not turn --summarize on
+  SYS1GREP_SUMMARIZER_MODEL  the summarizer's model instead of its default (haiku for claude)
+  SYS1GREP_OPTS       default options, split on spaces and put before the command line, which wins;
                      --no-X turns a boolean flag off (--color takes --color=never). Options only: no
-                     meanings, files or --. e.g. SEMGREP_OPTS='--level strict -n'. Scripts: SEMGREP_OPTS= semgrep
-  The key goes to SEMGREP_URL, whatever it is. With SEMGREP_URL set and no key, no auth header is sent.
-  e.g.  mkdir -p ~/.config/semgrep && echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env`;
-const HELP_JA = `usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
+                     meanings, files or --. e.g. SYS1GREP_OPTS='--level strict -n'. Scripts: SYS1GREP_OPTS= sys1grep
+  The key goes to SYS1GREP_URL, whatever it is. With SYS1GREP_URL set and no key, no auth header is sent.
+  e.g.  mkdir -p ~/.config/sys1grep && echo 'SYS1GREP_API_KEY=your-key' > ~/.config/sys1grep/.env`;
+const HELP_JA = `usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
 jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE 省略時は stdin。
-git semgrep として呼ぶと git grep と同じく FILE は pathspec になり、追跡中のファイルを全部探す。
+git sys1grep として呼ぶと git grep と同じく FILE は pathspec になり、追跡中のファイルを全部探す。
 
   -e MEANING   この意味に合う行 (複数指定は OR)
   -Q, --question QUESTION  QUESTION に答えている行 (尋ねている行ではない)。-e "the line answers: QUESTION"
@@ -250,11 +261,11 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                .git-credentials, *.pem, *.key, id_rsa*...) は飛ばす。git リポジトリの中では
                git が無視するもの (.gitignore) も飛ばす。コマンドラインで指定したファイル・ディレクトリは
                それでも探す。検索した行はすべて TypeSafe の API に送られる
-  --include=GLOB, --exclude=GLOB  -r と git semgrep で、名前が GLOB (* ? [...]) に合うファイルだけ
+  --include=GLOB, --exclude=GLOB  -r と git sys1grep で、名前が GLOB (* ? [...]) に合うファイルだけ
                (または合わないものだけ) を探す。複数指定可。-r ではコマンドラインで指定したファイルは
-               必ず探す。git semgrep の pathspec は他と同じく絞り込む。
+               必ず探す。git sys1grep の pathspec は他と同じく絞り込む。
                * は先頭のドットにも合う (*.md は .notes.md にも合う。rg --glob と同じ)
-  --changed-within=WHEN  -r と git semgrep で、WHEN 以内に更新したファイルだけを探す。30m / 2h / 7d / 2w、
+  --changed-within=WHEN  -r と git sys1grep で、WHEN 以内に更新したファイルだけを探す。30m / 2h / 7d / 2w、
                日付か日時以降 (2026-09-01 はその日のローカル時刻 0 時、2026-09-01T09:00、...Z)、
                または today / this-week (月曜から) / this-month (ローカル時刻)。git の履歴ではなく mtime で見る
   --no-auto-scope  意味の文面からファイルを絞り込まない。既定では意味ごとにまず Jev へ小さなリクエストを 1 つ
@@ -263,16 +274,16 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                いるか、置き場所 (テストコード、マイグレーション、README、CHANGELOG、文書、ソースコード、ログ) に
                限定しているか、git の状態 (未コミット、ステージ、未追跡、このブランチ、未プッシュ、自分が書いた)
                や作者 (コミットの多い 30 人) に限定しているかを聞く。リポジトリでは時期をコミットで見る
-               (コミット済みはそれ以降のコミットがあるもの、未コミットは mtime)。0.6 以上で yes なら、-r と git semgrep で見つけたファイルをそのファイル
+               (コミット済みはそれ以降のコミットがあるもの、未コミットは mtime)。0.6 以上で yes なら、-r と git sys1grep で見つけたファイルをそのファイル
                (*.py *.pyi *.pyw、それ以降に更新したもの) に絞る。Jev は意味全体を読むので、「案A、B、Cで」は
                C のファイルの話にならない。項ごとに効くので、-e A -e B は A が除いたファイルでも B を探す。
-               絞り込みは semgrep: scope: ... として stderr に出す (--verbose では、一致したファイルごとに通った
+               絞り込みは sys1grep: scope: ... として stderr に出す (--verbose では、一致したファイルごとに通った
                絞り込みと、除いたファイルも出す)。-r ではコマンドラインで指定したファイルは
-               絞らない。git semgrep の pathspec は他と同じく絞る (--include と同じ)
-  --auto-scope SEMGREP_OPTS の --no-auto-scope を打ち消して、絞り込みを有効に戻す
+               絞らない。git sys1grep の pathspec は他と同じく絞る (--include と同じ)
+  --auto-scope SYS1GREP_OPTS の --no-auto-scope を打ち消して、絞り込みを有効に戻す
   -l           一致した行ではなくファイル名だけを表示
   -H, --with-filename  1 ファイルだけでも、各行 (と -c の件数) の前にファイル名を付ける
-  --no-filename  複数ファイル・-r・git semgrep でもファイル名を付けない
+  --no-filename  複数ファイル・-r・git sys1grep でもファイル名を付けない
   -A NUM       一致行の後ろ NUM 行も表示 (grep と同じ。文脈行の区切りは - )
   -B NUM       一致行の前 NUM 行も表示
   -C NUM       前後 NUM 行を表示 (-A NUM -B NUM)
@@ -287,7 +298,7 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                一致したレコードも NUL 終端で出力する (grep -z と同じ)。ファイル名と件数は改行のまま。
                -n はレコード番号、-A/-B/-C は前後のレコード数、--chunk はレコード数を数える。
                レコードを出すツールとそのまま繋がる: git log -z、find -print0、xargs -0
-                 git log -z --format='%h %s %b' | semgrep -z -e "ユーザーに見える振る舞いを変えている"
+                 git log -z --format='%h %s %b' | sys1grep -z -e "ユーザーに見える振る舞いを変えている"
   --sentence[=HOW] 行ではなく文ごとに判定する。出力は当たった文がかかる元の行のままで、文の部分を太字の黄で
                強調する。文に分ける前に折り返した行をつなぐ。ただし空行、括弧や ; (JSON やコード)、
                - * + # > " や数字で始まる行 (箇条書き・見出し・引用・番号) の前ではつながない。単語の間に
@@ -322,34 +333,34 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
                否定側の閾値未満を赤、あいだを黄で表示。NO_COLOR にも従う
   --summarize[=TOOL]  出力するはずの内容 (ファイル名・-n・-A/-B/-C・-p) を TOOL に渡し、意味に照らした要約を
-               頼んで、その答えを代わりに表示する。TOOL: claude (既定。SEMGREP_SUMMARIZER で変えられる)。
+               頼んで、その答えを代わりに表示する。TOOL: claude (既定。SYS1GREP_SUMMARIZER で変えられる)。
                claude -p --model haiku をツールなし・設定なしで動かす。一致した行は TOOL の提供元へもう一度送られる。
                一致がなければ何も渡さない (終了コード 1)。TOOL が失敗したら 2。-q・-l・-c とは併用できない。
                --dedup ではテンプレートごとに代表を 1 回だけ、(×N like it) を付けて渡す。200 KB を超えたら
                TOOL には何も渡さない (終了コード 2)。式を絞るか --dedup を付ける
   --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
-               API の設定。下の SEMGREP_MODEL / SEMGREP_URL / SEMGREP_API_KEY より優先。
-               コマンドラインのキーは ps やシェル履歴に残るので、なるべく ~/.config/semgrep/.env に書く
+               API の設定。下の SYS1GREP_MODEL / SYS1GREP_URL / SYS1GREP_API_KEY より優先。
+               コマンドラインのキーは ps やシェル履歴に残るので、なるべく ~/.config/sys1grep/.env に書く
   -h, --help   このヘルプ (LANG / LC_ALL / LC_MESSAGES が ja 以外なら英語)
   -V, --version  バージョンを表示して終了
 
 終了コード: 一致あり 0 / なし 1 / エラー 2 (引数・読めないファイル・API 障害)
 
-環境変数 (環境、無ければ ~/.config/semgrep/.env から読む。./.env は読まない):
-  SEMGREP_API_KEY    API キー。無ければ TYPESAFE_API_KEY。取得は https://console.typesafe.ai/
-  SEMGREP_URL        送信先 (既定 https://api.typesafe.ai/v1/systemone)。TypeSafe 互換の
+環境変数 (環境、無ければ ~/.config/sys1grep/.env から読む。./.env は読まない):
+  SYS1GREP_API_KEY    API キー。無ければ TYPESAFE_API_KEY。取得は https://console.typesafe.ai/
+  SYS1GREP_URL        送信先 (既定 https://api.typesafe.ai/v1/systemone)。TypeSafe 互換の
                      /v1/systemone なら可。例 https://openrouter.ai/api/v1/systemone
-  SEMGREP_MODEL      モデル名 (既定 jev-latest)
-  SEMGREP_SUMMARIZER  値を付けない --summarize が使う TOOL (既定 claude)。これだけでは要約しない
-  SEMGREP_SUMMARIZER_MODEL  要約に使うモデル。既定のモデル (claude なら haiku) の代わり
-  SEMGREP_OPTS       既定のオプション。空白で区切ってコマンドラインの前に置くので、コマンドラインが
+  SYS1GREP_MODEL      モデル名 (既定 jev-latest)
+  SYS1GREP_SUMMARIZER  値を付けない --summarize が使う TOOL (既定 claude)。これだけでは要約しない
+  SYS1GREP_SUMMARIZER_MODEL  要約に使うモデル。既定のモデル (claude なら haiku) の代わり
+  SYS1GREP_OPTS       既定のオプション。空白で区切ってコマンドラインの前に置くので、コマンドラインが
                      優先する。--no-X で真偽のフラグを消せる (--color は --color=never)。書けるのは
-                     オプションだけで、意味・ファイル・-- は書けない。例 SEMGREP_OPTS='--level strict -n'。
-                     スクリプトからは SEMGREP_OPTS= semgrep と空にして呼ぶ
-  キーは SEMGREP_URL の先へそのまま送られる。SEMGREP_URL 指定時にキーが無ければ認証ヘッダを付けない。
-  例:  mkdir -p ~/.config/semgrep && echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env`;
+                     オプションだけで、意味・ファイル・-- は書けない。例 SYS1GREP_OPTS='--level strict -n'。
+                     スクリプトからは SYS1GREP_OPTS= sys1grep と空にして呼ぶ
+  キーは SYS1GREP_URL の先へそのまま送られる。SYS1GREP_URL 指定時にキーが無ければ認証ヘッダを付けない。
+  例:  mkdir -p ~/.config/sys1grep && echo 'SYS1GREP_API_KEY=your-key' > ~/.config/sys1grep/.env`;
 if (opt.version) {
-  console.log(`semgrep ${JSON.parse(readFileSync(new URL('package.json', import.meta.url), 'utf8')).version}`);
+  console.log(`sys1grep ${JSON.parse(readFileSync(new URL('package.json', import.meta.url), 'utf8')).version}`);
   process.exit(0);
 }
 if (opt.help) {
@@ -358,13 +369,13 @@ if (opt.help) {
   process.exit(0);
 }
 
-const customUrl = opt['sys1-url'] || SEMGREP_URL;
+const customUrl = opt['sys1-url'] || SYS1GREP_URL;
 const apiUrl = customUrl || 'https://api.typesafe.ai/v1/systemone';
-const apiHost = (() => { try { return new URL(apiUrl).host; } catch { die(`not a URL: ${apiUrl} (--sys1-url / SEMGREP_URL)`); } })();
-const model = opt['sys1-model'] || SEMGREP_MODEL || 'jev-latest';
-const credential = opt['sys1-api-key'] || SEMGREP_API_KEY || TYPESAFE_API_KEY;
+const apiHost = (() => { try { return new URL(apiUrl).host; } catch { die(`not a URL: ${apiUrl} (--sys1-url / SYS1GREP_URL)`); } })();
+const model = opt['sys1-model'] || SYS1GREP_MODEL || 'jev-latest';
+const credential = opt['sys1-api-key'] || SYS1GREP_API_KEY || TYPESAFE_API_KEY;
 if (credential && new URL(apiUrl).protocol === 'http:' && !/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(apiHost))
-  console.error(`semgrep: warning: the API key goes to ${apiHost} over plain http`);
+  console.error(`sys1grep: warning: the API key goes to ${apiHost} over plain http`);
 // --dry-run prints the files and the requests that would be sent, to stdout, and sends nothing. --verbose prints
 // the same to stderr while searching. -q's early exits would cut the list short, so --dry-run turns -q off.
 const dry = opt['dry-run'];
@@ -372,7 +383,7 @@ if (dry) opt.quiet = false;
 // File names and file contents come from whatever is searched, maybe an untrusted checkout: the lines about them
 // show control characters as \xNN, so an escape sequence cannot redraw what -i asks about.
 const safe = s => String(s).replace(/[\x00-\x1f\x7f-\x9f]/g, c => `\\x${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
-const trace = dry ? s => console.log(`semgrep: ${safe(s)}`) : opt.verbose ? s => console.error(`semgrep: ${safe(s)}`) : null;
+const trace = dry ? s => console.log(`sys1grep: ${safe(s)}`) : opt.verbose ? s => console.error(`sys1grep: ${safe(s)}`) : null;
 trace?.(`endpoint ${apiHost}${new URL(apiUrl).pathname}, model ${model}`);
 // While waiting on Jev or the summarizer, a one-line spinner on stderr (#89), drawn after 300 ms so a fast search never
 // flickers. Only where nothing else would show: a terminal, and not -q, --dry-run or --verbose (its trace lines). Any
@@ -382,7 +393,7 @@ if (process.stderr.isTTY && process.env.TERM !== 'dumb' && !opt.quiet && !dry &&
   const draw = process.stderr.write.bind(process.stderr);
   let label = '', shown = false, timer = null, frame = 0;
   const erase = () => { if (shown) draw('\r\x1b[K'); shown = false; };
-  const tick = () => { draw(`\r${'⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'[frame++ % 10]} semgrep: ${label}\x1b[K`); shown = true; };
+  const tick = () => { draw(`\r${'⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'[frame++ % 10]} sys1grep: ${label}\x1b[K`); shown = true; };
   spin.set = l => { label = l; timer ??= setTimeout(() => { tick(); timer = setInterval(tick, 100); }, 300); };
   spin.stop = () => { clearTimeout(timer); timer = null; erase(); };
   for (const s of [process.stdout, process.stderr]) { const w = s.write.bind(s); s.write = (...a) => (erase(), w(...a)); }
@@ -439,7 +450,7 @@ const hasMeanings = expr.some(term => term.some(lit => lit.kind === 'm'));
 // A compatible local server may need no key; the TypeSafe default always does. Regex-only queries never call the API.
 // --sentence=jev asks Jev where wrapped lines join; with regex terms only, nothing else is sent, so the rules decide.
 if (opt.sentence === 'jev' && !hasMeanings) opt.sentence = 'rules';
-if (hasMeanings && !credential && !customUrl) die('SEMGREP_API_KEY is not set. Export it or put it in ~/.config/semgrep/.env');
+if (hasMeanings && !credential && !customUrl) die('SYS1GREP_API_KEY is not set. Export it or put it in ~/.config/sys1grep/.env');
 
 const levels = { loose: [0.3, 0.7], normal: [0.5, 0.5], strict: [0.7, 0.3] };
 const level = levels[opt.level];
@@ -462,7 +473,7 @@ if (!['auto', 'always', 'never'].includes(opt.color)) die('--color must be auto,
 // after Jev was paid. About 50k tokens, well inside claude's 200k.
 const SUMMARY_MAX = 200 * 1024;
 const SUMMARIZERS = {
-  claude: p => ['claude', '-p', '--model', SEMGREP_SUMMARIZER_MODEL || 'haiku', '--tools', '', '--setting-sources', '', '--strict-mcp-config', '--safe-mode', '--system-prompt', p],
+  claude: p => ['claude', '-p', '--model', SYS1GREP_SUMMARIZER_MODEL || 'haiku', '--tools', '', '--setting-sources', '', '--strict-mcp-config', '--safe-mode', '--system-prompt', p],
 };
 let summarizer = null; // [command, ...args]
 if (opt.summarize !== undefined) {
@@ -490,7 +501,7 @@ const globRe = o => g => {
 };
 const includes = (opt.include ?? []).map(globRe('include')), excludes = (opt.exclude ?? []).map(globRe('exclude'));
 for (const [o, gs] of [['include', opt.include], ['exclude', opt.exclude]]) for (const g of gs ?? [])
-  if (g.includes('/')) console.error(`semgrep: warning: --${o}='${g}' has a /, but globs match the file name only, not the path, so it matches no file`);
+  if (g.includes('/')) console.error(`sys1grep: warning: --${o}='${g}' has a /, but globs match the file name only, not the path, so it matches no file`);
 // --changed-within: a duration back from now, a date or ISO date-time, or today / this-week / this-month (local).
 // Only these forms: Date() alone reads '7' as the year 2001, which would select every file. A bare date is local
 // midnight (Date() would read it as UTC).
@@ -507,7 +518,7 @@ const since = (w => {
   const [y, mo, dd] = w.slice(0, 10).split('-').map(Number), u = new Date(Date.UTC(y, mo - 1, dd));
   if (u.getUTCFullYear() !== y || u.getUTCMonth() !== mo - 1 || u.getUTCDate() !== dd) t = NaN;
   if (isNaN(t)) die(`--changed-within: '${w}' is not a duration (30m, 2h, 7d, 2w), a date (2026-09-01, 2026-09-01T09:00), today, this-week or this-month`);
-  if (t > Date.now()) console.error(`semgrep: warning: --changed-within=${w} is in the future, so no file found by -r or git semgrep is new enough`);
+  if (t > Date.now()) console.error(`sys1grep: warning: --changed-within=${w} is in the future, so no file found by -r or git sys1grep is new enough`);
   return t;
 })(opt['changed-within']);
 const wanted = (path, st) => {
@@ -516,7 +527,7 @@ const wanted = (path, st) => {
 };
 
 // Auto-scope (#43): a meaning that restricts its matches to some kind of file (Python files, what changed yesterday)
-// can only match in such files, so the files -r and git semgrep find are narrowed before anything is sent. Whether
+// can only match in such files, so the files -r and git sys1grep find are narrowed before anything is sent. Whether
 // it does is asked of Jev, one small request per meaning with a yes / no per candidate, as --dedup asks which values
 // matter. The candidates are fixed, so nothing has to be pulled out of the text, and Jev reads the whole meaning in
 // any language: "案A、B、Cで比較" is not about C files, a date quoted in a comment is not when the file changed. A
@@ -706,7 +717,7 @@ const SKIP_DIRS = ['.git', 'node_modules', '.ssh', '.aws', '.gnupg', '.kube', '.
 const SKIP_FILE = /^\.env|^\.(netrc|npmrc|pypirc|pgpass|git-credentials)$|\.(pem|key|p12|pfx|jks|keystore)$|^id_(rsa|dsa|ecdsa|ed25519)/i;
 let hadError = false;
 const warned = []; // what warn printed, so -i does not repeat it from its dry run
-const warn = (file, e) => { const m = `semgrep: ${safe(file)}: ${safe(e.message)}`; warned.push(m); console.error(m); hadError = true; };
+const warn = (file, e) => { const m = `sys1grep: ${safe(file)}: ${safe(e.message)}`; warned.push(m); console.error(m); hadError = true; };
 // -r also leaves out what git ignores (.gitignore, .git/info/exclude, the global excludes file), in one git call per
 // directory named on the command line. Paths come back relative to it; an ignored directory comes back whole, as
 // "dir/", so it is never walked. A directory that is itself ignored was named on purpose and is searched in full.
@@ -730,9 +741,9 @@ function expand(path, rel = '', ignored) {
     .sort((a, b) => a.name.localeCompare(b.name))
     .flatMap(d => expand(path.endsWith('/') ? path + d.name : `${path}/${d.name}`, `${rel}${d.name}/`, ignored)); // not path.join(): it would drop the leading ./
 }
-// As git semgrep, FILE arguments are pathspecs and the files are the tracked ones, like git grep. The skip list
+// As git sys1grep, FILE arguments are pathspecs and the files are the tracked ones, like git grep. The skip list
 // still applies, since these files were not named one by one. Deleted files, submodules and symlinks are left out.
-const asGit = globalThis.SEMGREP_GIT === true; // set by git-semgrep.mjs
+const asGit = globalThis.SYS1GREP_GIT === true; // set by git-sys1grep.mjs
 const lsFiles = () => {
   try { return execFileSync('git', ['ls-files', '-z', '--', ...files], { encoding: 'utf8', maxBuffer: Infinity }); }
   catch (e) { if (e.status == null) die(`git ls-files: ${e.message}`); process.exit(2); } // git exited non-zero: it has said why
@@ -746,7 +757,7 @@ const gitFiles = () => [...new Set(lsFiles().split('\0'))] // a conflicted file 
   .map(p => (p === '-' ? './-' : p)); // a tracked file named -, not stdin
 const found = asGit ? gitFiles()
   : (files.length ? files : [opt.r ? '.' : '-']).flatMap(f => (f === '-' ? [f] : expand(f)));
-// -r or git semgrep found something scopes could leave out, and a meaning could scope it: else no git, no question (#105)
+// -r or git sys1grep found something scopes could leave out, and a meaning could scope it: else no git, no question (#105)
 const narrowable = opt['auto-scope'] && expr.some(term => scoped(term).length) && found.some(f => !named(f));
 // Standard input is read once: -i hands it to its dry run, and the search reads it again from here.
 const stdinBuf = found.includes('-') ? readFileSync(0) : null;
@@ -754,18 +765,18 @@ const stdinBuf = found.includes('-') ? readFileSync(0) : null;
 // Nothing is sent before the answer. The answer comes from /dev/tty, so stdin can still carry the data.
 if (opt.interactive && !dry) {
   let tty;
-  try { tty = openSync('/dev/tty', 'r+'); } catch { die(`-i needs a terminal to ask on${optsInteractive ? ' (-i is in SEMGREP_OPTS; from a script, run SEMGREP_OPTS= semgrep ...)' : ''}`, !optsInteractive); }
+  try { tty = openSync('/dev/tty', 'r+'); } catch { die(`-i needs a terminal to ask on${optsInteractive ? ' (-i is in SYS1GREP_OPTS; from a script, run SYS1GREP_OPTS= sys1grep ...)' : ''}`, !optsInteractive); }
   const plan = spawnSync(process.execPath, [...process.execArgv, process.argv[1], '--dry-run', ...process.argv.slice(2)], { input: stdinBuf ?? '', encoding: 'utf8', maxBuffer: Infinity });
   if (plan.status !== 0 && plan.status !== 2) { process.stderr.write(plan.stderr); process.exit(2); } // 2: a file could not be read
   // A file that could not be read shows up only while reading, in the dry run: say so next to the question. What
   // this process already printed (the file list's warnings, the option warnings) is not repeated.
-  const errors = plan.stderr.split('\n').filter(l => l.startsWith('semgrep: ') && !l.startsWith('semgrep: warning: ') && !warned.includes(l));
-  const shown = [...plan.stdout.split('\n').filter(l => /^semgrep: (file |dry run: |summarize: )/.test(l)), ...errors].map(safe);
+  const errors = plan.stderr.split('\n').filter(l => l.startsWith('sys1grep: ') && !l.startsWith('sys1grep: warning: ') && !l.includes(' is deprecated; use ') && !warned.includes(l));
+  const shown = [...plan.stdout.split('\n').filter(l => /^sys1grep: (file |dry run: |summarize: )/.test(l)), ...errors].map(safe);
   warned.push(...errors); // its scope lines among them: not printed again after the answer
-  if (!/^semgrep: dry run: 0 requests/.test(shown.findLast(l => l.startsWith('semgrep: dry run: ')))) {
+  if (!/^sys1grep: dry run: 0 requests/.test(shown.findLast(l => l.startsWith('sys1grep: dry run: ')))) {
     writeSync(tty, `${shown.join('\n')}\nSearch, sending the above${summarizer ? `, then the matching lines to ${opt.summarize}` : ''}? [y/N] `);
     const buf = Buffer.alloc(256);
-    if (!/^\s*y(es)?\s*$/i.test(buf.toString('utf8', 0, readSync(tty, buf)))) { console.error('semgrep: nothing sent'); process.exit(1); }
+    if (!/^\s*y(es)?\s*$/i.test(buf.toString('utf8', 0, readSync(tty, buf)))) { console.error('sys1grep: nothing sent'); process.exit(1); }
   }
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -804,7 +815,7 @@ async function post(state, questions, label) {
       throw new Error(`${apiHost}: ${e.cause?.message ?? e.message}`);
     }
     if ((res.status === 429 || res.status === 529 || res.status >= 500) && attempt < 6) { await sleep(500 * 2 ** attempt); continue; }
-    // The body comes from whatever server SEMGREP_URL names: short, and without terminal control characters.
+    // The body comes from whatever server SYS1GREP_URL names: short, and without terminal control characters.
     if (!res.ok) throw new Error(`${apiHost} ${res.status}: ${(await res.text()).slice(0, 300).replace(/[\x00-\x1f\x7f-\x9f]/g, ' ')}`);
     const { answers, usage = {} } = await res.json();
     // A missing or malformed answer would read as 0 and make every "not X" hold, so it is an error instead.
@@ -838,11 +849,11 @@ if (narrowable) await Promise.all(expr.flatMap(term => scoped(term).map(lit =>
 // with -q silent, and not again after -i showed it.
 const targets = found.filter(f => expr.some(term => admitted(term, f)));
 if (!opt.quiet && narrowable) {
-  const lines = [...new Set(expr.flat().filter(lit => lit.kind === 's').map(lit => `semgrep: scope: ${safe(lit.label)} (from ${lit.words.map(w => `"${safe(w)}"`).join(', ')})`))];
-  if (lines.length) lines.push(`semgrep: scope: ${targets.length} of ${found.length} files`);
+  const lines = [...new Set(expr.flat().filter(lit => lit.kind === 's').map(lit => `sys1grep: scope: ${safe(lit.label)} (from ${lit.words.map(w => `"${safe(w)}"`).join(', ')})`))];
+  if (lines.length) lines.push(`sys1grep: scope: ${targets.length} of ${found.length} files`);
   // --verbose: the files the scopes left out, the first 10 by name (#104)
   const kept = new Set(targets), out = found.filter(f => !kept.has(f));
-  if (lines.length && opt.verbose && !dry && out.length) lines.push(`semgrep:   left out: ${out.slice(0, 10).map(safe).join(' ')}${out.length > 10 ? ` … (+${out.length - 10} more)` : ''}`);
+  if (lines.length && opt.verbose && !dry && out.length) lines.push(`sys1grep:   left out: ${out.slice(0, 10).map(safe).join(' ')}${out.length > 10 ? ` … (+${out.length - 10} more)` : ''}`);
   for (const m of lines) if (!warned.includes(m)) { console.error(m); warned.push(m); }
 }
 
@@ -930,7 +941,7 @@ for (const file of targets) {
   const head = buf.subarray(0, 8192);
   const binary = head.subarray(0, 5).toString('latin1') === '%PDF-' || (opt.z ? /[\x01-\x08\x0e-\x1a\x1c-\x1f]/.test(head.toString('latin1')) : head.includes(0));
   if (!utf16 && binary) {
-    if (files.includes(file)) console.error(`semgrep: ${file}: binary file skipped`); // named on the command line: say so
+    if (files.includes(file)) console.error(`sys1grep: ${file}: binary file skipped`); // named on the command line: say so
     continue;
   }
   const src = (utf16 ? new TextDecoder(utf16).decode(buf) : buf.toString('utf8')).split(SEP);
@@ -1098,7 +1109,7 @@ let answered = 0;
 spin.set(`0 of ${chunks.length} requests`);
 await Promise.all(chunks.map(chunk => pooled(() => evaluate(chunk).then(() => {
   if (opt.quiet && chunk.some(isHit)) process.exit(0);
-}, e => { if (!opt.quiet) throw e; console.error(`semgrep: ${e.message}`); hadError = true; }).finally(() => spin.set(`${++answered} of ${chunks.length} requests`)))));
+}, e => { if (!opt.quiet) throw e; console.error(`sys1grep: ${e.message}`); hadError = true; }).finally(() => spin.set(`${++answered} of ${chunks.length} requests`)))));
 spin.stop();
 
 // What --summarize pipes is never colored: escape sequences would reach the summarizer as text.
@@ -1199,7 +1210,7 @@ for (const file of opt.quiet || dry ? [] : targets) {
   if (!h) continue;
   // --verbose: the scopes that let this file through, once per file with a match (#104)
   const via = opt.verbose && !named(file) ? [...new Set(expr.filter(t => admitted(t, file)).flatMap(t => t.flatMap(l => (l.kind === 's' ? l.names : []))))] : [];
-  if (via.length) console.error(`semgrep: ${safe(file)}: searched by scope ${via.map(safe).join(', ')}`);
+  if (via.length) console.error(`sys1grep: ${safe(file)}: searched by scope ${via.map(safe).join(', ')}`);
   if (opt.l) { console.log(paint(35, file)); continue; }
   const src = sources.get(file);
   let last = 0; // last line number already printed for this file
@@ -1234,7 +1245,7 @@ if (summarizer && !dry && matched && pipedBytes > SUMMARY_MAX) {
   // Not cut short: a summary of the first part would read as a summary of all of it.
   const size = pipedBytes >= 1024 * 1024 ? `${(pipedBytes / 1024 / 1024).toFixed(1)} MB` : `${Math.round(pipedBytes / 1024)} KB`;
   const count = likeIt.size ? `${matched} matching ${unitName} as ${pipedUnits.size} representatives` : `${matched} matching ${unitName}`;
-  console.error(`semgrep: --summarize: ${count} (${size}) are more than the ${SUMMARY_MAX / 1024} KB to summarize; narrow the expression${opt.dedup ? '' : ' or add --dedup'}`);
+  console.error(`sys1grep: --summarize: ${count} (${size}) are more than the ${SUMMARY_MAX / 1024} KB to summarize; narrow the expression${opt.dedup ? '' : ' or add --dedup'}`);
   summaryFailed = true;
 } else if (summarizer && !dry && matched) {
   // spawn, not spawnSync: the spinner's timer runs only while the event loop does. Its output erases the spinner.
@@ -1246,7 +1257,7 @@ if (summarizer && !dry && matched && pipedBytes > SUMMARY_MAX) {
   child.stdin.end(piped.join(''));
   const [status, signal] = await new Promise(r => child.on('error', e => die(`--summarize=${opt.summarize}: ${e.message}`, false)).on('close', (c, sg) => r([c, sg])));
   spin.stop();
-  if (status !== 0) { console.error(`semgrep: --summarize=${opt.summarize}: ${summarizer[0]} exited with ${status ?? signal}`); summaryFailed = true; }
+  if (status !== 0) { console.error(`sys1grep: --summarize=${opt.summarize}: ${summarizer[0]} exited with ${status ?? signal}`); summaryFailed = true; }
 }
 // Summary only when interactive; grep prints nothing to stderr when scripted.
 if (dry) {
