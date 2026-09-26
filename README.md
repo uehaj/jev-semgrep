@@ -159,6 +159,14 @@ $ ./semgrep -e '/(?<date>\d{4}-\d\d-\d\d) (?<time>\d\d:\d\d)/' \
 Prefer `$<name>` and single quotes: `$<name>` survives double quotes in sh/bash/zsh; `$1`, `$time`
 and `${time}` don't (the shell expands them itself). `-p` prints `1.00`/`0.00` for a regex term.
 
+On a terminal every match of a regex is in grep's match color (bold red), for the terms that held; a negated regex
+is never colored. `-o` prints each match on a line of its own, as `grep -o`; a line only meanings matched prints
+whole, since a meaning has no matching part.
+
+```sh
+$ ./semgrep -o -n -e '/[A-Z]+-\d+/' -a 'the ticket is still open' notes.txt   # the ticket ids, one per line
+```
+
 ## Sending less
 
 Every line sent to Jev costs money and time, so the cheapest line is the one never sent. From the widest cut
@@ -477,7 +485,7 @@ File names (`-l`) and counts (`-c`) stay on newlines, as they do in grep. With `
 ### One sentence at a time (`--sentence`)
 
 `--sentence` judges each sentence instead of each line. The output is still lines, as in grep: every line a
-matching sentence touches is printed, and on a terminal the sentence itself is in grep's match color.
+matching sentence touches is printed, and on a terminal the sentence itself is in bold yellow (a regex match inside it, in grep's bold red).
 Wrapped lines are joined before splitting, so a sentence that runs over several lines is judged as one.
 [`tests/prose.txt`](tests/prose.txt) wraps an English paragraph and a Japanese one:
 
@@ -494,7 +502,7 @@ The sentence starts on line 1 and ends at `mistake.` on line 3; only that part i
 On a terminal, with both meanings and `-C 3` for context, the colors show where each sentence starts and ends
 inside a line: lines 3 and 9 are colored only up to the end of the matching sentence, and lines 4-7 are context (`-`):
 
-![--sentence -C 3 --color: the matching sentences in the match color, up to mistake. on line 3 and 返金してほしいです。 on line 9; lines 4 to 7 as context](docs/sentence.svg)
+![--sentence -C 3 --color: the matching sentences in bold yellow, up to mistake. on line 3 and 返金してほしいです。 on line 9; lines 4 to 7 as context](docs/sentence.svg)
 
 `-o` prints only the matching sentences, one per line, as `grep -o` prints only the matching part.
 `-n` then gives the line where the sentence starts. Japanese is joined without a space, as are Chinese,

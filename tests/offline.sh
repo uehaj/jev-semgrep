@@ -99,6 +99,21 @@ case $($J -p --color=always -e cat "$F" | head -1) in *"${esc}[32m0.90"*) ;; *) 
 case $($J -n --color -e cat "$F") in *"$esc"*) fail "--color (auto) colors a pipe" ;; esac
 case $($J -n -e cat "$F") in *"$esc"*) fail "default colors a pipe" ;; esac
 code 2 "--color=bogus" -- $J --color=bogus -e cat "$F"
+# regex matches in grep's match color (bold red), every one on the line, only for terms that held; sentences bold yellow
+eq "$($J --color=always -e '/a/' "$F" | sed -n 3p)" "the line ${esc}[01;31ma${esc}[0mnswers: owl" "--color: a regex match"
+eq "$($J --color=always -e '/o/' "$F" | tail -1)" "${esc}[01;31mo${esc}[0mwl" "--color: a regex match, not the meaning"
+eq "$($J --color=always -e '/dog/' -a cat "$F")" "cat ${esc}[01;31mdog${esc}[0m" "--color: a regex beside a meaning"
+eq "$($J --color=always -e '/dog/' -a zebra -e cat "$F" | tail -1)" "cat dog" "--color: no color from a term that did not hold"
+eq "$($J --color=always -e cat -v '/dog/' "$F")" "cat" "--color: no color from a negated regex"
+printf 'The cat sat. A dog ran.\n' >"$tmp/s.txt"
+eq "$($J --sentence=rules --color=always -e cat -a '/sat/' "$tmp/s.txt")" "${esc}[01;33mThe cat ${esc}[0m${esc}[01;31msat${esc}[0m${esc}[01;33m.${esc}[0m A dog ran." "--sentence --color: the sentence yellow, the regex red"
+eq "$($J --sentence=rules -o --color=always -e cat -a '/sat/' "$tmp/s.txt")" "The cat ${esc}[01;31msat${esc}[0m." "--sentence -o: the sentence, its regex red"
+# -o without --sentence: each regex match on a line of its own (grep -o), no context; a meaning-only line whole
+eq "$($J -o -n -e '/a/' "$F" | tr '\n' '|')" "1:a|4:a|7:a|" "-o: regex matches"
+eq "$($J -o -n -e '/o/' -a '/owl/' "$F" | tr '\n' '|')" "7:owl|8:owl|" "-o: overlapping matches print once, the longest"
+eq "$($J -o -n -e cat "$F" | tr '\n' '|')" "1:cat|4:cat dog|" "-o: a meaning-only line prints whole"
+printf 'ABcYZde\n' >"$tmp/o.txt"; eq "$($J -o -e '/AB/' -e '/B.{5}/' -e '/YZ/' "$tmp/o.txt" | tr '\n' '|')" "AB|YZ|" "-o: a skipped overlap does not hide a later match"
+eq "$($J -o -n -A 1 -e '/cat/' "$F" | tr '\n' '|')" "1:cat|4:cat|" "-o: no context"
 
 # --chunk: lines per request (7 lines are sent; the blank one is not)
 reset; $J -e cat "$F" >/dev/null; eq "$(stat count)" "1" "default chunk: one request"

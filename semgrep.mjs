@@ -157,7 +157,7 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                records. Pairs with tools that already emit records: git log -z, find -print0, xargs -0
                  git log -z --format='%h %s %b' | semgrep -z -e "the change alters user-visible behaviour"
   --sentence[=HOW] judge each sentence instead of each line. Output is still the lines a matching sentence
-               touches, with the sentence in the match color. Wrapped lines are joined before splitting,
+               touches, with the sentence in bold yellow. Wrapped lines are joined before splitting,
                except at a blank line, next to brackets or ; (JSON, code), or before a line starting with
                - * + # > " or a digit (list, heading, quote, number). Scripts without spaces between words
                (Japanese, Chinese, Thai, Lao, Khmer, Myanmar, Tibetan) join without one. HOW:
@@ -167,8 +167,9 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                The expression is evaluated per sentence. With -z each record is split on its own
                Sentences sent together (--chunk) read each other as context, so a verdict can shift with
                where the chunks fall, and a sentence next to a match can match too
-  -o           with --sentence, print only the matching sentences, one per line; -n gives the line where the
-               sentence starts, -c and -A/-B/-C count sentences
+  -o           print only what matched, one per line: each regex match, as grep -o (a line only meanings
+               matched prints whole; no context). With --sentence, the matching sentences; -n gives the line
+               where the sentence starts, -c and -A/-B/-C count sentences
   -p           print each meaning's probability at the end of the line (for tuning thresholds)
   --dry-run    send nothing; print to stdout the endpoint, each file searched (units, and how many would be
                sent) and each request with its questions, grouped by wording (line ids read Lnnn).
@@ -186,6 +187,7 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                shared skeleton and barely folds, and a meaning that reads a value folds little.
                With -z or --sentence the unit that folds is the record or the sentence
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
+               regex matches are in grep's match color (bold red), matching sentences in bold yellow;
                file and line number use grep's colors; with -p, probabilities are green at or above
                the positive threshold, red below the negative one, yellow in between. NO_COLOR is honored
   --summarize[=TOOL]  pipe what would print (file names, -n, -A/-B/-C, -p) to TOOL, asked to summarize it as it
@@ -284,7 +286,7 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                -n はレコード番号、-A/-B/-C は前後のレコード数、--chunk はレコード数を数える。
                レコードを出すツールとそのまま繋がる: git log -z、find -print0、xargs -0
                  git log -z --format='%h %s %b' | semgrep -z -e "ユーザーに見える振る舞いを変えている"
-  --sentence[=HOW] 行ではなく文ごとに判定する。出力は当たった文がかかる元の行のままで、文の部分を色で
+  --sentence[=HOW] 行ではなく文ごとに判定する。出力は当たった文がかかる元の行のままで、文の部分を太字の黄で
                強調する。文に分ける前に折り返した行をつなぐ。ただし空行、括弧や ; (JSON やコード)、
                - * + # > " や数字で始まる行 (箇条書き・見出し・引用・番号) の前ではつながない。単語の間に
                空白を置かない文字 (日本語・中国語・タイ語・ラオ語・クメール語・ミャンマー語・チベット語)
@@ -295,8 +297,9 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                式は文ごとに評価する。-z ではレコードごとに文に分け、当たったレコードを出す
                一緒に送る文 (--chunk) は互いを文脈として読むので、区切りの位置で判定が変わることがあり、
                当たった文の隣の文もつられて当たることがある
-  -o           --sentence と併用し、当たった文だけを 1 行ずつ出す。-n は文が始まる行、-c と
-               -A/-B/-C は文の数で数える
+  -o           当たった部分だけを 1 行ずつ出す。正規表現の一致をそれぞれ出す (grep -o と同じ。意味だけで
+               当たった行は行全体。前後の行は出さない)。--sentence と併用すると当たった文を出し、-n は文が
+               始まる行、-c と -A/-B/-C は文の数で数える
   -p           各意味の確率を行末に表示 (閾値調整用)
   --dry-run    何も送らず、送信先・検索するファイル (単位の数と送る数)・各リクエストとその質問を stdout に
                表示する。質問は文面ごとにまとめて数える (行の ID は Lnnn と表示)。--dedup と --sentence の
@@ -313,6 +316,7 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                以下になることもある。散文には共通の骨格がないのでほとんど縮まず、値を読む意味もあまり
                縮まない。-z や --sentence ではレコードや文を単位にまとめる
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
+               正規表現の一致は grep の一致の色 (太字の赤)、当たった文は太字の黄。
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
                否定側の閾値未満を赤、あいだを黄で表示。NO_COLOR にも従う
   --summarize[=TOOL]  出力するはずの内容 (ファイル名・-n・-A/-B/-C・-p) を TOOL に渡し、意味に照らした要約を
@@ -1099,31 +1103,46 @@ for (const l of allLines) {
 }
 // --sentence without -o prints the original lines (or records) a matching sentence touches, like grep prints
 // lines. A unit keeps the probabilities of its first matching sentence; ranges mark the matching text in it.
-const ranges = new Map(); // file -> (unit -> [[from, to]])
+const ranges = new Map(); // file -> (unit -> [[from, to, sentence]]): where a matching sentence lies in the unit
 if (opt.sentence && !opt.o) for (const [file, h] of hits) {
   const spans = spansOf.get(file), units = new Map(), marked = new Map();
   for (const [k, p] of [...h].sort((a, b) => a[0] - b[0])) for (const [u, a, b] of spans[k - 1]) {
     if (!units.has(u)) units.set(u, p);
-    marked.set(u, [...(marked.get(u) ?? []), [a, b]]);
+    marked.set(u, [...(marked.get(u) ?? []), [a, b, p]]);
   }
   hits.set(file, units);
   ranges.set(file, marked);
 }
-// Wrap the matching ranges in grep's match color (bold red), merging overlaps.
-const highlight = (text, rs) => {
-  if (!color || !rs) return text;
-  let out = '', at = 0;
-  for (const [a, b] of rs.sort((x, y) => x[0] - y[0])) {
-    if (b <= at) continue;
-    const from = Math.max(a, at);
-    out += text.slice(at, from) + paint('01;31', text.slice(from, b));
-    at = b;
+// Where a hit's regexes matched: every occurrence of each non-negated regex of the terms that held for it, as grep
+// colors every match on a line. from / to bound the search to the part of a printed line a sentence covers.
+// ponytail: a sentence's regex is run again on the printed line, so a match across a joined line break goes uncolored
+function regexRanges(text, hit, from = 0, to = text.length) {
+  const out = [];
+  for (const term of expr) if (termHolds(term, hit)) for (const lit of term) if (lit.kind === 'r' && !lit.not) {
+    const re = new RegExp(lit.re.source, `${lit.re.flags.replace(/[gy]/g, '')}g`);
+    for (const m of text.slice(from, to).matchAll(re)) if (m[0]) out.push([from + m.index, from + m.index + m[0].length]);
   }
-  return out + text.slice(at);
+  return out.sort((x, y) => x[0] - y[0] || y[1] - x[1]); // from the start; at one start the longest first, as grep -o
+}
+// Matching sentences in bold yellow, regex matches in grep's match color (bold red) over them.
+const highlight = (text, sentences = [], matches = []) => {
+  if (!color || !(sentences.length || matches.length)) return text;
+  const style = new Array(text.length).fill(0);
+  for (const [a, b] of sentences) style.fill('01;33', a, b);
+  for (const [a, b] of matches) style.fill('01;31', a, b);
+  let out = '';
+  for (let i = 0, j; i < text.length; i = j) {
+    for (j = i + 1; j < text.length && style[j] === style[i];) j++;
+    out += style[i] ? paint(style[i], text.slice(i, j)) : text.slice(i, j);
+  }
+  return out;
 };
 const startNo = (file, k) => (opt.o && opt.sentence ? spansOf.get(file)[k - 1][0][0] : k); // -o: the unit where the sentence starts
 
-const after = Number(opt.A ?? opt.C ?? 0), before = Number(opt.B ?? opt.C ?? 0);
+// -o without --sentence prints each regex match on a line of its own, as grep -o, and no context. A line that only
+// meanings matched has no matching part, so it prints whole.
+const partsOnly = opt.o && !opt.sentence;
+const after = partsOnly ? 0 : Number(opt.A ?? opt.C ?? 0), before = partsOnly ? 0 : Number(opt.B ?? opt.C ?? 0);
 // grep -r and git grep prefix file names even for a single file; -H / --no-filename decide it outright, the later one winning.
 const multi = opt['with-filename'] ?? (opt.r || asGit || targets.length > 1);
 let lastPrinted = null; // [file, line number]; used to print -- between context groups
@@ -1154,9 +1173,14 @@ for (const file of opt.quiet || dry ? [] : targets) {
       const sep = paint(36, p ? ':' : '-');
       const prefix = (multi ? paint(35, file) + sep : '') + (opt.n ? paint(32, startNo(file, k)) + sep : '');
       const tail = opt.p && p ? `\t[${displayRow(p).map(paintProb).join(' ')}]` : '';
+      const text = src[k - 1], sentences = ranges.get(file)?.get(k);
+      const matches = !p ? [] : sentences ? sentences.flatMap(([a, b, s]) => regexRanges(text, s, a, b)) : regexRanges(text, p);
       // Only data records carry the NUL terminator, as in grep -z; file names and counts stay on newlines.
-      const n = p && group && k === no ? likeIt.get(group) : 0;
-      write(prefix + highlight(src[k - 1], ranges.get(file)?.get(k)) + tail + (n > 1 ? `   (×${n} like it)` : '') + EOL);
+      const n = p && group && k === no ? likeIt.get(group) : 0, like = n > 1 ? `   (×${n} like it)` : '';
+      if (partsOnly && matches.length) {
+        let end = -1; // a match overlapping the last one printed is skipped; a skipped one does not hide later ones
+        for (const [a, b] of matches) if (a >= end) { write(prefix + paint('01;31', text.slice(a, b)) + tail + like + EOL); end = b; }
+      } else write(prefix + highlight(text, sentences, matches) + tail + like + EOL);
     }
     last = Math.max(last, to);
     lastPrinted = [file, to];

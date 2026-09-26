@@ -15,6 +15,10 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 - On a terminal, a one-line spinner on stderr while semgrep waits for Jev (`12 of 149 requests`) or the summarizer,
   drawn after 300 ms and erased before any output (#89). Not with `-q`, `--dry-run`, `--verbose` or `TERM=dumb`,
   and never when stderr is not a terminal, so scripts see exactly what they saw before.
+- On a terminal, a regex term's matches are in grep's match color (bold red): every match on the line, for the terms
+  that held, never a negated regex.
+- `-o` without `--sentence` prints each regex match on a line of its own, as `grep -o`, with no context. A line only
+  meanings matched prints whole. Before, `-o` without `--sentence` was ignored.
 - The `--dry-run` summary line (also shown by `-i`) estimates the input tokens and, for TypeSafe itself, the price:
   `…, 2315 chars, ~3178 input tokens, ~$0.000133; nothing sent`. The estimate is 650 tokens a request plus 0.21 a
   request-body byte, fitted on real requests in English and Japanese; it was within -8% to +12% of what Jev billed.
@@ -29,6 +33,9 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 - Auto-scope from git (#46): in a repository a time goes by commits (uncommitted files by their mtime), and git
   states (uncommitted, staged, untracked, this branch, not pushed, mine) and the 30 most active authors are
   candidates too. One git process per repository and question.
+
+### Changed
+- `--sentence` colors the matching sentence bold yellow instead of bold red, so a regex match inside it stands out.
 
 ## [0.4.0] - 2026-09-26
 
