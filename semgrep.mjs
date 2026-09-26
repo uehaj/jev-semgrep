@@ -4,7 +4,7 @@
 //   semgrep -Q "why the job failed" FILE...   # -Q X is -e "the line answers: X": answering lines, not asking ones
 //   -e / -Q terms are OR'd; -a / -v attach AND / AND NOT to the preceding term: (A and B and not C) or D.
 //   A leading ! negates just that meaning: -e A -e '!B' is A or not B.
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync, writeSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
@@ -364,6 +364,21 @@ if (dry) opt.quiet = false;
 const safe = s => String(s).replace(/[\x00-\x1f\x7f-\x9f]/g, c => `\\x${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
 const trace = dry ? s => console.log(`semgrep: ${safe(s)}`) : opt.verbose ? s => console.error(`semgrep: ${safe(s)}`) : null;
 trace?.(`endpoint ${apiHost}${new URL(apiUrl).pathname}, model ${model}`);
+// While waiting on Jev or the summarizer, a one-line spinner on stderr (#89), drawn after 300 ms so a fast search never
+// flickers. Only where nothing else would show: a terminal, and not -q, --dry-run or --verbose (its trace lines). Any
+// write to stdout or stderr erases it first, and so does exit, so no half-drawn line stays behind.
+const spin = { set() {}, stop() {} };
+if (process.stderr.isTTY && process.env.TERM !== 'dumb' && !opt.quiet && !dry && !opt.verbose) {
+  const draw = process.stderr.write.bind(process.stderr);
+  let label = '', shown = false, timer = null, frame = 0;
+  const erase = () => { if (shown) draw('\r\x1b[K'); shown = false; };
+  const tick = () => { draw(`\r${'⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'[frame++ % 10]} semgrep: ${label}\x1b[K`); shown = true; };
+  spin.set = l => { label = l; timer ??= setTimeout(() => { tick(); timer = setInterval(tick, 100); }, 300); };
+  spin.stop = () => { clearTimeout(timer); timer = null; erase(); };
+  for (const s of [process.stdout, process.stderr]) { const w = s.write.bind(s); s.write = (...a) => (erase(), w(...a)); }
+  process.on('exit', erase);
+  process.on('SIGINT', () => process.exit(130));
+}
 
 // Expression: a list of AND terms joined by OR. Each literal is a meaning { kind:'m', text, not } or a
 // regex { kind:'r', re, names, count, not }, matched locally. A leading ! negates just that literal.
@@ -779,6 +794,7 @@ const pooled = async fn => { await acquire(); try { return await fn(); } finally
 
 // The scope questions go out only now, after -i's answer, and only when there is something to narrow.
 if (narrowable) CANDIDATES.push(...gitCandidates(found.filter(f => !named(f))));
+if (narrowable) spin.set('asking which files each meaning restricts to (auto-scope)');
 if (narrowable) await Promise.all(expr.flatMap(term => scoped(term).map(lit =>
   pooled(() => post({ meaning: lit.text }, scopeQuestions(lit.text), `[scope] "${cut(lit.text, 40)}"`)).then(a => {
     // --verbose: the answers worth a look, for tuning (tests/scope-eval.mjs reads this line)
@@ -887,6 +903,7 @@ const runsOf = src => (opt.z
   : [{ lines: src, unitOf: i => i + 1, baseOf: () => 0 }]);
 const runsByFile = new Map([...read].map(([file, src]) => [file, opt.sentence ? runsOf(src) : []]));
 const splits = new Map(); // run -> Set of breaks Jev judged to end an entry
+if (opt.sentence === 'jev') spin.set('judging where wrapped lines break (--sentence)');
 if (opt.sentence === 'jev')
   await Promise.all([...runsByFile].flatMap(([file, runs]) => runs.map(run => judgeBreaks(run.lines, file).then(sp => splits.set(run, sp)))));
 for (const [file, src] of read) {
@@ -990,6 +1007,7 @@ if (opt.dedup && lines.length) {
   const meanings = [...new Set(expr.flat().filter(lit => lit.kind === 'm').map(lit => lit.text))];
   // One request per meaning, the meaning as the only state: this is the form measured in #19. Keeping a kind that
   // could be folded only costs savings; folding one that matters gives wrong answers, so the threshold leans to keeping.
+  spin.set('asking which values a meaning reads (--dedup)');
   const keep = await Promise.all(meanings.map(text => pooled(() => post({ meaning: text }, Object.fromEntries(MASK.map(([kind, , , what]) => [kind, {
     type: 'noul',
     instructions: `Log lines are grouped when they differ only in ${what}. Could the value of ${what} in a log line change whether that line matches the meaning "${text}"?`,
@@ -1031,9 +1049,12 @@ async function evaluate(chunk) {
 }
 const isHit = l => expr.some(term => termHolds(term, l));
 // -q: a failed request is reported and the rest still run, since a later match means exit 0 (grep -q).
+let answered = 0;
+spin.set(`0 of ${chunks.length} requests`);
 await Promise.all(chunks.map(chunk => pooled(() => evaluate(chunk).then(() => {
   if (opt.quiet && chunk.some(isHit)) process.exit(0);
-}, e => { if (!opt.quiet) throw e; console.error(`semgrep: ${e.message}`); hadError = true; }))));
+}, e => { if (!opt.quiet) throw e; console.error(`semgrep: ${e.message}`); hadError = true; }).finally(() => spin.set(`${++answered} of ${chunks.length} requests`)))));
+spin.stop();
 
 // What --summarize pipes is never colored: escape sequences would reach the summarizer as text.
 const color = !summarizer && (opt.color === 'always' || (opt.color === 'auto' && process.stdout.isTTY && !process.env.NO_COLOR));
@@ -1129,9 +1150,16 @@ for (const file of opt.quiet || dry ? [] : targets) {
 // No match sends nothing to the summarizer. It writes its answer straight to stdout; failing, it has said why on stderr.
 let summaryFailed = false;
 if (summarizer && !dry && matched) {
-  const r = spawnSync(summarizer[0], summarizer.slice(1), { input: piped.join(''), stdio: ['pipe', 'inherit', 'inherit'] });
-  if (r.error) die(`--summarize=${opt.summarize}: ${r.error.message}`, false);
-  if (r.status !== 0) { console.error(`semgrep: --summarize=${opt.summarize}: ${summarizer[0]} exited with ${r.status ?? r.signal}`); summaryFailed = true; }
+  // spawn, not spawnSync: the spinner's timer runs only while the event loop does. Its output erases the spinner.
+  spin.set(`summarizing with ${opt.summarize}`);
+  const child = spawn(summarizer[0], summarizer.slice(1), { stdio: ['pipe', 'pipe', 'pipe'] });
+  // pipe() keeps backpressure; the once() listener, registered first, erases the spinner before the first chunk lands.
+  for (const [from, to] of [[child.stdout, process.stdout], [child.stderr, process.stderr]]) { from.once('data', spin.stop); from.pipe(to, { end: false }); }
+  child.stdin.on('error', () => {}); // EPIPE: the TOOL exited without reading it all; its exit status says what happened
+  child.stdin.end(piped.join(''));
+  const [status, signal] = await new Promise(r => child.on('error', e => die(`--summarize=${opt.summarize}: ${e.message}`, false)).on('close', (c, sg) => r([c, sg])));
+  spin.stop();
+  if (status !== 0) { console.error(`semgrep: --summarize=${opt.summarize}: ${summarizer[0]} exited with ${status ?? signal}`); summaryFailed = true; }
 }
 // Summary only when interactive; grep prints nothing to stderr when scripted.
 if (dry) {

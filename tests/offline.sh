@@ -402,6 +402,22 @@ eq "$(stat count)" "0" "--summarize errors send nothing"
 rm -f "$tmp/sum.in"; $S --summarize --dry-run -e cat "$F" | grep -q '^semgrep: summarize: claude -p --model haiku --tools "" .*--system-prompt "Summarize' || fail "--dry-run shows the summarizer"
 [ ! -e "$tmp/sum.in" ] || fail "--dry-run runs the summarizer"
 
+# the spinner (#89): on a terminal, one line on stderr while waiting, erased before the output; never when not a terminal
+printf 'cat @slow\ndog\n' >"$tmp/slow.txt"
+eq "$($J -e cat "$tmp/slow.txt" 2>&1 >/dev/null | od -c | grep -c '\\r' || true)" "0" "no spinner when stderr is not a terminal"
+out=$(onpty "$J --chunk 1 -j 1 -e cat '$tmp/slow.txt'" </dev/null | od -An -c | tr -d ' \n')
+case $out in *'semgrep:0of2requests'*) ;; *) fail "spinner: the count of requests: $out" ;; esac
+case $out in *'033[Kcat@slow'*) ;; *) fail "spinner: erased before the first line: $out" ;; esac
+out=$(onpty "$J -q -e cat '$tmp/slow.txt'" </dev/null | od -An -c | tr -d ' \n')
+case $out in *requests*) fail "spinner with -q: $out" ;; esac
+out=$(onpty "$J --verbose -e cat '$tmp/slow.txt'" </dev/null | od -An -c | tr -d ' \n')
+case $out in *'of1requests'*) fail "spinner with --verbose: $out" ;; esac
+out=$(onpty "TERM=dumb $J -e cat '$tmp/slow.txt'" </dev/null | od -An -c | tr -d ' \n')
+case $out in *'of1requests'*) fail "spinner with TERM=dumb: $out" ;; esac
+# --summarize: the spinner says so while the TOOL runs, and is erased before its first byte
+printf '%s\n' '#!/bin/sh' 'cat >/dev/null' 'sleep 0.5' 'echo SUMMARY' >"$tmp/bin/claude"
+out=$(onpty "PATH=$tmp/bin:\$PATH $J --summarize -e cat '$F'" </dev/null | od -An -c | tr -d ' \n')
+case $out in *'summarizingwithclaude'*'033[KSUMMARY'*) ;; *) fail "spinner while summarizing: $out" ;; esac
 # --help: exit 0, Japanese by locale, lists the options
 code 0 "--help" -- $E LANG=C node ../semgrep.mjs --help
 eq "$($E LANG=C node ../semgrep.mjs -h | head -1 | cut -c1-14)" "usage: semgrep" "-h"

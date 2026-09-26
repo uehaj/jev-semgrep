@@ -2,7 +2,8 @@
 // scores 0.9, or N when the line carries "@N" (e.g. "a cat @0.4"). "@drop" answers without a noul;
 // A scope question ("Does the meaning "M" restrict its matches to …?") scores 0.9 when M carries "@s:KEY" for that
 // question's key (e.g. "@s:l_python", "@s:t_yesterday"), else 0.05.
-// "@err" in any line fails the request with a 400 and a long body holding an escape sequence. Each request takes 30ms, so -j shows up.
+// "@err" in any line fails the request with a 400 and a long body holding an escape sequence. Each request takes 30ms, so -j shows up;
+// "@slow" in any line makes it 400ms, so the spinner (drawn after 300ms) shows up.
 // GET returns {"count", "asked", "max", "auth", "model"}: judging requests and questions so far, most requests in flight at once, the last
 // authorization header and model; GET /reset also zeroes them. Prints the port it listens on.
 import { createServer } from 'node:http';
@@ -21,7 +22,7 @@ const server = createServer(async (req, res) => {
   asked += Object.keys(questions).length;
   max = Math.max(max, ++inFlight);
   auth = req.headers.authorization ?? null, model = sentModel;
-  await new Promise(r => setTimeout(r, 30));
+  await new Promise(r => setTimeout(r, Object.values(state).some(l => String(l).includes('@slow')) ? 400 : 30));
   inFlight--;
   const answers = {};
   if (Object.values(state).some(l => String(l).includes('@err'))) { // an error body a hostile server might send
