@@ -514,12 +514,16 @@ const SUMMARIZERS = {
   claude: p => ['claude', '-p', '--model', SYS1GREP_SUMMARIZER_MODEL || 'haiku', '--tools', '', '--setting-sources', '', '--strict-mcp-config', '--safe-mode', '--system-prompt', p],
   llm: p => ['llm', '-n', '-s', p, ...(SYS1GREP_SUMMARIZER_MODEL ? ['-m', SYS1GREP_SUMMARIZER_MODEL] : [])], // Simon Willison's llm (#77); tools are off unless -T/--functions is given, which this never does
   // pi (#78): --no-tools starts with every built-in, extension and custom tool disabled; the other --no-* flags
-  // turn off session persistence and project-level context files, extensions, skills and prompt templates. The
-  // lines go on stdin; a trailing '' is the (possibly required) positional message, left empty since the prompt
-  // is entirely in --system-prompt (cli.md: "Piped stdin | Prepend its contents to the first prompt", unclear
-  // whether stdin alone with no positional at all is also accepted).
-  pi: p => ['pi', '--print', '--no-tools', '--no-session', '--no-context-files', '--no-extensions', '--no-skills',
-    '--no-prompt-templates', '--thinking', 'off', '--system-prompt', p, ...(SYS1GREP_SUMMARIZER_MODEL ? ['--model', SYS1GREP_SUMMARIZER_MODEL] : []), ''],
+  // turn off session persistence and project-level context files, extensions, skills and prompt templates.
+  // --no-approve (cli.md: "Ignores trust-gated project-local configuration and resources for this process")
+  // closes the one gap those leave: a project-local .pi/settings.json or other trust-gated resource that the
+  // --no-context-files/--no-extensions/--no-skills/--no-prompt-templates flags don't cover. The lines go on
+  // stdin; a trailing '' is the (possibly required) positional message, left empty since the prompt is entirely
+  // in --system-prompt (cli.md: "Piped stdin | Prepend its contents to the first prompt", unclear whether stdin
+  // alone with no positional at all is also accepted).
+  pi: p => ['pi', '--print', '--no-tools', '--no-approve', '--no-session', '--no-context-files', '--no-extensions',
+    '--no-skills', '--no-prompt-templates', '--thinking', 'off', '--system-prompt', p,
+    ...(SYS1GREP_SUMMARIZER_MODEL ? ['--model', SYS1GREP_SUMMARIZER_MODEL] : []), ''],
 };
 // OpenAI-compatible chat servers (#76), sent by fetch: no CLI, so the matching lines never leave the machine a
 // second time. ollama and lmstudio name a fixed base; any other http(s):// URL is its own base (llama-server,
