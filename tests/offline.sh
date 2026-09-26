@@ -3,6 +3,7 @@
 # The fake scores a line 0.9 when it contains the meaning verbatim ("@N" in the line sets N instead), else 0.05,
 # so these checks are about semgrep itself: the expression, output shapes, options, requests and exit codes.
 set -e
+unset FORCE_COLOR # node would color the numbers it prints (the fake's port, the counts read back)
 cd "$(dirname "$0")"
 tmp=$(mktemp -d)
 node fake-jev.mjs >"$tmp/port" &
@@ -307,6 +308,14 @@ eq "$($JI -r -l -e "$PT" "$S" 2>/dev/null | tr '\n' ' ')" "$S/a.py $S/sub/c.py "
 eq "$($JI -r --dry-run -e "$T" -e dog "$S" | grep -c '\[scope\]')" "2" "scope: one question request per meaning"
 eq "$($JI --dry-run -e "$T" "$S/a.py" | grep -c '\[scope\]' || true)" "0" "scope: no question for named files only"
 eq "$($JI -r --no-auto-scope --dry-run -e "$T" "$S" | grep -c '\[scope\]' || true)" "0" "scope: no question with --no-auto-scope"
+# --verbose: each candidate answered 0.2 or more, ✓ applied with the files it alone keeps, · not applied and why
+V=$($JI -r -l --verbose -e 'cat @s:l_python @s:r_test=0.4 @s:t_yesterday @s:t_day30' "$S" 2>&1 >/dev/null || true)
+echo "$V" | grep -q '^semgrep: scope "cat @s:l_python' || fail "--verbose: a header per meaning: $V"
+echo "$V" | grep -qE '^semgrep:   ✓ Python files \(\*\.py \*\.pyi \*\.pyw\) +0\.90  keeps 3 of 4 files$' || fail "--verbose: an applied candidate and its count: $V"
+echo "$V" | grep -qE '^semgrep:   · test code \(.*\) +0\.40  \(below 0\.6, not applied\)$' || fail "--verbose: a candidate below 0.6: $V"
+echo "$V" | grep -qE '^semgrep:   ✓ what was changed yesterday .*keeps [0-9]+ of 4 files$' || fail "--verbose: the narrowest span applied: $V"
+echo "$V" | grep -qE '^semgrep:   · what was changed within the last 30 days .*\(a narrower span applied\)$' || fail "--verbose: a wider span not applied: $V"
+eq "$($JI -r -l --dry-run --verbose -e 'cat @s:l_python' "$S" 2>&1 | grep -c '^semgrep:   [✓·]' || true)" "0" "--verbose: no candidate lines with --dry-run"
 # git: time by commit (not the mtime a checkout sets), states and authors; not asked outside a repository
 G="$tmp/gitscope"; mkdir -p "$G"
 GM='cat @s:t_yesterday|cat @s:a_a_x|cat @s:g_mine|cat @s:g_mine @s:a_b_x|cat @s:g_uncommitted|cat @s:g_staged|cat @s:g_untracked|cat @s:g_branch|cat @s:g_unpushed'
