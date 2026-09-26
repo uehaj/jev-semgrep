@@ -119,6 +119,12 @@ $E SEMGREP_API_KEY=unused node ../semgrep.mjs --dry-run -e cat "$F" | tail -1 | 
 reset; eq "$($J --verbose -n -e cat "$F" 2>/dev/null | nums)" "1 4 " "--verbose keeps stdout"
 eq "$(stat count)" "1" "--verbose sends"
 eq "$($J --verbose -e cat "$F" 2>&1 >/dev/null | grep -c '^semgrep: request 1 \[judge\]')" "1" "--verbose on stderr"
+# The summary line says what its numbers are (#91); its total counts every line read, also those a regex left out (#79)
+eq "$($J --verbose -e cat "$F" 2>&1 >/dev/null | tail -1)" "2 of 8 lines matched; 7 sent to Jev in 1 request, 1 input token" "summary line"
+eq "$($J --verbose -e /cat/ "$F" 2>&1 >/dev/null | tail -1)" "2 of 8 lines matched; nothing sent" "summary line, regex only"
+eq "$($J --verbose -e /dog/ -a cat "$F" 2>&1 >/dev/null | tail -1)" "1 of 8 lines matched; 2 sent to Jev in 1 request, 1 input token" "summary line counts the lines a regex left out"
+$J --verbose --dedup -e cat "$F" 2>&1 >/dev/null | tail -1 | grep -Eq '^2 of 8 lines matched; [0-9]+ sent to Jev \([0-9]+ folded by --dedup, ~-?[0-9]+ input tokens saved, -?[0-9]+%\) in 2 requests, 2 input tokens$' || fail "summary line with --dedup"
+$J --dry-run -e /dog/ -a cat "$F" | tail -1 | grep -q ', 2 of 8 lines to send,' || fail "--dry-run counts the lines a regex left out"
 
 # -j: requests in flight at once (each takes 30ms at the fake)
 reset; $J --chunk 1 -j 1 -e cat "$F" >/dev/null; eq "$(stat max)" "1" "-j 1"

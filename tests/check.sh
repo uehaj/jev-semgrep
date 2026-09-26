@@ -67,10 +67,10 @@ z_in | $J -z -e 'the customer is asking for a refund' 2>/dev/null | od -An -c | 
 # --sentence=jev keeps unpunctuated Japanese entries apart, so the refund requests match as they do per line
 [ "$($J -n --sentence -e 'the customer is asking for a refund' corpus.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "14 18 " ]
 
-# --dedup. The summary line ("… (N sent of M) …") is only printed to a terminal, so run under script(1).
+# --dedup. The summary line ("… N sent to Jev (F folded by --dedup, …") is only printed to a terminal, so run under script(1).
 # util-linux script answers --version and takes the command with -c; BSD script takes it as arguments.
 if script --version >/dev/null 2>&1; then onpty() { script -qec "$1" /dev/null </dev/null; }; else onpty() { script -q /dev/null sh -c "$1" </dev/null; }; fi
-sent() { onpty "$J --dedup $* 2>&1 >/dev/null" | grep -o '[0-9]* sent of [0-9]*'; }
+sent() { onpty "$J --dedup $* 2>&1 >/dev/null" | grep -o '[0-9]* sent to Jev ([0-9]* folded'; }
 ids() { printf 'worker request 3fa9c1e27b failed: connection reset\nworker request 88d0e41a5c failed: connection reset\nworker request 0b7f2a9e13 failed: connection reset\nworker started\n'; }
 disk() { printf 'disk usage 95%%\ndisk usage 12%%\ndisk usage 97%%\n'; }
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
@@ -81,9 +81,9 @@ printf 'GET https://example.com/admin/users\nGET https://example.com/public/inde
 printf 'the same line\nthe same line\nthe same line\n' > "$T/same"
 printf '{"url":"https://example.com/a","status":"failed"}\n{"url":"https://example.com/b","status":"success"}\n' > "$T/json"
 # identical lines are one group whatever the meaning
-[ "$(sent -e "'about cats'" "$T/same")" = "1 sent of 3" ]
+[ "$(sent -e "'about cats'" "$T/same")" = "1 sent to Jev (2 folded" ]
 # ids carry no meaning for a failure: the three failures fold into one, and each member gets the answer
-[ "$(sent -e "'a request failed'" "$T/ids")" = "2 sent of 4" ]
+[ "$(sent -e "'a request failed'" "$T/ids")" = "2 sent to Jev (2 folded" ]
 [ "$($J --dedup -c -e 'a request failed' "$T/ids" 2>/dev/null)" = "3" ]
 # every line is still printed, with its own original text rather than the representative's or the mask
 [ "$($J --dedup -c -t 0 -e 'anything at all' "$T/ids" 2>/dev/null)" = "4" ]
@@ -91,21 +91,21 @@ $J --dedup -n -e 'a request failed' "$T/ids" 2>/dev/null | grep -qx '2:worker re
 # (placeholders start with a NUL, so a leaked mask would show one; "! … | grep" would never stop set -e)
 if $J --dedup -e 'a request failed' "$T/ids" 2>/dev/null | od -An -c | grep -q '\\0'; then exit 1; fi
 # a meaning that reads the number keeps numbers apart (#19)
-[ "$(sent -e "'disk usage is above 90%'" "$T/disk")" = "3 sent of 3" ]
+[ "$(sent -e "'disk usage is above 90%'" "$T/disk")" = "3 sent to Jev (0 folded" ]
 [ "$($J --dedup -n -e 'disk usage is above 90%' "$T/disk" 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 3 " ]
 # a meaning that reads the time keeps times apart
-[ "$(sent -e "'happened at night'" "$T/time")" = "3 sent of 3" ]
+[ "$(sent -e "'happened at night'" "$T/time")" = "3 sent to Jev (0 folded" ]
 [ "$($J --dedup -n -e 'happened at night' "$T/time" 2>/dev/null | cut -d: -f1)" = "2" ]
 # a kept kind is safe from the folded ones: the host is kept, and the path mask must not reach into the URL
 # (it did, and folded evil.example.net into example.com)
-[ "$(sent -e "'the request is sent to example.com'" "$T/url")" = "3 sent of 3" ]
+[ "$(sent -e "'the request is sent to example.com'" "$T/url")" = "3 sent to Jev (0 folded" ]
 [ "$($J --dedup -n -e 'the request is sent to example.com' "$T/url" 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 2 " ]
 # kept values stay tied to their place: a URL and a path in swapped places are two groups
 # (they were one, and the second line took the first one's match)
-[ "$(sent -e "'the line fetches /admin/config from https://example.org'" "$T/swap")" = "2 sent of 2" ]
+[ "$(sent -e "'the line fetches /admin/config from https://example.org'" "$T/swap")" = "2 sent to Jev (0 folded" ]
 [ "$($J --dedup -n -e 'the line fetches /admin/config from https://example.org' "$T/swap" 2>/dev/null | cut -d: -f1)" = "1" ]
 # a URL mask stops at the quote: in jsonl it swallowed the fields after it, and failed and success were one group
-[ "$(sent -e "'the request failed'" "$T/json")" = "2 sent of 2" ]
+[ "$(sent -e "'the request failed'" "$T/json")" = "2 sent to Jev (0 folded" ]
 [ "$($J --dedup -n -e 'the request failed' "$T/json" 2>/dev/null | cut -d: -f1)" = "1" ]
 # the per-meaning question runs under -j too, and several meanings still combine
 [ "$($J --dedup -j 1 -c -e 'a request failed' -e 'disk usage is above 90%' "$T/ids" "$T/disk" 2>/dev/null | tr '\n' ' ')" = "$T/ids:3 $T/disk:2 " ]
@@ -129,7 +129,7 @@ node ../scripts/dedup-measure.mjs "$T/ids" | tail -1 | grep -q " | 4 | 2 | "   #
 [ "$(printf '' | $J --dedup -c -e 'about cats' 2>/dev/null)" = "0" ]
 # with --sentence the unit is a sentence, and sentences fold like lines
 printf 'The job 3fa9c1e27b failed. The job 88d0e41a5c failed.\n' > "$T/sent"
-[ "$(sent --sentence=rules -e "'a job failed'" "$T/sent")" = "1 sent of 2" ]
+[ "$(sent --sentence=rules -e "'a job failed'" "$T/sent")" = "1 sent to Jev (1 folded" ]
 # -e '/regex/': matched locally, no Jev involved. NOKEY proves it: no key, no .env, still runs.
 # $NJ skips $J's --env-file (a ../.env would bring the key back), SEMGREP_OPTS= drops the user's defaults.
 NOKEY="env -u TYPESAFE_API_KEY -u SEMGREP_API_KEY -u SEMGREP_URL SEMGREP_OPTS= HOME=/nonexistent-semgrep-test-home"
@@ -181,9 +181,9 @@ eq('\$100 以上の請求', '03:12' + '00 以上の請求');
 "
 
 # With the API: the stderr summary (printed only to a terminal, hence script(1)) counts the units sent.
-sent() { onpty "$J $* 2>&1 >/dev/null" | grep -o '([0-9]* sent)'; }
-[ "$(sent -e "'/ERROR/'" -a "'a network or remote connection failure'" fixture.txt)" = "(4 sent)" ]   # only the 4 ERROR lines
-[ "$(sent -e "'/ERROR/'" -a "'a network or remote connection failure'" -e "'customer is asking for a refund'" fixture.txt)" = "(30 sent)" ]  # the second term has no regex
+sent() { onpty "$J $* 2>&1 >/dev/null" | grep -o '[0-9]* sent to Jev'; }
+[ "$(sent -e "'/ERROR/'" -a "'a network or remote connection failure'" fixture.txt)" = "4 sent to Jev" ]   # only the 4 ERROR lines
+[ "$(sent -e "'/ERROR/'" -a "'a network or remote connection failure'" -e "'customer is asking for a refund'" fixture.txt)" = "30 sent to Jev" ]  # the second term has no regex
 # a line without the regex is asked only the other term: A is true of both lines (line 2 alone scores 0.96),
 # yet line 2 does not match through it
 printf 'the invoice was paid on time\nthe weather is sunny today\n' > "$T/ab"

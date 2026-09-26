@@ -251,7 +251,7 @@ $ ./semgrep -n -e "customer is angry or frustrated" tests/corpus.txt
 18:I want my money back. The item arrived broken and customer service ignored me.
 21:Your product ruined my weekend. Never buying from you again.
 23:This is the third time I'm writing. Nobody has replied to my previous emails.
-5/51 lines, 2 requests, 3225 input tokens
+5 of 51 lines matched; 51 sent to Jev in 2 requests, 3225 input tokens
 ```
 
 どの行にも「angry」「frustrated」という語はありません。英語の意味で日本語の行も拾えています。
@@ -276,7 +276,7 @@ $ echo "ジョブは失敗した" | ./semgrep -Q "ジョブは成功しました
 $ ./semgrep -n -Q "whether the server is down" tests/intent.txt
 5:The server is down.
 6:The server is healthy and responding normally.
-2/17 lines (17 sent), 1 requests, 1087 input tokens, ~$0.000046
+2 of 17 lines matched; 17 sent to Jev in 1 request, 1087 input tokens, ~$0.000046
 ```
 
 確認する行も否定する行も、どちらもサーバが落ちているかどうかを解消しているので一致する。`Is the server
@@ -295,7 +295,7 @@ $ ./semgrep -n -p -e "返金の要求" -e "配送先の変更依頼" tests/corpu
 17:ユーザー高橋さんからの問い合わせ: 配送先の住所を変更したいのですが	[0.01 0.96]
 18:I want my money back. The item arrived broken and customer service ignored me.	[0.96 0.01]
 22:Can I change the delivery address for order #8821?	[0.02 0.96]
-4/51 lines, 2 requests, 4602 input tokens
+4 of 51 lines matched; 51 sent to Jev in 2 requests, 4602 input tokens
 ```
 
 末尾の括弧が、指定した順に各意味の確率です。閾値を決めるときの目安になります。
@@ -316,7 +316,7 @@ $ ./semgrep -n -e "ネットワークやリモート接続の障害" -v "a retry
 13:network unreachable: no route to host 10.0.0.5
 30:except ConnectionError as e:
 31:    logger.error("upstream unreachable: %s", e)
-7/51 lines, 2 requests, 5112 input tokens
+7 of 51 lines matched; 51 sent to Jev in 2 requests, 5112 input tokens
 ```
 
 5 行目の `retrying payment-gateway request (attempt 2/3)` はネットワーク障害ですが、`-v` で落ちています。
@@ -328,7 +328,7 @@ $ ./semgrep -n -e "about economy, finance or markets" -a "the news is negative o
 36:今日の天気は晴れ、最高気温は28度です
 43:Stock prices fell 3% after the earnings report missed expectations.
 48:明日は雨の予報なので傘を持っていきます
-3/51 lines, 2 requests, 5673 input tokens
+3 of 51 lines matched; 51 sent to Jev in 2 requests, 5673 input tokens
 ```
 
 `The central bank raised interest rates` は金融の話ですが下落ではないので外れています。
@@ -527,7 +527,7 @@ $ ./semgrep --dedup -n -e "a request failed" app.log
 1:worker request 3fa9c1e27b failed: connection reset
 2:worker request 88d0e41a5c failed: connection reset
 4:worker request 0b7f2a9e13 failed: connection reset
-3/6 lines (4 sent of 6), 2 requests, 907 input tokens, ~$0.000038
+3 of 6 lines matched; 4 sent to Jev (2 folded by --dedup) in 2 requests, 907 input tokens, ~$0.000038
 ```
 
 どの値をまとめてよいかは意味によります。「ディスク使用率が 90% を超えている」なら数値が、「夜間に起きた」なら
@@ -539,6 +539,10 @@ Jev に聞き、その種類はまとめません（上の 2 リクエストの�
 `install.log` が 21.1% に縮みました。Claude Code のトランスクリプト（jsonl）は 56.8% までしか縮みません。
 機械が吐くログ向けの機能で、散文には共通の骨格がなく、時刻を読む意味ではほとんど縮みません。
 `-z` や `--sentence` では、行ではなくレコードや文をまとめます。
+
+検索後の集計行には、まとめたことで浮いた分が `(2 folded by --dedup, ~1100 input tokens / ~$0.000046 saved, 45%)`
+のように出ます。まとめた行を別のリクエストとして送った場合の推定値から、値の種類を聞いたリクエストの費用を引いた
+正味の値です。小さなファイルや散文ではマイナスになることもあります。
 
 手元のログがどこまで縮むかは、検索の費用を払う前に `node scripts/dedup-measure.mjs FILE...` で確かめられます。
 同じマスクを使い、API を呼ばずに行数・テンプレート数・送るバイト数の割合を数えます。`--keep=num,time` を

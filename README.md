@@ -268,7 +268,7 @@ $ ./semgrep -n -e "customer is angry or frustrated" tests/corpus.en.txt
 18:I want my money back. The item arrived broken and customer service ignored me.
 21:Your product ruined my weekend. Never buying from you again.
 23:This is the third time I'm writing. Nobody has replied to my previous emails.
-5/51 lines (51 sent), 2 requests, 3054 input tokens, ~$0.000128
+5 of 51 lines matched; 51 sent to Jev in 2 requests, 3054 input tokens, ~$0.000128
 ```
 
 None of these lines contain the words "angry" or "frustrated".
@@ -292,7 +292,7 @@ answers nothing, and for a yes/no question a line that *denies* it still answers
 $ ./semgrep -n -Q "whether the server is down" tests/intent.txt
 5:The server is down.
 6:The server is healthy and responding normally.
-2/17 lines (17 sent), 1 requests, 1087 input tokens, ~$0.000046
+2 of 17 lines matched; 17 sent to Jev in 1 request, 1087 input tokens, ~$0.000046
 ```
 
 Both the confirming line and the denying line match: each settles whether the server is down. `Is the
@@ -308,7 +308,7 @@ $ ./semgrep -n -p -e "customer is asking for a refund" -e "delivery address chan
 17:Inquiry from user Takahashi: I'd like to change the delivery address	[0.01 0.99]
 18:I want my money back. The item arrived broken and customer service ignored me.	[0.96 0.01]
 22:Can I change the delivery address for order #8821?	[0.02 0.99]
-4/51 lines (51 sent), 2 requests, 4275 input tokens, ~$0.000180
+4 of 51 lines matched; 51 sent to Jev in 2 requests, 4275 input tokens, ~$0.000180
 ```
 
 The bracket shows one probability per meaning, in the order given. Use it to pick a threshold.
@@ -329,7 +329,7 @@ $ ./semgrep -n -e "network or remote connection failure" -v "a retry is happenin
 13:network unreachable: no route to host 10.0.0.5
 30:except ConnectionError as e:
 31:    logger.error("upstream unreachable: %s", e)
-7/51 lines, 2 requests, 5112 input tokens
+7 of 51 lines matched; 51 sent to Jev in 2 requests, 5112 input tokens
 ```
 
 Line 5, `retrying payment-gateway request (attempt 2/3)`, is a network failure but is dropped by `-v`.
@@ -341,7 +341,7 @@ $ ./semgrep -n -e "about economy, finance or markets" -a "the news is negative o
 36:Today's weather is sunny, high of 28 degrees
 43:Stock prices fell 3% after the earnings report missed expectations.
 48:Tomorrow's forecast is rain so I'll bring an umbrella
-3/51 lines (51 sent), 2 requests, 5499 input tokens, ~$0.000231
+3 of 51 lines matched; 51 sent to Jev in 2 requests, 5499 input tokens, ~$0.000231
 ```
 
 `The central bank raised interest rates` is about finance but not a decline, so it is out.
@@ -544,7 +544,7 @@ $ ./semgrep --dedup -n -e "a request failed" app.log
 1:worker request 3fa9c1e27b failed: connection reset
 2:worker request 88d0e41a5c failed: connection reset
 4:worker request 0b7f2a9e13 failed: connection reset
-3/6 lines (4 sent of 6), 2 requests, 907 input tokens, ~$0.000038
+3 of 6 lines matched; 4 sent to Jev (2 folded by --dedup) in 2 requests, 907 input tokens, ~$0.000038
 ```
 
 Whether a value may be folded depends on the meaning: a number decides "disk usage is above 90%", a time
@@ -556,6 +556,10 @@ Measured on real logs, with nothing kept: a 43,071-line system log folds into 55
 bytes), `install.log` to 21.1%, a Claude Code transcript (jsonl) only to 56.8%. It is for machine-generated
 logs; prose has no shared skeleton, and a meaning that reads a timestamp folds almost nothing. With `-z` or
 `--sentence` the records or sentences fold instead of lines.
+
+After a search, the summary line says what the folding saved: `(2 folded by --dedup, ~1100 input tokens /
+~$0.000046 saved, 45%)`. It estimates what the folded lines would have cost as requests of their own and subtracts
+what the value questions cost. On a small file or on prose, the result can be negative.
 
 To see how far your own logs fold before paying for a search, `node scripts/dedup-measure.mjs FILE...`
 counts lines, templates and the share of bytes sent, offline, with the same masks; `--keep=num,time` shows
