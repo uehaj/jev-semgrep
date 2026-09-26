@@ -7,6 +7,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync, writeSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { dirname, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
 // Errors are one line plus exit code 2, like grep. No stack traces.
@@ -125,7 +126,10 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                language or format (Python files, YAML files, ...) or to what changed within a span (the last
                minute / hour, today, yesterday, the last 1 / 2 / 3 / 7 / 30 days, this month, last week, last
                month, the last year, this fiscal year) or to a place (test code, migrations, the README, the
-               changelog, documentation, source code, logs); a yes at 0.6 or more searches only those files
+               changelog, documentation, source code, logs), a git state (uncommitted, staged, untracked, this
+               branch, not pushed, mine) or an author (the 30 with the most commits); a yes at 0.6 or more
+               searches only those files. In a repository a time goes by commits: a committed file needs a
+               commit since then, an uncommitted one its mtime
                (*.py *.pyi *.pyw; modified since then). Jev reads the whole meaning, so "案A、B、Cで" is not
                about C files. Per term: -e A -e B still searches B in the files A leaves out. Each scope goes
                to stderr as semgrep: scope: ...; files named on the command line are never narrowed
@@ -242,7 +246,9 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                送り、その意味が一致を言語・形式 (Python のファイル、YAML のファイル…) や変更時期 (1 分以内、
                1 時間以内、今日、昨日、1・2・3・7・30 日以内、今月、先週、先月、この 1 年、今年度) に限定して
                いるか、置き場所 (テストコード、マイグレーション、README、CHANGELOG、文書、ソースコード、ログ) に
-               限定しているかを聞く。0.6 以上で yes なら、-r と git semgrep で見つけたファイルをそのファイル
+               限定しているか、git の状態 (未コミット、ステージ、未追跡、このブランチ、未プッシュ、自分が書いた)
+               や作者 (コミットの多い 30 人) に限定しているかを聞く。リポジトリでは時期をコミットで見る
+               (コミット済みはそれ以降のコミットがあるもの、未コミットは mtime)。0.6 以上で yes なら、-r と git semgrep で見つけたファイルをそのファイル
                (*.py *.pyi *.pyw、それ以降に更新したもの) に絞る。Jev は意味全体を読むので、「案A、B、Cで」は
                C のファイルの話にならない。項ごとに効くので、-e A -e B は A が除いたファイルでも B を探す。
                絞り込みは semgrep: scope: ... として stderr に出す。コマンドラインで指定したファイルは絞らない
@@ -508,7 +514,79 @@ const TIME_SPANS = [ // [key, the span in the question, its start]
 ];
 const fmtTime = ms => new Date(ms - new Date(ms).getTimezoneOffset() * 6e4).toISOString().slice(0, 16).replace('T', ' ');
 for (const [key, span, from] of TIME_SPANS)
-  CANDIDATES.push({ key: `t_${key}`, cat: 'time', what: `what was changed ${span}`, from, label: `modified since ${fmtTime(from)}`, test: (f, st) => st.mtimeMs >= from });
+  CANDIDATES.push({ key: `t_${key}`, cat: 'time', what: `what was changed ${span}`, from, label: `changed since ${fmtTime(from)} (git commits; the mtime for files git does not have committed)`, test: (f, st) => changedSince(from, f, st) });
+// git (#46): inside a repository, git says which files changed since a time, who wrote them and what is uncommitted,
+// staged, untracked, changed on this branch or not pushed. One git process per repository and question, over the
+// whole tree: `git log -1 -- FILE` per file took 50 ms a file on a 6,400-file repository (5 minutes), `git log
+// --since` over the tree 15 ms. Files, not lines: `git blame` took 93 ms a file, and which lines changed is #49.
+// Outside a repository, without git, or when git fails, a git scope admits every file (a time falls back to the mtime).
+const repoOf = (memo => function repo(dir) {
+  if (!memo.has(dir)) memo.set(dir, existsSync(`${dir}/.git`) ? dir : dirname(dir) === dir ? null : repo(dirname(dir)));
+  return memo.get(dir);
+})(new Map());
+const gitMemo = new Map(); // repository + args -> Set of absolute paths, or null when git failed
+function gitPaths(top, ...args) {
+  const key = [top, ...args].join('\0');
+  if (!gitMemo.has(key)) {
+    let paths = null;
+    try { paths = new Set(execFileSync('git', ['-C', top, ...args], { encoding: 'utf8', maxBuffer: Infinity, stdio: ['ignore', 'pipe', 'ignore'] }).split(/[\0\n]/).filter(Boolean).map(p => resolve(top, p))); } catch {}
+    gitMemo.set(key, paths);
+  }
+  return gitMemo.get(key);
+}
+const gitOut = (top, ...args) => { try { return execFileSync('git', ['-C', top, ...args], { encoding: 'utf8', maxBuffer: Infinity, stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return ''; } };
+const union = (...sets) => (sets.some(x => !x) ? null : new Set(sets.flatMap(x => [...x])));
+const untracked = top => gitPaths(top, 'ls-files', '-z', '--others', '--exclude-standard');
+const uncommitted = top => union(gitPaths(top, 'diff', '--name-only', '-z', 'HEAD'), untracked(top)); // worktree and index against HEAD
+// The branch's own changes: from where it left the default branch (origin/HEAD, else main or master) to the worktree.
+function branchChanges(top) {
+  const base = [gitOut(top, 'rev-parse', '--abbrev-ref', 'origin/HEAD'), 'main', 'master', 'origin/main', 'origin/master'].find(b => b && gitOut(top, 'rev-parse', '--verify', '-q', b));
+  const fork = base && gitOut(top, 'merge-base', 'HEAD', base);
+  if (!fork || fork === gitOut(top, 'rev-parse', 'HEAD')) return null; // on the default branch itself: no branch of its own
+  return union(gitPaths(top, 'diff', '--name-only', '-z', fork), untracked(top));
+}
+// Commits not on the upstream; without one, commits on no remote branch.
+const unpushed = top => gitPaths(top, 'log', '--format=', '--name-only', '-z', '@{upstream}..HEAD') ?? gitPaths(top, 'log', '--format=', '--name-only', '-z', 'HEAD', '--not', '--remotes');
+// Every file a commit by this e-mail touched (mailmap applied); me: user.email's, and the uncommitted files.
+// ponytail: a file renamed after they wrote it is missed; `git log --follow` per file if that matters.
+function byAuthor(top, email) {
+  const me = email === null, who = me ? gitOut(top, 'config', 'user.email') : email;
+  if (!who) return null;
+  const files = gitPaths(top, 'log', '--use-mailmap', '-i', `--author=<${who.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}>`, '--format=', '--name-only', '-z');
+  return !files?.size ? null : me ? union(files, uncommitted(top)) : files;
+}
+// A time in a repository: a committed file needs a commit at or after it (a checkout sets every mtime to now, and a
+// commit comes after the edit it records; the committer date, which a rebase moves later, never earlier). An
+// uncommitted file, or one outside a repository, needs its mtime at or after it.
+function changedSince(from, f, st) {
+  const abs = resolve(f), top = repoOf(dirname(abs));
+  const committed = top && gitPaths(top, 'log', `--since=${new Date(from).toISOString()}`, '--format=', '--name-only', '-z'), open = top && uncommitted(top);
+  return !committed || !open ? st.mtimeMs >= from : committed.has(abs) || (open.has(abs) && st.mtimeMs >= from);
+}
+const inGit = files => f => { const abs = resolve(f), top = repoOf(dirname(abs)), set = top && files(top); return !set || set.has(abs); };
+const GIT_STATES = [ // [key, what the question names, files of a repository]
+  ['uncommitted', 'files with uncommitted changes (modified, staged or untracked)', uncommitted],
+  ['staged', 'files with staged changes', top => gitPaths(top, 'diff', '--name-only', '-z', '--cached')],
+  ['untracked', 'untracked files, not yet added to git', untracked],
+  ['branch', 'files changed on the current git branch', branchChanges],
+  ['unpushed', 'files changed in commits not yet pushed', unpushed],
+  ['mine', 'code written by me (the current git user)', top => byAuthor(top, null)],
+];
+// The candidates git adds, from the repositories of the files found: the states git can answer there (not "this
+// branch" on the default branch), and the 30 authors with the most commits. Only asked when there is a repository.
+function gitCandidates(found) {
+  const tops = [...new Set(found.map(f => repoOf(dirname(resolve(f)))).filter(Boolean))];
+  const out = GIT_STATES.filter(([key, , files]) => key === 'mine' || tops.some(t => files(t)))
+    .map(([key, what, files]) => ({ key: `g_${key}`, cat: key === 'mine' ? 'author' : `git-${key}`, what, label: `git-${key} files`, test: inGit(files) })); // mine and an author named as me are alternatives, not both required
+  const authors = new Map(); // e-mail -> { who, commits }
+  for (const t of tops) for (const line of gitOut(t, 'shortlog', '-sne', 'HEAD').split('\n')) {
+    const m = line.match(/^\s*(\d+)\s+(.*<(.+)>)$/);
+    if (m) authors.set(m[3], { who: m[2], commits: (authors.get(m[3])?.commits ?? 0) + +m[1] });
+  }
+  for (const [email, { who }] of [...authors].sort((a, b) => b[1].commits - a[1].commits).slice(0, 30))
+    out.push({ key: `a_${email.replace(/\W/g, '_')}`, cat: 'author', what: `code written by ${who}`, label: `git-author files: by ${who}`, test: inGit(top => byAuthor(top, email)) });
+  return out;
+}
 const scopeQuestions = text => Object.fromEntries(CANDIDATES.map(c => [c.key, { type: 'noul', instructions: `Does the meaning "${text}" restrict its matches to ${c.what}?` }]));
 // Jev's answers -> one scope per category that got a yes: { label, words, test }
 function scopesOf(answers) {
@@ -659,6 +737,7 @@ const release = () => (running--, waiters.shift()?.());
 const pooled = async fn => { await acquire(); try { return await fn(); } finally { release(); } };
 
 // The scope questions go out only now, after -i's answer, and only when there is something to narrow.
+if (narrowable) CANDIDATES.push(...gitCandidates(found.filter(f => !named(f))));
 if (narrowable) await Promise.all(expr.flatMap(term => scoped(term).map(lit =>
   pooled(() => post({ meaning: lit.text }, scopeQuestions(lit.text), `[scope] "${cut(lit.text, 40)}"`)).then(a => scopesOf(a).forEach(sc => addScope(term, sc))))));
 // A file no term admits is not read. Each scope is reported when it can narrow something (not with named files only),

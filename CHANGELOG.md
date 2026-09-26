@@ -16,6 +16,9 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   narrowed. `--no-auto-scope` turns it off, `--auto-scope` back on.
 - Auto-scope by place (#48): test code, migrations, the README, the changelog, documentation, source code (what is
   not documentation) and logs, by path conventions, asked of Jev with the other candidates.
+- Auto-scope from git (#46): in a repository a time goes by commits (uncommitted files by their mtime), and git
+  states (uncommitted, staged, untracked, this branch, not pushed, mine) and the 30 most active authors are
+  candidates too. One git process per repository and question.
 
 ## [0.4.0] - 2026-09-26
 

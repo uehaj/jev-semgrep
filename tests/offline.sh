@@ -286,12 +286,32 @@ eq "$($JI -r -l --no-auto-scope -e "$PY" "$S" 2>&1 | grep -c .)" "4" "--no-auto-
 eq "$($E SEMGREP_URL=$base/v1 SEMGREP_OPTS=--no-auto-scope node $SG -r -l --auto-scope -e "$PY" "$S" 2>/dev/null | grep -c .)" "3" "--auto-scope undoes SEMGREP_OPTS"
 eq "$($JI -r -l -e 'Python で cat' "$S" 2>&1 | grep -c 'semgrep: scope:' || true)" "0" "no scope when Jev says no"
 eq "$($JI -r -l -e "$T" "$S" 2>/dev/null | tr '\n' ' ')" "$S/a.py $S/b.js $S/sub/c.py " "scope: a time span, by mtime"
-eq "$($JI -r -l -e "$T" "$S" 2>&1 >/dev/null | grep -c 'modified since .* (from "what was changed yesterday: 0.90")')" "1" "scope: the narrowest span"
+eq "$($JI -r -l -e "$T" "$S" 2>&1 >/dev/null | grep -c 'since .* (from "what was changed yesterday: 0.90")')" "1" "scope: the narrowest span"
 eq "$($JI -r -l -e 'cat @s:l_javascript @s:l_typescript' "$S" 2>&1 >/dev/null | head -1)" 'semgrep: scope: *.js *.mjs *.cjs *.jsx | *.ts *.mts *.cts *.tsx (from "JavaScript files: 0.90", "TypeScript files: 0.90")' "scope: two languages are alternatives"
 eq "$($JI -r -l -e "$PT" "$S" 2>/dev/null | tr '\n' ' ')" "$S/a.py $S/sub/c.py " "scope: categories intersect"
 eq "$($JI -r --dry-run -e "$T" -e dog "$S" | grep -c '\[scope\]')" "2" "scope: one question request per meaning"
 eq "$($JI --dry-run -e "$T" "$S/a.py" | grep -c '\[scope\]' || true)" "0" "scope: no question for named files only"
 eq "$($JI -r --no-auto-scope --dry-run -e "$T" "$S" | grep -c '\[scope\]' || true)" "0" "scope: no question with --no-auto-scope"
+# git: time by commit (not the mtime a checkout sets), states and authors; not asked outside a repository
+G="$tmp/gitscope"; mkdir -p "$G"
+GM='cat @s:t_yesterday|cat @s:a_a_x|cat @s:g_mine|cat @s:g_mine @s:a_b_x|cat @s:g_uncommitted|cat @s:g_staged|cat @s:g_untracked|cat @s:g_branch|cat @s:g_unpushed'
+for f in old new feat dirty staged untr; do printf '%s\n' "$GM" | tr '|' '\n' >"$G/$f.txt"; done
+(cd "$G" && git init -q -b main && git config user.email b@x && git config user.name Bob && git config core.hooksPath /dev/null \
+  && git add old.txt dirty.txt && GIT_AUTHOR_DATE=2020-01-01T00:00 GIT_COMMITTER_DATE=2020-01-01T00:00 git commit -q --author='Alice <a@x>' -m old \
+  && git add new.txt && git commit -q -m new && git checkout -q -b feat && git add feat.txt && git commit -q -m feat \
+  && echo more >>dirty.txt && git add staged.txt)
+gs() { $JI -r -l -e "cat @s:$1" "$G" 2>/dev/null | sed "s|$G/||" | tr '\n' ' '; }
+eq "$(gs t_yesterday)" "dirty.txt feat.txt new.txt staged.txt untr.txt " "git scope: time by commit, old.txt's fresh mtime aside"
+eq "$(gs a_a_x)" "dirty.txt old.txt " "git scope: an author"
+eq "$(gs g_mine)" "dirty.txt feat.txt new.txt staged.txt untr.txt " "git scope: mine, uncommitted files included"
+eq "$(gs 'g_mine @s:a_b_x')" "dirty.txt feat.txt new.txt staged.txt untr.txt " "git scope: mine and my name as an author are alternatives"
+eq "$(gs g_uncommitted)" "dirty.txt staged.txt untr.txt " "git scope: uncommitted"
+eq "$(gs g_staged)" "staged.txt " "git scope: staged"
+eq "$(gs g_untracked)" "untr.txt " "git scope: untracked"
+eq "$(gs g_branch)" "dirty.txt feat.txt staged.txt untr.txt " "git scope: this branch"
+eq "$(gs g_unpushed)" "dirty.txt feat.txt new.txt old.txt " "git scope: unpushed, no remote"
+eq "$(cd "$G" && $GS -l -e 'cat @s:g_staged' 2>/dev/null | tr '\n' ' ')" "staged.txt " "git scope: git semgrep"
+eq "$($JI -r -l -e 'cat @s:g_staged' "$S" 2>&1 | grep -c 'semgrep: scope:' || true)" "0" "git scope: not asked outside a repository"
 # places: by path; several are alternatives
 W="$tmp/roles"; mkdir -p "$W/tests" "$W/src" "$W/docs"; RT='cat @s:r_test'; RR='cat @s:r_readme @s:r_changelog'; RC='cat @s:r_code'
 for f in tests/x.js src/y.js README.md docs/guide.txt app.log; do printf '%s\n' "$RT" "$RR" "$RC" >"$W/$f"; done

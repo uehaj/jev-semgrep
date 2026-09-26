@@ -413,6 +413,13 @@ semgrep: scope: 3 of 120 files
   *.txt`, `docs/`), source code (whatever is not documentation, so languages missing from the dictionary still
   count) and logs (`*.log *.log.N *.out *.err`, `logs/`), by the path conventions of JS, Python, Go, Java, Ruby, Rust
   and PHP. Several places are alternatives ("README か CHANGELOG に").
+- **git**: in a repository, a time goes by commits: a committed file needs a commit at or after the start (the
+  committer date; a checkout sets every mtime to now), an uncommitted one its mtime. States: uncommitted (worktree
+  and index against HEAD, and untracked files), staged, untracked, this branch (since it left `origin/HEAD`, `main`
+  or `master`), not pushed (`@{upstream}..HEAD`, else commits on no remote branch), and mine (`user.email`'s
+  commits and the uncommitted files). Authors: the 30 with the most commits (`git shortlog`), each a candidate by
+  name and e-mail; a yes narrows to every file a commit of theirs touched. Outside a repository none of these is
+  asked, and a time goes by the mtime.
 - Jev reads the whole meaning, in any language: "案A、B、Cで比較" is not about C files, and a date quoted in a
   comment is not when the file changed. Nothing is extracted from the text; the candidates are fixed.
 - **Per term.** `-e A -e B` still searches B in the files A's scope leaves out; within an AND term, and across
