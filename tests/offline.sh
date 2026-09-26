@@ -12,7 +12,7 @@ trap 'kill $fake 2>/dev/null; wait $fake 2>/dev/null || true; rm -rf "$tmp"' EXI
 i=0; while [ ! -s "$tmp/port" ]; do i=$((i + 1)); [ $i -lt 200 ] || { echo "FAIL: fake-jev did not start" >&2; exit 1; }; sleep 0.05; done
 base="http://127.0.0.1:$(cat "$tmp/port")"
 # No key from the environment, and a HOME and cwd without .env, so nothing real is read or sent
-E="env -u SYS1GREP_API_KEY -u SEMGREP_API_KEY -u TYPESAFE_API_KEY -u SYS1GREP_MODEL -u SEMGREP_MODEL -u SEMGREP_URL -u SEMGREP_SUMMARIZER -u SEMGREP_SUMMARIZER_MODEL -u NO_COLOR -u LC_ALL -u LC_MESSAGES HOME=$tmp SYS1GREP_OPTS="
+E="env -u SYS1GREP_API_KEY -u SEMGREP_API_KEY -u TYPESAFE_API_KEY -u SYS1GREP_MODEL -u SEMGREP_MODEL -u SEMGREP_URL -u SEMGREP_SUMMARIZER -u SEMGREP_SUMMARIZER_MODEL -u SYS1GREP_SUMMARIZER_API_KEY -u SEMGREP_SUMMARIZER_API_KEY -u OLLAMA_HOST -u NO_COLOR -u LC_ALL -u LC_MESSAGES HOME=$tmp SYS1GREP_OPTS="
 J="$E SYS1GREP_URL=$base/v1 node ../sys1grep.mjs"
 stat() { curl -s "$base" | node -pe "JSON.parse(require('fs').readFileSync(0)).$1"; }
 reset() { curl -s "$base/reset" >/dev/null; }
@@ -522,6 +522,27 @@ eq "$b" "$a" "--summarize-prompt with empty TEXT is the same as none"
 eq "$($E PATH=$tmp/bin:$PATH SYS1GREP_OPTS='--summarize-prompt=x' SYS1GREP_URL=$base/v1 node ../sys1grep.mjs -l -e cat "$F")" "$F" "--summarize-prompt in SYS1GREP_OPTS without --summarize: -l still works"
 $E PATH=$tmp/bin:$PATH SUM=$tmp/sum SYS1GREP_OPTS='--summarize-prompt=fromopts' SYS1GREP_URL=$base/v1 node ../sys1grep.mjs --summarize -e cat "$F" >/dev/null
 grep -qF 'The user adds: fromopts' "$tmp/sum.argv" || fail "--summarize-prompt in SYS1GREP_OPTS applies once --summarize is given"
+
+# --summarize=ollama / lmstudio / a URL (#76): an OpenAI-compatible server, sent by fetch, no CLI
+reset
+code 2 "--summarize=ollama needs SYS1GREP_SUMMARIZER_MODEL" -- $S --summarize=ollama -e cat "$F"
+eq "$(stat count)" "0" "--summarize=ollama without a model sends nothing"
+port=$(cat "$tmp/port")
+O="$E OLLAMA_HOST=127.0.0.1:$port SYS1GREP_SUMMARIZER_MODEL=qwen3.5:9b SYS1GREP_URL=$base/v1 node ../sys1grep.mjs"
+out=$($O --summarize=ollama -n -e cat "$F")
+eq "$out" "$(printf '1:cat|4:cat dog' | tr 'a-z' 'A-Z' | tr '|' '\n')" "--summarize=ollama: the answer"
+eq "$(stat chat.model)" "qwen3.5:9b" "--summarize=ollama: the model"
+eq "$(stat chat.authorization)" "null" "--summarize=ollama: no key even with SYS1GREP_SUMMARIZER_API_KEY (never sent)"
+$E OLLAMA_HOST=127.0.0.1:$port SYS1GREP_SUMMARIZER_MODEL=x SYS1GREP_SUMMARIZER_API_KEY=secret SYS1GREP_URL=$base/v1 node ../sys1grep.mjs --summarize=ollama -e cat "$F" >/dev/null
+eq "$(stat chat.authorization)" "null" "--summarize=ollama never sends SYS1GREP_SUMMARIZER_API_KEY"
+code 2 "--summarize=http://... server error" -- $O --summarize="$base/v1" --summarize-prompt='@500' -e cat "$F"
+$O --summarize="$base/v1" --summarize-prompt='@500' -e cat "$F" 2>&1 >/dev/null | grep -q '^sys1grep: --summarize=.*: 500: server error ' || fail "--summarize=URL: the server's error body"
+code 2 "--summarize=http://... no content" -- $O --summarize="$base/v1" --summarize-prompt='@empty' -e cat "$F"
+eq "$($E SYS1GREP_SUMMARIZER_MODEL=x SYS1GREP_SUMMARIZER_API_KEY=secret SYS1GREP_URL=$base/v1 node ../sys1grep.mjs --summarize="$base/v1" -n -e cat "$F")" "$(printf '1:cat|4:cat dog' | tr 'a-z' 'A-Z' | tr '|' '\n')" "--summarize=URL: the answer"
+eq "$(stat chat.authorization)" "Bearer secret" "--summarize=URL sends SYS1GREP_SUMMARIZER_API_KEY as Bearer"
+$S --summarize=lmstudio --dry-run -e cat "$F" 2>&1 | grep -qF 'needs SYS1GREP_SUMMARIZER_MODEL' || fail "--summarize=lmstudio without a model: dry-run errors too"
+$E SYS1GREP_SUMMARIZER_MODEL=x SYS1GREP_URL=$base/v1 node ../sys1grep.mjs --summarize=lmstudio --dry-run -e cat "$F" | grep -q '^sys1grep: summarize: POST http://localhost:1234/v1/chat/completions model=x' || fail "--dry-run shows the lmstudio target"
+code 2 "--summarize=unknown-tool-or-url" -- $S --summarize=nope -e cat "$F"
 
 # the spinner (#89): on a terminal, one line on stderr while waiting, erased before the output; never when not a terminal
 printf 'cat @slow\ndog\n' >"$tmp/slow.txt"

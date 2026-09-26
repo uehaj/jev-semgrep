@@ -571,9 +571,9 @@ $ sys1grep -r -n --summarize -e "API キーをファイルから読んでいる"
 を尋ねた例では、Claude の入力が 22,059 トークンから 1,356 に、Jev を含む総額が $0.094 から $0.013 に下がり、答えは同じでした（#69）。
 答えが少数の行にあるときに効きます。
 
-- 一致した行はもう一度マシンの外へ、Anthropic に送られます。
+- 一致した行はもう一度マシンの外へ、Anthropic（や TOOL の接続先）に送られます。
 - `-n`・`-A/-B/-C`・`-p`・ファイル名は表示どおりに渡し、色は付けません。一致がなければ何も渡しません（終了コード 1）。
-- `SYS1GREP_SUMMARIZER` は値を付けない `--summarize` の TOOL を（今は `claude` だけ）、`SYS1GREP_SUMMARIZER_MODEL` はそのモデルを決めます。
+- `SYS1GREP_SUMMARIZER` は値を付けない `--summarize` の TOOL を、`SYS1GREP_SUMMARIZER_MODEL` はそのモデルを決めます。
 - `-q`・`-l`・`-c` は行を出さないので、一緒には使えません。
 - `--dedup` では、Jev に送ったものと同じく、テンプレートごとの代表を 1 回だけ `(×N like it)` を付けて渡します。
   答えを使い回したすべての行は渡しません。
@@ -588,6 +588,21 @@ $ sys1grep -r -n --summarize --summarize-prompt="3 行以内で。どのファ�
 ```
 
 `--summarize` が要ります。空の TEXT は指定しないのと同じです。
+
+他の TOOL:
+
+```sh
+$ SYS1GREP_SUMMARIZER_MODEL=qwen3.5:9b sys1grep --summarize=ollama -e "..." FILE
+$ SYS1GREP_SUMMARIZER_MODEL=some-id sys1grep --summarize=lmstudio -e "..." FILE   # モデル id は GET /v1/models から
+$ SYS1GREP_SUMMARIZER_MODEL=some-id sys1grep --summarize=http://localhost:8080/v1 -e "..." FILE  # llama.cpp・vLLM・LocalAI・ゲートウェイ
+```
+
+`ollama` と `lmstudio` はローカルの OpenAI 互換サーバ (`POST /v1/chat/completions`) へ `fetch` で直接送ります。
+CLI を挟まないので、一致した行がもう一度マシンの外へ出ることはありません。素の `http(s)://` URL は他の
+OpenAI 互換サーバ全般です。3 つとも `SYS1GREP_SUMMARIZER_MODEL` が要ります（既定モデルが無いため）。
+`SYS1GREP_SUMMARIZER_API_KEY` は URL の TOOL にだけ `Authorization: Bearer` として送られます
+（Jev 用の `SYS1GREP_API_KEY` は送りません）。`OLLAMA_HOST` で ollama 側のホストを変えられます
+（`ollama` CLI 自体と同じ）。
 
 ## Claude Code から使う
 

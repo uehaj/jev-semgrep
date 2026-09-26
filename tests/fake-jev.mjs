@@ -6,14 +6,32 @@
 // "@slow" in any line makes it 400ms, so the spinner (drawn after 300ms) shows up.
 // GET returns {"count", "asked", "max", "auth", "model"}: judging requests and questions so far, most requests in flight at once, the last
 // authorization header and model; GET /reset also zeroes them. Prints the port it listens on.
+//
+// POST .../chat/completions is a second, unrelated stand-in: an OpenAI-compatible server for --summarize=ollama /
+// lmstudio / a URL (#76). It records the last {model, messages, authorization} as "chat", answered by GET too.
+// The system message deciding the answer: it contains "@500" -> 500 with a plain-text body (an escape sequence in
+// it, like @err above); "@empty" -> 200 with no choices[0].message.content; else 200 with the user message
+// upper-cased, so a test can tell the request was received right without hard-coding an answer.
 import { createServer } from 'node:http';
 
-let count = 0, asked = 0, inFlight = 0, max = 0, auth = null, model = null;
+let count = 0, asked = 0, inFlight = 0, max = 0, auth = null, model = null, chat = null;
 const server = createServer(async (req, res) => {
   if (req.method === 'GET') {
-    res.end(JSON.stringify({ count, asked, max, auth, model }));
-    if (req.url === '/reset') count = asked = max = 0, auth = model = null;
+    res.end(JSON.stringify({ count, asked, max, auth, model, chat }));
+    if (req.url === '/reset') count = asked = max = 0, auth = model = chat = null;
     return;
+  }
+  if (req.url.endsWith('/chat/completions')) {
+    let raw = '';
+    for await (const c of req) raw += c;
+    const { model: m, messages } = JSON.parse(raw);
+    chat = { model: m, messages, authorization: req.headers.authorization ?? null };
+    const sys = messages.find(x => x.role === 'system')?.content ?? '';
+    if (sys.includes('@500')) { res.statusCode = 500; return res.end('server error\x1b[31m ' + 'x'.repeat(1000)); }
+    res.setHeader('content-type', 'application/json');
+    if (sys.includes('@empty')) return res.end(JSON.stringify({ choices: [{ message: {} }] }));
+    const user = messages.find(x => x.role === 'user')?.content ?? '';
+    return res.end(JSON.stringify({ choices: [{ message: { content: user.toUpperCase() } }] }));
   }
   let body = '';
   for await (const c of req) body += c;

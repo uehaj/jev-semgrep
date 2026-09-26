@@ -25,6 +25,11 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   not sent at all (exit 2), never cut short (#98).
 - `--summarize-prompt=TEXT` adds the user's own instruction after `--summarize`'s fixed one (#88). Needs
   `--summarize`; empty TEXT is the same as none.
+- `--summarize=ollama` / `--summarize=lmstudio` / `--summarize=http(s)://...` send the same request straight to
+  an OpenAI-compatible chat server by `fetch`, no CLI, so the matching lines never leave the machine a second
+  time with a local server (#76). All three need `SYS1GREP_SUMMARIZER_MODEL` (no default model);
+  `SYS1GREP_SUMMARIZER_API_KEY` goes as `Authorization: Bearer` to a URL TOOL only, never `SYS1GREP_API_KEY`.
+  `OLLAMA_HOST` moves `ollama`'s host.
 - On a terminal, a one-line spinner on stderr while sys1grep waits for Jev (`12 of 149 requests`) or the summarizer,
   drawn after 300 ms and erased before any output (#89). Not with `-q`, `--dry-run`, `--verbose` or `TERM=dumb`,
   and never when stderr is not a terminal, so scripts see exactly what they saw before.
