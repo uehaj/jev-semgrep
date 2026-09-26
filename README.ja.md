@@ -534,7 +534,7 @@ $ ./semgrep --dedup -n -e "a request failed" app.log
 1:worker request 3fa9c1e27b failed: connection reset
 2:worker request 88d0e41a5c failed: connection reset
 4:worker request 0b7f2a9e13 failed: connection reset
-3 of 6 lines matched; 4 sent to Jev (2 folded by --dedup) in 2 requests, 907 input tokens, ~$0.000038
+3 of 6 lines matched; 4 sent to Jev (2 folded by --dedup, ~235 input tokens / ~$0.000010 saved, 21%) in 2 requests, 907 input tokens, ~$0.000038
 ```
 
 どの値をまとめてよいかは意味によります。「ディスク使用率が 90% を超えている」なら数値が、「夜間に起きた」なら
@@ -547,8 +547,8 @@ Jev に聞き、その種類はまとめません（上の 2 リクエストの�
 機械が吐くログ向けの機能で、散文には共通の骨格がなく、時刻を読む意味ではほとんど縮みません。
 `-z` や `--sentence` では、行ではなくレコードや文をまとめます。
 
-検索後の集計行には、まとめたことで浮いた分が `(2 folded by --dedup, ~1100 input tokens / ~$0.000046 saved, 45%)`
-のように出ます。まとめた行を別のリクエストとして送った場合の推定値から、値の種類を聞いたリクエストの費用を引いた
+検索後の集計行には、まとめたことで浮いた分が `(2 folded by --dedup, ~235 input tokens / ~$0.000010 saved, 21%)`
+のように出ます（上の例）。まとめた行を別のリクエストとして送った場合の推定値から、値の種類を聞いたリクエストの費用を引いた
 正味の値です。小さなファイルや散文ではマイナスになることもあります。
 
 手元のログがどこまで縮むかは、検索の費用を払う前に `node scripts/dedup-measure.mjs FILE...` で確かめられます。

@@ -552,7 +552,7 @@ $ ./semgrep --dedup -n -e "a request failed" app.log
 1:worker request 3fa9c1e27b failed: connection reset
 2:worker request 88d0e41a5c failed: connection reset
 4:worker request 0b7f2a9e13 failed: connection reset
-3 of 6 lines matched; 4 sent to Jev (2 folded by --dedup) in 2 requests, 907 input tokens, ~$0.000038
+3 of 6 lines matched; 4 sent to Jev (2 folded by --dedup, ~235 input tokens / ~$0.000010 saved, 21%) in 2 requests, 907 input tokens, ~$0.000038
 ```
 
 Whether a value may be folded depends on the meaning: a number decides "disk usage is above 90%", a time
@@ -565,8 +565,8 @@ bytes), `install.log` to 21.1%, a Claude Code transcript (jsonl) only to 56.8%. 
 logs; prose has no shared skeleton, and a meaning that reads a timestamp folds almost nothing. With `-z` or
 `--sentence` the records or sentences fold instead of lines.
 
-After a search, the summary line says what the folding saved: `(2 folded by --dedup, ~1100 input tokens /
-~$0.000046 saved, 45%)`. It estimates what the folded lines would have cost as requests of their own and subtracts
+After a search, the summary line says what the folding saved: `(2 folded by --dedup, ~235 input tokens /
+~$0.000010 saved, 21%)` above. It estimates what the folded lines would have cost as requests of their own and subtracts
 what the value questions cost. On a small file or on prose, the result can be negative.
 
 To see how far your own logs fold before paying for a search, `node scripts/dedup-measure.mjs FILE...`
