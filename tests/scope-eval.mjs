@@ -1,5 +1,5 @@
 // Auto-scope accuracy (#44): runs semgrep -r --verbose on every row of a corpus (EXPECTED<TAB>QUESTION) against real
-// Jev, reads the answers to the scope question, and scores them against the expected scopes at several thresholds.
+// Jev, reads the candidates --verbose lists with Jev's answers, and scores them against the expected scopes at several thresholds.
 // Each row sends one request, the scope question: the directory searched is a small repository whose files hold
 // only blank lines, which are never sent.
 //   node tests/scope-eval.mjs [FILE.tsv...]   a table per corpus (default: both), the rows that differ at 0.6 (semgrep's threshold)
@@ -35,6 +35,14 @@ function group(key) {
   if (kind === 'a' || key === 'g_mine') return ['author', 'author'];
   return [`git:${name}`, name];
 }
+// A candidate as --verbose names it ("Python files (*.py …)", "test code (test files: …)") -> a key group() reads
+const NAMES = [[/^what was changed /, 't_'], [/^code written by me /, 'g_mine'], [/^code written by /, 'a_'],
+  [/^files with uncommitted /, 'g_uncommitted'], [/^files with staged /, 'g_staged'], [/^untracked files/, 'g_untracked'],
+  [/^files changed on the current git branch/, 'g_branch'], [/^files changed in commits not yet pushed/, 'g_unpushed'],
+  [/^test code /, 'r_test'], [/^database migration files /, 'r_migration'], [/^the README /, 'r_readme'], [/^the changelog /, 'r_changelog'],
+  [/^documentation /, 'r_docs'], [/^source code /, 'r_code'], [/^log files /, 'r_log']];
+const keyOf = name => NAMES.find(([re]) => re.test(name))?.[1]
+  ?? `l_${name.replace(/ files \(.*$/, '').toLowerCase().replace(/\+/g, 'p').replace(/#/g, 's').replace(/\W/g, '')}`;
 // An expected label -> [group, alternatives]
 function expected(label) {
   const [kind, rest] = label.split(':');
@@ -83,8 +91,9 @@ for (const [name, rows] of corpora) {
       let err;
       try { err = (await run(process.execPath, [`${here}../semgrep.mjs`, '--verbose', '-r', '-e', rows[i][1], dir], { env })).stderr; }
       catch (e) { err = e.code === 1 ? e.stderr : null; } // 1: no match, which every row is (the files are blank)
-      const line = err?.split('\n').find(l => l.startsWith('semgrep: scope answers '));
-      answers[i] = line ? [...line.replace(/^.*?": /, '').matchAll(/(\w+)=([\d.]+)/g)].map(m => [m[1], +m[2]]) : null;
+      // --verbose names each candidate answered 0.2 or more: `semgrep:   ✓ Python files (*.py …)  0.93  keeps …`
+      const lines = err?.split('\n');
+      answers[i] = lines?.some(l => l.startsWith('semgrep: scope "')) ? lines.map(l => l.match(/^semgrep: {3}[✓·] (.+?) +(\d\.\d\d) {2}/)).filter(Boolean).map(m => [keyOf(m[1]), +m[2]]) : null;
     }
   }));
   failed += answers.filter(a => a === null).length;

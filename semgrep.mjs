@@ -644,15 +644,31 @@ function gitCandidates(found) {
   return out;
 }
 const scopeQuestions = text => Object.fromEntries(CANDIDATES.map(c => [c.key, { type: 'noul', instructions: `Does the meaning "${text}" restrict its matches to ${c.what}?` }]));
+const SCOPE_AT = 0.6; // a candidate counts at this or more (see the top of auto-scope)
 // Jev's answers -> one scope per category that got a yes: { label, words, test }
 function scopesOf(answers) {
-  const yes = CANDIDATES.filter(c => answers[c.key].noul >= 0.6), out = [];
+  const yes = CANDIDATES.filter(c => answers[c.key].noul >= SCOPE_AT), out = [];
   for (const cat of new Set(yes.map(c => c.cat))) {
     let cs = yes.filter(c => c.cat === cat);
     if (cat === 'time') cs = [cs.reduce((a, b) => (b.from > a.from ? b : a))];
     out.push({ label: [...new Set(cs.map(c => c.label))].join(' | '), words: cs.map(c => `${c.what}: ${answers[c.key].noul.toFixed(2)}`), test: (f, st) => cs.some(c => c.test(f, st)) });
   }
   return out;
+}
+// --verbose: every candidate Jev answered 0.2 or more, highest first, whether it was applied, and how many of the files
+// found it alone keeps. tests/scope-eval.mjs reads these lines.
+function traceScope(text, answers, pool) {
+  const listed = CANDIDATES.filter(c => answers[c.key].noul >= 0.2).sort((x, y) => answers[y.key].noul - answers[x.key].noul);
+  const times = CANDIDATES.filter(c => c.cat === 'time' && answers[c.key].noul >= SCOPE_AT);
+  const narrowest = times.length ? times.reduce((a, b) => (b.from > a.from ? b : a)) : null;
+  trace(`scope "${cut(text, 40)}":`);
+  if (!listed.length) return trace('  (no candidate answered 0.2 or more)');
+  const names = listed.map(c => `${c.what} (${cut(c.label, 40)})`), width = Math.max(...names.map(n => n.length));
+  listed.forEach((c, i) => {
+    const p = answers[c.key].noul, applied = p >= SCOPE_AT && (c.cat !== 'time' || c === narrowest);
+    const tail = applied ? `keeps ${pool.filter(f => c.test(f, statSync(f))).length} of ${pool.length} files` : p >= SCOPE_AT ? '(a narrower span applied)' : `(below ${SCOPE_AT}, not applied)`;
+    trace(`  ${applied ? '✓' : '·'} ${names[i].padEnd(width)}  ${p.toFixed(2)}  ${tail}`);
+  });
 }
 // Each scope goes into its meaning's AND term as { kind: 's', label, words, admits(file) }; negated meanings say
 // what a line is not, which says nothing about its file.
@@ -797,8 +813,7 @@ if (narrowable) CANDIDATES.push(...gitCandidates(found.filter(f => !named(f))));
 if (narrowable) spin.set('asking which files each meaning restricts to (auto-scope)');
 if (narrowable) await Promise.all(expr.flatMap(term => scoped(term).map(lit =>
   pooled(() => post({ meaning: lit.text }, scopeQuestions(lit.text), `[scope] "${cut(lit.text, 40)}"`)).then(a => {
-    // --verbose: the answers worth a look, for tuning (tests/scope-eval.mjs reads this line)
-    if (opt.verbose && !dry) trace(`scope answers "${cut(lit.text, 40)}": ${Object.entries(a).filter(([, v]) => v.noul >= 0.2).sort((x, y) => y[1].noul - x[1].noul).map(([k, v]) => `${k}=${v.noul.toFixed(2)}`).join(' ') || '(none at 0.2 or more)'}`);
+    if (opt.verbose && !dry) traceScope(lit.text, a, found.filter(f => !named(f)));
     scopesOf(a).forEach(sc => addScope(term, sc));
   }))));
 // A file no term admits is not read. Each scope is reported when it can narrow something (not with named files only),
