@@ -285,7 +285,7 @@ eq "$($JI -r -l -e 'Python のような cat' "$S" 2>&1 | grep -c scope || true)"
 for q in 'added a separator cat' 'removed a decorator cat' 'we changed that may call cat' '10日前後に変更した cat'; do
   eq "$($JI -r -l -e "$q" "$S" 2>&1 | grep -c scope || true)" "0" "no time scope: $q"
 done
-eq "$($JI -r -l -e 'changed in May cat' "$S" 2>&1 | grep -c 'scope: modified since')" "1" "a month with in"
+eq "$($JI -r -l -e 'changed in May cat' "$S" 2>&1 | grep -c 'from "in May"')" "1" "a month with in"
 eq "$($JI -r -n -e 'Python で cat' -e dog "$S" 2>/dev/null | grep -c "^$S/b.js:2:dog")" "1" "scope: another term still searches the file"
 eq "$($JI -r -n -e 'Python で cat' -e dog "$S" 2>/dev/null | grep -c "^$S/b.js:1:")" "0" "scope: the scoped term does not hold in it"
 eq "$($JI -r -n -e 'Python で cat' -a '!昨日変えた cat' "$S" 2>/dev/null | grep -c "^$S/b.js:1:")" "0" "scope: within an AND term"
@@ -295,7 +295,7 @@ eq "$($JI -p --color=never -e 'Python で cat' "$S/a.py" | head -1)" "$(printf '
 # git: time of change by commit (not the mtime a checkout sets), author, uncommitted / staged / untracked, branch
 G="$tmp/gitscope"; mkdir -p "$G"; GM='Alice さんが書いた cat|Carol さんが書いた cat|自分が書いた cat|昨日変えた cat|未コミットの cat|ステージした cat|未追跡の cat|このブランチで変えた cat'
 for f in old new feat dirty staged untr; do printf '%s\n' "$GM" | tr '|' '\n' >"$G/$f.txt"; done
-(cd "$G" && git init -q -b main && git config user.email b@x && git config user.name Bob \
+(cd "$G" && git init -q -b main && git config user.email b@x && git config user.name Bob && git config core.hooksPath /dev/null \
   && git add old.txt dirty.txt && GIT_AUTHOR_DATE=2020-01-01T00:00 GIT_COMMITTER_DATE=2020-01-01T00:00 git commit -q --author='Alice <a@x>' -m old \
   && git add new.txt && git commit -q -m new && git checkout -q -b feat && git add feat.txt && git commit -q -m feat \
   && echo more >>dirty.txt && git add staged.txt)
