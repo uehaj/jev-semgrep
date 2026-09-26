@@ -99,6 +99,21 @@ case $($J -p --color=always -e cat "$F" | head -1) in *"${esc}[32m0.90"*) ;; *) 
 case $($J -n --color -e cat "$F") in *"$esc"*) fail "--color (auto) colors a pipe" ;; esac
 case $($J -n -e cat "$F") in *"$esc"*) fail "default colors a pipe" ;; esac
 code 2 "--color=bogus" -- $J --color=bogus -e cat "$F"
+# regex matches in grep's match color (bold red), every one on the line, only for terms that held; sentences bold yellow
+eq "$($J --color=always -e '/a/' "$F" | sed -n 3p)" "the line ${esc}[01;31ma${esc}[0mnswers: owl" "--color: a regex match"
+eq "$($J --color=always -e '/o/' "$F" | tail -1)" "${esc}[01;31mo${esc}[0mwl" "--color: a regex match, not the meaning"
+eq "$($J --color=always -e '/dog/' -a cat "$F")" "cat ${esc}[01;31mdog${esc}[0m" "--color: a regex beside a meaning"
+eq "$($J --color=always -e '/dog/' -a zebra -e cat "$F" | tail -1)" "cat dog" "--color: no color from a term that did not hold"
+eq "$($J --color=always -e cat -v '/dog/' "$F")" "cat" "--color: no color from a negated regex"
+printf 'The cat sat. A dog ran.\n' >"$tmp/s.txt"
+eq "$($J --sentence=rules --color=always -e cat -a '/sat/' "$tmp/s.txt")" "${esc}[01;33mThe cat ${esc}[0m${esc}[01;31msat${esc}[0m${esc}[01;33m.${esc}[0m A dog ran." "--sentence --color: the sentence yellow, the regex red"
+eq "$($J --sentence=rules -o --color=always -e cat -a '/sat/' "$tmp/s.txt")" "The cat ${esc}[01;31msat${esc}[0m." "--sentence -o: the sentence, its regex red"
+# -o without --sentence: each regex match on a line of its own (grep -o), no context; a meaning-only line whole
+eq "$($J -o -n -e '/a/' "$F" | tr '\n' '|')" "1:a|4:a|7:a|" "-o: regex matches"
+eq "$($J -o -n -e '/o/' -a '/owl/' "$F" | tr '\n' '|')" "7:owl|8:owl|" "-o: overlapping matches print once, the longest"
+eq "$($J -o -n -e cat "$F" | tr '\n' '|')" "1:cat|4:cat dog|" "-o: a meaning-only line prints whole"
+printf 'ABcYZde\n' >"$tmp/o.txt"; eq "$($J -o -e '/AB/' -e '/B.{5}/' -e '/YZ/' "$tmp/o.txt" | tr '\n' '|')" "AB|YZ|" "-o: a skipped overlap does not hide a later match"
+eq "$($J -o -n -A 1 -e '/cat/' "$F" | tr '\n' '|')" "1:cat|4:cat|" "-o: no context"
 
 # --chunk: lines per request (7 lines are sent; the blank one is not)
 reset; $J -e cat "$F" >/dev/null; eq "$(stat count)" "1" "default chunk: one request"
@@ -409,6 +424,17 @@ rm -f "$tmp/sum.in"; $S --summarize --dry-run -e cat "$F" | grep -q '^semgrep: s
 [ ! -e "$tmp/sum.in" ] || fail "--dry-run runs the summarizer"
 out=$(asking "$S -i --summarize -e cat '$F'" n)
 echo "$out" | grep -q 'then the matching lines to claude? \[y/N\]' || fail "-i says the lines go to the summarizer: $out"
+# #98: with --dedup the TOOL gets each representative once, with its count; over 200 KB nothing is spawned, exit 2
+printf 'cat 1\ncat 2\ncat 3\ndog 4\n' >"$tmp/dd.txt"
+eq "$($S --summarize --dedup -e cat "$tmp/dd.txt")" "SUMMARY" "--summarize --dedup"
+eq "$(cat "$tmp/sum.in")" "cat 1   (×3 like it)" "--summarize --dedup: a representative and its count"
+grep -q 'stands for N matching lines' "$tmp/sum.argv" || fail "--summarize --dedup: the prompt says what ×N is"
+$S --summarize -e cat "$tmp/dd.txt" >/dev/null; grep -q 'like it' "$tmp/sum.argv" && fail "--summarize without --dedup: no ×N in the prompt"
+node -e "for (let i = 0; i < 3000; i++) console.log('cat ' + 'x'.repeat(80) + ' ' + i)" >"$tmp/big.txt"
+rm -f "$tmp/sum.in"; code 2 "--summarize over 200 KB" -- $S --summarize -e '/cat/' "$tmp/big.txt"
+[ ! -e "$tmp/sum.in" ] || fail "--summarize over 200 KB runs the summarizer"
+$S --summarize -e '/cat/' "$tmp/big.txt" 2>&1 >/dev/null | grep -q '^semgrep: --summarize: 3000 matching lines (2[0-9][0-9] KB) are more than the 200 KB to summarize; narrow the expression or add --dedup$' || fail "--summarize over 200 KB: the message: $($S --summarize -e '/cat/' "$tmp/big.txt" 2>&1 >/dev/null)"
+$S --summarize --dry-run -e cat "$F" | grep -q '^semgrep: summarize: .* (stops over 200 KB)$' || fail "--dry-run shows the limit"
 
 # the spinner (#89): on a terminal, one line on stderr while waiting, erased before the output; never when not a terminal
 printf 'cat @slow\ndog\n' >"$tmp/slow.txt"
