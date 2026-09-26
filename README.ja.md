@@ -147,6 +147,13 @@ $ ./semgrep -e '/(?<date>\d{4}-\d\d-\d\d) (?<time>\d\d:\d\d)/' \
 `$<name>` と単一引用符を勧めます。`$<name>` は sh/bash/zsh のダブルクォート内でも生き残りますが、
 `$1`、`$time`、`${time}` はシェル自身に展開されてしまいます。`-p` は正規表現項に `1.00`/`0.00` を表示します。
 
+端末では、成り立った項の正規表現の一致をすべて grep の一致の色（太字の赤）で表示します。否定した正規表現には色を付けません。
+`-o` は一致をそれぞれ 1 行ずつ出します（`grep -o` と同じ）。意味には「一致した部分」がないので、意味だけで当たった行は行全体を出します。
+
+```sh
+$ ./semgrep -o -n -e '/[A-Z]+-\d+/' -a 'チケットがまだ閉じていない' notes.txt   # チケット番号を 1 行ずつ
+```
+
 ## 送る量を減らす
 
 Jev に送る行が増えるほど、費用も時間もかかります。いちばん安いのは、送らずに済ませた行です。絞り方を、
@@ -155,13 +162,15 @@ Jev に送る行が増えるほど、費用も時間もかかります。いち�
 - **どのファイルを探すか。** `-r` は `.git`、`node_modules`、バイナリ、秘密情報らしいファイル、git が無視する
   ものを飛ばします。[`git semgrep`](#git-のサブコマンドとして-git-semgrep) は追跡しているファイルだけを探します。
   `--include` / `--exclude`（ファイル名のグロブ）と `--changed-within`（`30m`、`7d`、`today`、`this-week`、日付）で
-  さらに絞れます。
+  さらに絞れます。言語や変更時期を指定する意味は、それだけでファイルを絞ります
+  ([意味からの絞り込み](#意味からの絞り込み))。
 - **どの行を送るか。** [正規表現項](#正規表現項)はローカルで判定し、当たった行だけが同じ AND 項の意味を
   尋ねられます。空行は送りません。
 - **何回判定するか。** [`--dedup`](#テンプレートごとに-1-行だけ判定する---dedup) は、ID・数値・時刻・パスだけが
   違う行をまとめて、テンプレートごとに 1 行だけ判定します。
 - **払う前に確かめる。** `--dry-run` は何も送らず、検索するファイル、ファイルごとの送る行数、各リクエストと
-  その質問を表示します。`-i` は同じ集計を端末に出し、`y` と答えたときだけ送ります。
+  その質問を表示します。最後の行には入力トークン数と、TypeSafe 本体なら料金の見積もりが出ます
+  （`~3178 input tokens, ~$0.000133`。誤差 1 割程度）。`-i` は同じ集計を端末に出し、`y` と答えたときだけ送ります。
 
 ```sh
 $ semgrep --dry-run -r --include='*.log' --changed-within=today -e '/ERROR|FATAL/' -a '顧客に影響が出ている' logs/
@@ -249,7 +258,7 @@ $ ./semgrep -n -e "customer is angry or frustrated" tests/corpus.txt
 18:I want my money back. The item arrived broken and customer service ignored me.
 21:Your product ruined my weekend. Never buying from you again.
 23:This is the third time I'm writing. Nobody has replied to my previous emails.
-5/51 lines, 2 requests, 3225 input tokens
+5 of 51 lines matched; 51 sent to Jev in 2 requests, 3225 input tokens
 ```
 
 どの行にも「angry」「frustrated」という語はありません。英語の意味で日本語の行も拾えています。
@@ -274,7 +283,7 @@ $ echo "ジョブは失敗した" | ./semgrep -Q "ジョブは成功しました
 $ ./semgrep -n -Q "whether the server is down" tests/intent.txt
 5:The server is down.
 6:The server is healthy and responding normally.
-2/17 lines (17 sent), 1 requests, 1087 input tokens, ~$0.000046
+2 of 17 lines matched; 17 sent to Jev in 1 request, 1087 input tokens, ~$0.000046
 ```
 
 確認する行も否定する行も、どちらもサーバが落ちているかどうかを解消しているので一致する。`Is the server
@@ -293,7 +302,7 @@ $ ./semgrep -n -p -e "返金の要求" -e "配送先の変更依頼" tests/corpu
 17:ユーザー高橋さんからの問い合わせ: 配送先の住所を変更したいのですが	[0.01 0.96]
 18:I want my money back. The item arrived broken and customer service ignored me.	[0.96 0.01]
 22:Can I change the delivery address for order #8821?	[0.02 0.96]
-4/51 lines, 2 requests, 4602 input tokens
+4 of 51 lines matched; 51 sent to Jev in 2 requests, 4602 input tokens
 ```
 
 末尾の括弧が、指定した順に各意味の確率です。閾値を決めるときの目安になります。
@@ -314,7 +323,7 @@ $ ./semgrep -n -e "ネットワークやリモート接続の障害" -v "a retry
 13:network unreachable: no route to host 10.0.0.5
 30:except ConnectionError as e:
 31:    logger.error("upstream unreachable: %s", e)
-7/51 lines, 2 requests, 5112 input tokens
+7 of 51 lines matched; 51 sent to Jev in 2 requests, 5112 input tokens
 ```
 
 5 行目の `retrying payment-gateway request (attempt 2/3)` はネットワーク障害ですが、`-v` で落ちています。
@@ -326,7 +335,7 @@ $ ./semgrep -n -e "about economy, finance or markets" -a "the news is negative o
 36:今日の天気は晴れ、最高気温は28度です
 43:Stock prices fell 3% after the earnings report missed expectations.
 48:明日は雨の予報なので傘を持っていきます
-3/51 lines, 2 requests, 5673 input tokens
+3 of 51 lines matched; 51 sent to Jev in 2 requests, 5673 input tokens
 ```
 
 `The central bank raised interest rates` は金融の話ですが下落ではないので外れています。
@@ -369,6 +378,49 @@ git リポジトリの中では、git が無視するもの（`.gitignore`、`.g
 コマンドラインで明示したファイルは、除外リストに該当しても、git が無視していても検索します。git が無視している
 ディレクトリも、名前を指定すれば検索します（`semgrep -r -e ... dist`）。
 `-l` は一致したファイルを見つかった順に 1 回ずつ表示し、`-r` の有無にかかわらず使えます。`-c` は行の代わりにファイルごとの一致行数を出します。
+
+### 意味からの絞り込み
+
+一致を特定の種類のファイルに限定している意味は、そういうファイルの中でしか当たりません。`-r` と
+`git semgrep` では、意味ごとにまず Jev へ小さなリクエストを 1 つ送り、候補ごとに yes / no を聞きます。0.6 以上で
+yes なら、ほかを送る前にファイルを絞ります。残りは読まず、送りもしません。絞り込みは Jev の答えとともに stderr
+に出るので、誤りに気づけます。
+
+```sh
+$ semgrep -r -e 'Python でリトライ処理を書いている箇所' .
+semgrep: scope: *.py *.pyi *.pyw (from "Python files: 0.94")
+semgrep: scope: 12 of 340 files
+$ semgrep -r -e '昨日変えた箇所で認証を扱っている' src/
+semgrep: scope: modified since 2026-09-25 00:00 (from "what was changed yesterday: 0.91")
+semgrep: scope: 3 of 120 files
+```
+
+- **言語・形式**: 26 の候補 (Python、JavaScript、TypeScript、Go、Rust、Java、Kotlin、Ruby、PHP、C、C++、C#、Swift、
+  Scala、R、シェルスクリプト、SQL、HTML、CSS、Markdown、YAML、JSON、TOML、XML、Dockerfile、Makefile)。拡張子と
+  ファイル名は GitHub Linguist による。複数に yes ならどれか (「JavaScript か TypeScript」)。
+- **変更時期**: 14 の区間。1 分以内、1 時間以内、今日、昨日、1・2・3・7・30 日以内、今月、先週、先月、この 1 年、
+  今年度 (4 月 1 日から)。yes のうちいちばん狭い区間を、その始まりだけで使います (昨日変えたファイルを今日また
+  変えることがあるため)。
+- **置き場所**: テストコード (`tests/ test/ __tests__/ spec/ e2e/`、`test_*.py *_test.* *.test.* *.spec.* *Test.java
+  *_spec.rb`、それに `*.rs` すべて。Rust は単体テストを同じファイルに書くため)、DB マイグレーション (`*migrat*`、
+  Flyway の `V1__*.sql`)、README、CHANGELOG (`CHANGELOG* CHANGES* HISTORY* NEWS*`)、文書 (`*.md *.rst *.adoc *.txt`、
+  `docs/`)、ソースコード (文書以外すべて。辞書に無い言語も含む)、ログ (`*.log *.log.N *.out *.err`、`logs/`)。
+  JS・Python・Go・Java・Ruby・Rust・PHP のパスの慣習で判定します。複数ならどれか (「README か CHANGELOG に」)。
+- **git**: リポジトリの中では、時期をコミットで見ます。コミット済みのファイルは始まり以降のコミットがあるもの
+  (コミッター日時。checkout は mtime をすべて今にしてしまうため)、未コミットのファイルは mtime。状態は、未コミット
+  (作業ツリーとインデックスの HEAD との差分と未追跡のファイル)、ステージ、未追跡、このブランチ (`origin/HEAD`・
+  `main`・`master` から分かれた点から)、未プッシュ (`@{upstream}..HEAD`、無ければどのリモートにも無いコミット)、
+  自分が書いた (`user.email` のコミットと未コミットのファイル)。作者は、コミットの多い 30 人 (`git shortlog`) を
+  名前とメールで候補にし、yes ならその人のコミットが触れたファイルに絞ります。リポジトリの外ではどれも聞かず、
+  時期は mtime で見ます。
+- Jev は意味全体を、どの言語でも読みます。「案A、B、Cで比較」は C のファイルの話にならず、コメントに引用された
+  日付はファイルを変えた日になりません。文面から何かを取り出すことはせず、候補は固定です。
+- **項ごとに効く。** `-e A -e B` は A の絞り込みで除いたファイルでも B を探します。同じ AND 項の中と、カテゴリを
+  またぐとき (「Python のテストコード」) は絞り込みが重なります。否定した意味 (`-v`、`!`) は聞きません。意味の
+  文面はそのまま送ります。
+- 問い合わせは意味 1 つにつき小さなリクエスト 1 つで、`-r` / `git semgrep` で絞れるファイルが見つかったとき
+  だけ、`-i` の答えの後に送ります。`--dry-run` では `[scope]` と表示します。`--include` と同じく、`-r` では
+  コマンドラインで指定したファイルと stdin は絞らず、`git semgrep` の pathspec は他と同じく絞ります。`--no-auto-scope` で止められます (`--auto-scope` で戻せます)。
 
 ### git のサブコマンドとして (`git semgrep`)
 
@@ -418,7 +470,7 @@ $ git log -z --format='%h %s %b' | ./semgrep -z -n -e "ユーザーに見える�
 ### 1 文ずつ判定する (`--sentence`)
 
 `--sentence` を付けると、行ではなく文ごとに判定します。出力は grep と同じく行のままです。当たった文がかかる
-行をすべて出し、端末では文の部分を grep の一致の色で強調します。文に分ける前に折り返した行をつなぐので、
+行をすべて出し、端末では文の部分を太字の黄で強調します（その中の正規表現の一致は grep と同じ太字の赤）。文に分ける前に折り返した行をつなぐので、
 複数行にまたがる文も 1 文として判定します。[`tests/prose.txt`](tests/prose.txt) には、折り返した英語と日本語の
 段落が入っています。
 
@@ -435,7 +487,7 @@ $ ./semgrep -n --sentence -e "the author admits they made a mistake" tests/prose
 端末で意味を 2 つ渡し、`-C 3` で前後も出すと、文がどこで始まりどこで終わるかが色で分かります。3 行目と 9 行目は、当たった文の
 終わりまでだけ色が付き、4〜7 行目は文脈行（`-`）です:
 
-![--sentence -C 3 --color: 当たった文が一致の色になる。3 行目は mistake. まで、9 行目は 返金してほしいです。 まで。4〜7 行目は文脈行](docs/sentence.svg)
+![--sentence -C 3 --color: 当たった文が太字の黄になる。3 行目は mistake. まで、9 行目は 返金してほしいです。 まで。4〜7 行目は文脈行](docs/sentence.svg)
 
 `-o` を付けると、当たった文だけを 1 行ずつ出します。`grep -o` が一致した部分だけを出すのと同じです。
 `-n` は文が始まる行の番号になります。日本語は空白を入れずにつなぎます。単語の間に空白を置かない
@@ -482,7 +534,7 @@ $ ./semgrep --dedup -n -e "a request failed" app.log
 1:worker request 3fa9c1e27b failed: connection reset
 2:worker request 88d0e41a5c failed: connection reset
 4:worker request 0b7f2a9e13 failed: connection reset
-3/6 lines (4 sent of 6), 2 requests, 907 input tokens, ~$0.000038
+3 of 6 lines matched; 4 sent to Jev (2 folded by --dedup, ~235 input tokens / ~$0.000010 saved, 21%) in 2 requests, 907 input tokens, ~$0.000038
 ```
 
 どの値をまとめてよいかは意味によります。「ディスク使用率が 90% を超えている」なら数値が、「夜間に起きた」なら
@@ -495,12 +547,40 @@ Jev に聞き、その種類はまとめません（上の 2 リクエストの�
 機械が吐くログ向けの機能で、散文には共通の骨格がなく、時刻を読む意味ではほとんど縮みません。
 `-z` や `--sentence` では、行ではなくレコードや文をまとめます。
 
+検索後の集計行には、まとめたことで浮いた分が `(2 folded by --dedup, ~235 input tokens / ~$0.000010 saved, 21%)`
+のように出ます（上の例）。まとめた行を別のリクエストとして送った場合の推定値から、値の種類を聞いたリクエストの費用を引いた
+正味の値です。小さなファイルや散文ではマイナスになることもあります。
+
 手元のログがどこまで縮むかは、検索の費用を払う前に `node scripts/dedup-measure.mjs FILE...` で確かめられます。
 同じマスクを使い、API を呼ばずに行数・テンプレート数・送るバイト数の割合を数えます。`--keep=num,time` を
 付けると、その種類を残す意味の場合を見られます。
 
 同じリクエストの他の行は各行の文脈になり（#9）、`--dedup` はそれを変えます。そのため閾値に近い行は、
 全行を送ったときと判定が変わることがあります。
+
+### 行の代わりに要約を出す (`--summarize`)
+
+一致した行が多いとき、欲しいのはたいてい要旨、つまりそれらの行が探した意味について何を言っているかです。
+`--summarize` は semgrep が出力するはずの内容を `claude -p --model haiku`（ツールなし・設定なし・CLAUDE.md なし）に渡し、
+意味に照らして要約させ、行の代わりにその答えを表示します。
+
+```sh
+$ semgrep -r -n --summarize -e "API キーをファイルから読んでいる" .
+キーは semgrep.mjs:19 で ~/.config/semgrep/.env から読み、./.env は読みません (semgrep.mjs:16)。...
+```
+
+高いモデルは Jev が残した分しか読みません。このリポジトリの `git log`（168 コミット）に「なぜ `./.env` を読まなくなったか」
+を尋ねた例では、Claude の入力が 22,059 トークンから 1,356 に、Jev を含む総額が $0.094 から $0.013 に下がり、答えは同じでした（#69）。
+答えが少数の行にあるときに効きます。
+
+- 一致した行はもう一度マシンの外へ、Anthropic に送られます。
+- `-n`・`-A/-B/-C`・`-p`・ファイル名は表示どおりに渡し、色は付けません。一致がなければ何も渡しません（終了コード 1）。
+- `SEMGREP_SUMMARIZER` は値を付けない `--summarize` の TOOL を（今は `claude` だけ）、`SEMGREP_SUMMARIZER_MODEL` はそのモデルを決めます。
+- `-q`・`-l`・`-c` は行を出さないので、一緒には使えません。
+- `--dedup` では、Jev に送ったものと同じく、テンプレートごとの代表を 1 回だけ `(×N like it)` を付けて渡します。
+  答えを使い回したすべての行は渡しません。
+- 200 KB（約 5 万トークン）を超えるときは何も渡さず、大きさを示して終了コード 2 で止まります。TOOL の費用がかかる前です。
+  先頭だけの要約は全体の要約に見えてしまうので、切り詰めはしません。
 
 ## Claude Code から使う
 
@@ -560,6 +640,7 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                (-r ではコマンドラインで指定したファイルは必ず探す。git semgrep の pathspec は絞り込む)
   --changed-within=WHEN  -r と git semgrep で、30m / 2h / 7d / 2w 以内、日付か日時以降、today / this-week /
                this-month に更新したファイルだけを探す
+  --no-auto-scope  意味の文面からファイルを絞り込まない (意味からの絞り込みを参照)。--auto-scope で戻す
   -l           一致した行ではなくファイル名だけを表示
   -H, --with-filename  1 ファイルでもファイル名を付ける。--no-filename は常に付けない
   -A NUM       一致行の後ろ NUM 行も表示 (grep と同じ。文脈行の区切りは - )

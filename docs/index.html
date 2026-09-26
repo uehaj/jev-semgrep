@@ -246,7 +246,7 @@ const S = [
   c:"--dedup masks ids, hashes, numbers, dates, paths and URLs, sends one line per template and reuses the answer. Jev is asked first which values could change a match, so “disk usage is above 90%” keeps 95% and 12% apart.",
   cmd:'semgrep --dedup -n -e "a request failed" app.log',
   rows:[[1,"worker request <u>3fa9c1e27b</u> failed: connection reset",null,1],[2,"worker request <u>88d0e41a5c</u> failed: connection reset",null,1],[4,"worker request <u>0b7f2a9e13</u> failed: connection reset",null,1]],
-  note:"3/6 lines (4 sent of 6), 2 requests, 939 input tokens, ~$0.000039"},
+  note:"3 of 6 lines matched; 4 sent to Jev (2 folded by --dedup, ~235 input tokens / ~$0.000010 saved, 21%) in 2 requests, 907 input tokens, ~$0.000038"},
  {h:"Records, not just lines",
   c:"-z judges NUL-terminated records, as in grep -z. “Changes user-visible behaviour” is true of a whole commit, not of any one line in it.",
   cmd:"git log -z --format='%h %s %b' | semgrep -z -n -e \"the change alters user-visible behaviour\" -v \"documentation only\"",

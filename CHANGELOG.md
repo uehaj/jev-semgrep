@@ -5,6 +5,39 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 
 ## [Unreleased]
 
+### Added
+- `--summarize[=TOOL]` pipes what would print to an LLM CLI, asked about the meanings as they were written, and
+  prints its answer instead of the lines (#69, #75). TOOL is `claude` (`claude -p --model haiku` with no tools and
+  no settings); `SEMGREP_SUMMARIZER` picks the TOOL of a bare `--summarize`, `SEMGREP_SUMMARIZER_MODEL` its
+  model. The matching lines are sent a second time, to the TOOL's provider. `--dry-run` shows the command.
+  With `--dedup` the TOOL gets each template's representative once, marked `(×N like it)`; more than 200 KB is
+  not sent at all (exit 2), never cut short (#98).
+- On a terminal, a one-line spinner on stderr while semgrep waits for Jev (`12 of 149 requests`) or the summarizer,
+  drawn after 300 ms and erased before any output (#89). Not with `-q`, `--dry-run`, `--verbose` or `TERM=dumb`,
+  and never when stderr is not a terminal, so scripts see exactly what they saw before.
+- On a terminal, a regex term's matches are in grep's match color (bold red): every match on the line, for the terms
+  that held, never a negated regex.
+- `-o` without `--sentence` prints each regex match on a line of its own, as `grep -o`, with no context. A line only
+  meanings matched prints whole. Before, `-o` without `--sentence` was ignored.
+- The `--dry-run` summary line (also shown by `-i`) estimates the input tokens and, for TypeSafe itself, the price:
+  `…, 2315 chars, ~3178 input tokens, ~$0.000133; nothing sent`. The estimate is 650 tokens a request plus 0.21 a
+  request-body byte, fitted on real requests in English and Japanese; it was within -8% to +12% of what Jev billed.
+- Auto-scope (#43): with `-r` and `git semgrep`, each meaning first asks Jev, in one small request, whether it
+  restricts its matches to a language or format (26 of them) or to what changed within a span (the last minute
+  … this fiscal year, 14 of them); a yes at 0.6 or more searches only those files. Per term, reported on stderr as
+  `semgrep: scope: …` with Jev's answer, silent with `-q`, asked only after `-i`'s answer; named files are never
+  narrowed. `--no-auto-scope` turns it off, `--auto-scope` back on.
+  `--verbose` lists each candidate Jev answered 0.2 or more, with its answer, ✓ if applied or · if not, and how
+  many of the files found it alone keeps (#99).
+- Auto-scope by place (#48): test code, migrations, the README, the changelog, documentation, source code (what is
+  not documentation) and logs, by path conventions, asked of Jev with the other candidates.
+- Auto-scope from git (#46): in a repository a time goes by commits (uncommitted files by their mtime), and git
+  states (uncommitted, staged, untracked, this branch, not pushed, mine) and the 30 most active authors are
+  candidates too. One git process per repository and question.
+
+### Changed
+- `--sentence` colors the matching sentence bold yellow instead of bold red, so a regex match inside it stands out.
+
 ## [0.4.0] - 2026-09-26
 
 ### Security

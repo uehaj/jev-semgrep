@@ -38,6 +38,7 @@
     "test": "sh tests/offline.sh && sh tests/check.sh",
     "test:offline": "sh tests/offline.sh",
     "judge": "node --no-warnings --env-file-if-exists=.env tests/judge.mts",
+    "scope-eval": "node tests/scope-eval.mjs",
     "release": "sh scripts/release.sh"
   }
 }

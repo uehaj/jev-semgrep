@@ -159,6 +159,14 @@ $ ./semgrep -e '/(?<date>\d{4}-\d\d-\d\d) (?<time>\d\d:\d\d)/' \
 Prefer `$<name>` and single quotes: `$<name>` survives double quotes in sh/bash/zsh; `$1`, `$time`
 and `${time}` don't (the shell expands them itself). `-p` prints `1.00`/`0.00` for a regex term.
 
+On a terminal every match of a regex is in grep's match color (bold red), for the terms that held; a negated regex
+is never colored. `-o` prints each match on a line of its own, as `grep -o`; a line only meanings matched prints
+whole, since a meaning has no matching part.
+
+```sh
+$ ./semgrep -o -n -e '/[A-Z]+-\d+/' -a 'the ticket is still open' notes.txt   # the ticket ids, one per line
+```
+
 ## Sending less
 
 Every line sent to Jev costs money and time, so the cheapest line is the one never sent. From the widest cut
@@ -167,12 +175,16 @@ to the narrowest:
 - **Which files.** `-r` skips `.git`, `node_modules`, binary files, likely secrets and what git ignores;
   [`git semgrep`](#as-a-git-subcommand-git-semgrep) searches tracked files only. `--include` / `--exclude`
   (file-name globs) and `--changed-within` (`30m`, `7d`, `today`, `this-week`, a date) narrow them further.
+  A meaning that restricts itself to a language or a time of change narrows them by itself: see
+  [Scope from the meaning](#scope-from-the-meaning).
 - **Which lines.** A [regex term](#regex-terms) is matched locally, and only the lines it holds for are asked
   its AND term's meanings. Blank lines are never sent.
 - **How many times.** [`--dedup`](#one-line-per-template---dedup) judges one line per template: lines that
   differ only in ids, numbers, times or paths share one answer.
 - **Check before paying.** `--dry-run` sends nothing and prints the files, how many lines each would send and
-  every request with its questions. `-i` shows the same totals on the terminal and sends only after `y`.
+  every request with its questions. Its last line estimates the input tokens and, for TypeSafe itself, the price
+  (`~3178 input tokens, ~$0.000133`; within about 10%). `-i` shows the same totals on the terminal and sends only
+  after `y`.
 
 ```sh
 $ semgrep --dry-run -r --include='*.log' --changed-within=today -e '/ERROR|FATAL/' -a 'a customer is affected' logs/
@@ -264,7 +276,7 @@ $ ./semgrep -n -e "customer is angry or frustrated" tests/corpus.en.txt
 18:I want my money back. The item arrived broken and customer service ignored me.
 21:Your product ruined my weekend. Never buying from you again.
 23:This is the third time I'm writing. Nobody has replied to my previous emails.
-5/51 lines (51 sent), 2 requests, 3054 input tokens, ~$0.000128
+5 of 51 lines matched; 51 sent to Jev in 2 requests, 3054 input tokens, ~$0.000128
 ```
 
 None of these lines contain the words "angry" or "frustrated".
@@ -288,7 +300,7 @@ answers nothing, and for a yes/no question a line that *denies* it still answers
 $ ./semgrep -n -Q "whether the server is down" tests/intent.txt
 5:The server is down.
 6:The server is healthy and responding normally.
-2/17 lines (17 sent), 1 requests, 1087 input tokens, ~$0.000046
+2 of 17 lines matched; 17 sent to Jev in 1 request, 1087 input tokens, ~$0.000046
 ```
 
 Both the confirming line and the denying line match: each settles whether the server is down. `Is the
@@ -304,7 +316,7 @@ $ ./semgrep -n -p -e "customer is asking for a refund" -e "delivery address chan
 17:Inquiry from user Takahashi: I'd like to change the delivery address	[0.01 0.99]
 18:I want my money back. The item arrived broken and customer service ignored me.	[0.96 0.01]
 22:Can I change the delivery address for order #8821?	[0.02 0.99]
-4/51 lines (51 sent), 2 requests, 4275 input tokens, ~$0.000180
+4 of 51 lines matched; 51 sent to Jev in 2 requests, 4275 input tokens, ~$0.000180
 ```
 
 The bracket shows one probability per meaning, in the order given. Use it to pick a threshold.
@@ -325,7 +337,7 @@ $ ./semgrep -n -e "network or remote connection failure" -v "a retry is happenin
 13:network unreachable: no route to host 10.0.0.5
 30:except ConnectionError as e:
 31:    logger.error("upstream unreachable: %s", e)
-7/51 lines, 2 requests, 5112 input tokens
+7 of 51 lines matched; 51 sent to Jev in 2 requests, 5112 input tokens
 ```
 
 Line 5, `retrying payment-gateway request (attempt 2/3)`, is a network failure but is dropped by `-v`.
@@ -337,7 +349,7 @@ $ ./semgrep -n -e "about economy, finance or markets" -a "the news is negative o
 36:Today's weather is sunny, high of 28 degrees
 43:Stock prices fell 3% after the earnings report missed expectations.
 48:Tomorrow's forecast is rain so I'll bring an umbrella
-3/51 lines (51 sent), 2 requests, 5499 input tokens, ~$0.000231
+3 of 51 lines matched; 51 sent to Jev in 2 requests, 5499 input tokens, ~$0.000231
 ```
 
 `The central bank raised interest rates` is about finance but not a decline, so it is out.
@@ -380,6 +392,50 @@ A file named explicitly on the command line is always searched, even if it match
 so is a directory that git ignores, when you name it (`semgrep -r -e ... dist`). `-l` prints each
 matching file once, in the order matches are found, and works with or without `-r`. `-c` prints the number of
 matching lines per file instead.
+
+### Scope from the meaning
+
+A meaning that restricts its matches to some kind of file can only match in such files. With `-r` and
+`git semgrep`, each meaning first asks Jev, in one small request, a yes / no per candidate, and a yes at 0.6 or
+more narrows the files before anything else is sent. The rest is never read or sent. Each scope is reported on
+stderr with Jev's answer, so a wrong one is visible:
+
+```sh
+$ semgrep -r -e 'Python でリトライ処理を書いている箇所' .
+semgrep: scope: *.py *.pyi *.pyw (from "Python files: 0.94")
+semgrep: scope: 12 of 340 files
+$ semgrep -r -e '昨日変えた箇所で認証を扱っている' src/
+semgrep: scope: modified since 2026-09-25 00:00 (from "what was changed yesterday: 0.91")
+semgrep: scope: 3 of 120 files
+```
+
+- **Language or format**: 26 candidates (Python, JavaScript, TypeScript, Go, Rust, Java, Kotlin, Ruby, PHP, C, C++,
+  C#, Swift, Scala, R, shell script, SQL, HTML, CSS, Markdown, YAML, JSON, TOML, XML, Dockerfile, Makefile), with
+  GitHub Linguist's extensions and file names. Several yes answers are alternatives ("JavaScript か TypeScript").
+- **Time of change**: 14 spans: the last minute, the last hour, today, yesterday, the last 1 / 2 / 3 / 7 / 30 days,
+  this month, last week, last month, the last year, this fiscal year (from April 1). The narrowest span answered
+  yes is taken, by its start only: a file changed yesterday may have been modified again today.
+- **Place**: test code (`tests/ test/ __tests__/ spec/ e2e/`, `test_*.py *_test.* *.test.* *.spec.* *Test.java
+  *_spec.rb`, and every `*.rs`: Rust keeps unit tests inside the file), database migrations (`*migrat*`, Flyway's
+  `V1__*.sql`), the README, the changelog (`CHANGELOG* CHANGES* HISTORY* NEWS*`), documentation (`*.md *.rst *.adoc
+  *.txt`, `docs/`), source code (whatever is not documentation, so languages missing from the dictionary still
+  count) and logs (`*.log *.log.N *.out *.err`, `logs/`), by the path conventions of JS, Python, Go, Java, Ruby, Rust
+  and PHP. Several places are alternatives ("README か CHANGELOG に").
+- **git**: in a repository, a time goes by commits: a committed file needs a commit at or after the start (the
+  committer date; a checkout sets every mtime to now), an uncommitted one its mtime. States: uncommitted (worktree
+  and index against HEAD, and untracked files), staged, untracked, this branch (since it left `origin/HEAD`, `main`
+  or `master`), not pushed (`@{upstream}..HEAD`, else commits on no remote branch), and mine (`user.email`'s
+  commits and the uncommitted files). Authors: the 30 with the most commits (`git shortlog`), each a candidate by
+  name and e-mail; a yes narrows to every file a commit of theirs touched. Outside a repository none of these is
+  asked, and a time goes by the mtime.
+- Jev reads the whole meaning, in any language: "案A、B、Cで比較" is not about C files, and a date quoted in a
+  comment is not when the file changed. Nothing is extracted from the text; the candidates are fixed.
+- **Per term.** `-e A -e B` still searches B in the files A's scope leaves out; within an AND term, and across
+  categories ("Python のテストコード"), the scopes intersect. Negated meanings (`-v`, `!`) are not asked. The
+  meaning is sent unchanged.
+- The question costs one small request per meaning, sent only when `-r` / `git semgrep` found something to
+  narrow, and after `-i`'s answer. `--dry-run` shows it as `[scope]`. As with `--include`, with `-r` a file named on
+  the command line and stdin are never narrowed, and `git semgrep`'s pathspecs are narrowed like the rest. `--no-auto-scope` turns it off (`--auto-scope` turns it back on).
 
 ### As a git subcommand (`git semgrep`)
 
@@ -429,7 +485,7 @@ File names (`-l`) and counts (`-c`) stay on newlines, as they do in grep. With `
 ### One sentence at a time (`--sentence`)
 
 `--sentence` judges each sentence instead of each line. The output is still lines, as in grep: every line a
-matching sentence touches is printed, and on a terminal the sentence itself is in grep's match color.
+matching sentence touches is printed, and on a terminal the sentence itself is in bold yellow (a regex match inside it, in grep's bold red).
 Wrapped lines are joined before splitting, so a sentence that runs over several lines is judged as one.
 [`tests/prose.txt`](tests/prose.txt) wraps an English paragraph and a Japanese one:
 
@@ -446,7 +502,7 @@ The sentence starts on line 1 and ends at `mistake.` on line 3; only that part i
 On a terminal, with both meanings and `-C 3` for context, the colors show where each sentence starts and ends
 inside a line: lines 3 and 9 are colored only up to the end of the matching sentence, and lines 4-7 are context (`-`):
 
-![--sentence -C 3 --color: the matching sentences in the match color, up to mistake. on line 3 and 返金してほしいです。 on line 9; lines 4 to 7 as context](docs/sentence.svg)
+![--sentence -C 3 --color: the matching sentences in bold yellow, up to mistake. on line 3 and 返金してほしいです。 on line 9; lines 4 to 7 as context](docs/sentence.svg)
 
 `-o` prints only the matching sentences, one per line, as `grep -o` prints only the matching part.
 `-n` then gives the line where the sentence starts. Japanese is joined without a space, as are Chinese,
@@ -496,7 +552,7 @@ $ ./semgrep --dedup -n -e "a request failed" app.log
 1:worker request 3fa9c1e27b failed: connection reset
 2:worker request 88d0e41a5c failed: connection reset
 4:worker request 0b7f2a9e13 failed: connection reset
-3/6 lines (4 sent of 6), 2 requests, 907 input tokens, ~$0.000038
+3 of 6 lines matched; 4 sent to Jev (2 folded by --dedup, ~235 input tokens / ~$0.000010 saved, 21%) in 2 requests, 907 input tokens, ~$0.000038
 ```
 
 Whether a value may be folded depends on the meaning: a number decides "disk usage is above 90%", a time
@@ -509,12 +565,40 @@ bytes), `install.log` to 21.1%, a Claude Code transcript (jsonl) only to 56.8%. 
 logs; prose has no shared skeleton, and a meaning that reads a timestamp folds almost nothing. With `-z` or
 `--sentence` the records or sentences fold instead of lines.
 
+After a search, the summary line says what the folding saved: `(2 folded by --dedup, ~235 input tokens /
+~$0.000010 saved, 21%)` above. It estimates what the folded lines would have cost as requests of their own and subtracts
+what the value questions cost. On a small file or on prose, the result can be negative.
+
 To see how far your own logs fold before paying for a search, `node scripts/dedup-measure.mjs FILE...`
 counts lines, templates and the share of bytes sent, offline, with the same masks; `--keep=num,time` shows
 a meaning that keeps those kinds apart.
 
 The request's other lines are each line's context (#9), and `--dedup` changes them, so a line near the
 threshold can be judged differently than in a full pass.
+
+### A summary instead of the lines (`--summarize`)
+
+When many lines match, what you want is often the gist: what they say about the meaning you searched for.
+`--summarize` pipes what semgrep would print to `claude -p --model haiku` (no tools, no settings, no CLAUDE.md),
+asks it to summarize the lines as they bear on the meanings, and prints its answer instead of the lines.
+
+```sh
+$ semgrep -r -n --summarize -e "the API key is read from a file" .
+The key is read in semgrep.mjs:19 from ~/.config/semgrep/.env, never from ./.env (semgrep.mjs:16), ...
+```
+
+The expensive model reads only what Jev kept. Asking why `./.env` is no longer read of this repository's
+`git log` (168 commits), Claude's input fell from 22,059 tokens to 1,356, the total cost with Jev's from
+$0.094 to $0.013, with the same answer (#69). It pays when the answer sits in a few lines.
+
+- The matching lines leave the machine a second time, to Anthropic.
+- `-n`, `-A/-B/-C`, `-p` and file names go in as they would print; colors never do. No match runs nothing (exit 1).
+- `SEMGREP_SUMMARIZER` picks the TOOL of a bare `--summarize` (only `claude` so far), `SEMGREP_SUMMARIZER_MODEL` its model.
+- `-q`, `-l` and `-c` print no lines, so they cannot be combined with it.
+- With `--dedup`, the TOOL gets what Jev got: each template's representative once, marked `(×N like it)`,
+  not every line its answer was reused for.
+- More than 200 KB (about 50k tokens) is not sent at all: exit 2, with the size, before the TOOL is paid.
+  It is never cut short, since a summary of the first part would read as a summary of all of it.
 
 ## Use it from Claude Code
 
@@ -574,6 +658,8 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                (with -r a file named on the command line is always searched; git semgrep's pathspecs are filtered)
   --changed-within=WHEN  with -r and git semgrep, only files modified within 30m / 2h / 7d / 2w, since a date
                or date-time, today, this-week or this-month
+  --no-auto-scope  do not narrow those files by what a meaning says about them (see Scope from the meaning);
+               --auto-scope turns it back on
   -l           print only the names of files with a match, not the lines
   -H, --with-filename  prefix file names even for a single file; --no-filename never prefixes them
   -A NUM       print NUM lines of trailing context after each match (context lines use - as separator)
