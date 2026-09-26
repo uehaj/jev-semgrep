@@ -541,7 +541,7 @@ if (opt.interactive && !dry) {
   const errors = plan.stderr.split('\n').filter(l => l.startsWith('semgrep: ') && !l.startsWith('semgrep: warning: ') && !warned.includes(l));
   const shown = [...plan.stdout.split('\n').filter(l => /^semgrep: (file |dry run: |summarize: )/.test(l)), ...errors].map(safe);
   if (!/^semgrep: dry run: 0 requests/.test(shown.findLast(l => l.startsWith('semgrep: dry run: ')))) {
-    writeSync(tty, `${shown.join('\n')}\nSearch, sending the above? [y/N] `);
+    writeSync(tty, `${shown.join('\n')}\nSearch, sending the above${summarizer ? `, then the matching lines to ${opt.summarize}` : ''}? [y/N] `);
     const buf = Buffer.alloc(256);
     if (!/^\s*y(es)?\s*$/i.test(buf.toString('utf8', 0, readSync(tty, buf)))) { console.error('semgrep: nothing sent'); process.exit(1); }
   }
