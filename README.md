@@ -564,6 +564,26 @@ a meaning that keeps those kinds apart.
 The request's other lines are each line's context (#9), and `--dedup` changes them, so a line near the
 threshold can be judged differently than in a full pass.
 
+### A summary instead of the lines (`--summarize`)
+
+When many lines match, what you want is often the gist: what they say about the meaning you searched for.
+`--summarize` pipes what semgrep would print to `claude -p --model haiku` (no tools, no settings, no CLAUDE.md),
+asks it to summarize the lines as they bear on the meanings, and prints its answer instead of the lines.
+
+```sh
+$ semgrep -r -n --summarize -e "the API key is read from a file" .
+The key is read in semgrep.mjs:19 from ~/.config/semgrep/.env, never from ./.env (semgrep.mjs:16), ...
+```
+
+The expensive model reads only what Jev kept. Asking why `./.env` is no longer read of this repository's
+`git log` (168 commits), Claude's input fell from 22,059 tokens to 1,356, the total cost with Jev's from
+$0.094 to $0.013, with the same answer (#69). It pays when the answer sits in a few lines.
+
+- The matching lines leave the machine a second time, to Anthropic.
+- `-n`, `-A/-B/-C`, `-p` and file names go in as they would print; colors never do. No match runs nothing (exit 1).
+- `SEMGREP_SUMMARIZER` picks the TOOL of a bare `--summarize` (only `claude` so far), `SEMGREP_SUMMARIZER_MODEL` its model.
+- `-q`, `-l` and `-c` print no lines, so they cannot be combined with it.
+
 ## Use it from Claude Code
 
 There is a Claude Code skill that runs semgrep for you: describe what you are looking for in plain words

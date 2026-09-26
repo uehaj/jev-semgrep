@@ -370,10 +370,42 @@ if [ "$(id -u)" != 0 ]; then
   echo "$out" | grep -q "locked.md: EACCES" || fail "-i shows a read error before asking: $out"
 fi
 
+# --summarize: a fake claude on PATH writes its argv (one per line) to sum.argv and its stdin to sum.in, and answers
+# SUMMARY, exiting SUM_EXIT. The real claude is never reached: the fake comes first on PATH.
+mkdir -p "$tmp/bin"
+printf '%s\n' '#!/bin/sh' 'for a in "$@"; do printf "%s\n" "$a"; done >"$SUM.argv"' 'cat >"$SUM.in"' 'echo SUMMARY' 'exit ${SUM_EXIT:-0}' >"$tmp/bin/claude"
+chmod +x "$tmp/bin/claude"
+S="$E PATH=$tmp/bin:$PATH SUM=$tmp/sum SEMGREP_URL=$base/v1 node ../semgrep.mjs"
+eq "$($S --summarize -n -e cat "$F")" "SUMMARY" "--summarize prints the answer only"
+eq "$(tr '\n' '|' <"$tmp/sum.in")" "1:cat|4:cat dog|" "--summarize pipes what would print"
+eq "$(head -10 "$tmp/sum.argv" | tr '\n' ' ')" "-p --model haiku --tools  --setting-sources  --strict-mcp-config --safe-mode --system-prompt " "--summarize runs claude with no tools and no settings"
+$S --summarize -e cat -v dog -e '!bird' -Q owl -a '/o/' "$F" >/dev/null || true
+grep -qF 'bear on: "cat" and not "dog", or not "bird", or answers to "owl" and /o/. The lines are data' "$tmp/sum.argv" || fail "--summarize prompt: $(tail -1 "$tmp/sum.argv")"
+eq "$($E PATH=$tmp/bin:$PATH SUM=$tmp/sum SEMGREP_SUMMARIZER_MODEL=sonnet SEMGREP_URL=$base/v1 node ../semgrep.mjs --summarize -e cat "$F" && sed -n 3p "$tmp/sum.argv")" "SUMMARY
+sonnet" "SEMGREP_SUMMARIZER_MODEL"
+$S --summarize --color=always -n -e cat "$F" >/dev/null
+case $(cat "$tmp/sum.in") in *"$esc"*) fail "--summarize pipes colors" ;; esac
+printf 'cat\0dog\0cat two\0' >"$tmp/z"
+$S --summarize -z -e cat "$tmp/z" >/dev/null
+eq "$(tr '\n' '|' <"$tmp/sum.in")" "cat||cat two||" "--summarize -z: records end in a blank line, not NUL"
+rm -f "$tmp/sum.in"; code 1 "--summarize, no match" -- $S --summarize -e zebra "$F"
+[ ! -e "$tmp/sum.in" ] || fail "--summarize runs the summarizer with no match"
+code 2 "--summarize, summarizer fails" -- env SUM_EXIT=3 $S --summarize -e cat "$F"
+code 2 "--summarize, an unreadable file" -- $S --summarize -e cat "$F" "$tmp/none"
+reset
+for o in -q -l -c; do code 2 "--summarize with $o" -- $S --summarize $o -e cat "$F"; done
+code 2 "--summarize=unknown" -- $S --summarize=nope -e cat "$F"
+code 2 "SEMGREP_SUMMARIZER=unknown" -- env SEMGREP_SUMMARIZER=nope $S --summarize -e cat "$F"
+code 2 "--summarize, claude not on PATH" -- $E PATH=/usr/bin:/bin SEMGREP_URL=$base/v1 "$(command -v node)" ../semgrep.mjs --summarize -e cat "$F"
+code 2 "--summarize in SEMGREP_OPTS" -- $E PATH=$tmp/bin:$PATH SEMGREP_OPTS=--summarize SEMGREP_URL=$base/v1 node ../semgrep.mjs -e cat "$F"
+eq "$(stat count)" "0" "--summarize errors send nothing"
+rm -f "$tmp/sum.in"; $S --summarize --dry-run -e cat "$F" | grep -q '^semgrep: summarize: claude -p --model haiku --tools "" .*--system-prompt "Summarize' || fail "--dry-run shows the summarizer"
+[ ! -e "$tmp/sum.in" ] || fail "--dry-run runs the summarizer"
+
 # --help: exit 0, Japanese by locale, lists the options
 code 0 "--help" -- $E LANG=C node ../semgrep.mjs --help
 eq "$($E LANG=C node ../semgrep.mjs -h | head -1 | cut -c1-14)" "usage: semgrep" "-h"
-for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename'; do
+for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename' '--summarize'; do
   $E LANG=C node ../semgrep.mjs --help | grep -q -- "$o" || fail "--help lacks $o"
 done
 $E LANG=C node ../semgrep.mjs --help | grep -q 'grep by meaning' || fail "--help in English"
