@@ -159,18 +159,23 @@ $ ./sys1grep -o -n -e '/[A-Z]+-\d+/' -a 'チケットがまだ閉じていない
 Jev に送る行が増えるほど、費用も時間もかかります。いちばん安いのは、送らずに済ませた行です。絞り方を、
 大きく削れるものから順に並べます。
 
-- **どのファイルを探すか。** `-r` は `.git`、`node_modules`、バイナリ、秘密情報らしいファイル、git が無視する
+- **どのファイルを探すか。** `-r` は `.git`、`node_modules`、バイナリ、秘密情報らしいファイル、生成されたファイル
+  （ソースマップ、minify 済み JS/CSS、ロックファイル）、git が無視する
   ものを飛ばします。[`git sys1grep`](#git-のサブコマンドとして-git-sys1grep) は追跡しているファイルだけを探します。
   `--include` / `--exclude`（ファイル名のグロブ）と `--changed-within`（`30m`、`7d`、`today`、`this-week`、日付）で
   さらに絞れます。言語や変更時期を指定する意味は、それだけでファイルを絞ります
   ([意味からの絞り込み](#意味からの絞り込み))。
 - **どの行を送るか。** [正規表現項](#正規表現項)はローカルで判定し、当たった行だけが同じ AND 項の意味を
-  尋ねられます。空行は送りません。
+  尋ねられます。空行は送りません。`-M`/`--max-columns`（既定 2000、`-z` なら 8000）を超える行は送らず
+  飛ばします。それ自体が当たることはありません。
 - **何回判定するか。** [`--dedup`](#テンプレートごとに-1-行だけ判定する---dedup) は、ID・数値・時刻・パスだけが
   違う行をまとめて、テンプレートごとに 1 行だけ判定します。
 - **払う前に確かめる。** `--dry-run` は何も送らず、検索するファイル、ファイルごとの送る行数、各リクエストと
   その質問を表示します。最後の行には入力トークン数と、TypeSafe 本体なら料金の見積もりが出ます
   （`~3178 input tokens, ~$0.000133`。誤差 1 割程度）。`-i` は同じ集計を端末に出し、`y` と答えたときだけ送ります。
+  リクエストの本体を送る前にも、ファイルのサイズ（`--max-filesize`、既定 10M）と送る予定のトークンの値段
+  （`--max-cost`、既定 1 USD）をそれぞれ計測し、超えていれば端末で続けるか聞きます。`-y` は聞かずに yes と
+  答え、端末が無く超えていれば終了コード 2 です。
 
 ```sh
 $ sys1grep --dry-run -r --include='*.log' --changed-within=today -e '/ERROR|FATAL/' -a '顧客に影響が出ている' logs/
@@ -369,7 +374,9 @@ tests/tickets/sub/b.txt
 `-r` はディレクトリを名前順にたどり、`.git`、`node_modules`、`.ssh`、`.aws`、`.gnupg`、`.kube`、`.docker`、
 バイナリ（先頭 8 KB に NUL がある、または PDF。BOM 付きの UTF-16 はテキストとして読む）、
 秘密情報になりがちなファイル（`.env*`、`.netrc`、`.npmrc`、`.pypirc`、`.pgpass`、`.git-credentials`、`*.pem`、
-`*.key`、`*.p12`、`*.pfx`、`*.jks`、`*.keystore`、`id_rsa*` など。大文字小文字は区別しない）を飛ばします。
+`*.key`、`*.p12`、`*.pfx`、`*.jks`、`*.keystore`、`id_rsa*` など。大文字小文字は区別しない）、
+生成されたファイル（`*.map`、`*.min.js`、`*.min.css`、`package-lock.json`、`yarn.lock`、`pnpm-lock.yaml`、
+`Cargo.lock`、`poetry.lock`、`composer.lock`、`Gemfile.lock`、`go.sum`）を飛ばします。
 **検索対象の行はすべて TypeSafe の API に送られる**ので、スキャンするつもりのディレクトリだけを指定してください。
 git リポジトリの中では、git が無視するもの（`.gitignore`、`.git/info/exclude`、グローバルの除外ファイル）も `-r` で
 飛ばすので、ビルド成果物や手元だけのファイルは送られません。追跡中のファイルは、無視パターンに当たっても検索します。
@@ -633,7 +640,7 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
   -T THRESH    否定条件の閾値。確率 < THRESH で「〜でない」と判定 (--level より優先)
                -t 0.6 -T 0.3 なら 0.3〜0.6 の曖昧な行はどちらにも当たらない
   -r           ディレクトリを再帰的に探す (FILE 省略時はカレント)。.git、node_modules、
-               バイナリ、秘密情報らしいファイル、git が無視するものは飛ばす
+               バイナリ、秘密情報らしいファイル、生成されたファイル、git が無視するものは飛ばす
   --include=GLOB, --exclude=GLOB  -r と git sys1grep で、名前が GLOB に合うファイルだけ (または合わないものだけ) を探す
                (-r ではコマンドラインで指定したファイルは必ず探す。git sys1grep の pathspec は絞り込む)
   --changed-within=WHEN  -r と git sys1grep で、30m / 2h / 7d / 2w 以内、日付か日時以降、today / this-week /
@@ -658,6 +665,11 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
   --dry-run    何も送らず、送信先・検索するファイル・各リクエストとその質問を表示
   --verbose    同じ表示を検索しながら stderr に出す
   -i, --interactive  --dry-run と同じ内容を見せ、端末で y と答えたときだけ検索する
+  -M NUM, --max-columns=NUM  NUM 文字を超える行 (-z ならレコード) を飛ばす。送らず、当たらない (既定 2000、-z なら 8000)
+  --max-filesize=SIZE  対象を先に計測 (K/M/G、既定 10M)。超えれば続けるか聞く (下記と同じ質問)
+  --max-cost=USD  送る予定の入力を見積もって値段を出す。超えれば (既定 1) 続けるか聞く。--max-filesize と同じ質問。
+               -y は聞かずに yes と答える。端末が無くどちらかを超えていれば終了コード 2 (-i は無条件かつこれより
+               前に聞くので二重には聞かない)
   --dedup      テンプレートごとに 1 行だけ判定し、その答えを残りにも使う (前述の「テンプレートごとに 1 行だけ判定する」を参照)
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、

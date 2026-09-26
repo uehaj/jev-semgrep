@@ -211,6 +211,12 @@ mkdir -p "$tmp/sec/.kube" "$tmp/sec/.docker"
 for f in .envrc .env-local .env_prod .ENV .netrc .npmrc .pypirc .pgpass .git-credentials id_rsa_work x.JKS .kube/config .docker/config.json ok.txt; do printf 'cat\n' >"$tmp/sec/$f"; done
 eq "$($J -r -l -e cat "$tmp/sec")" "$tmp/sec/ok.txt" "-r skips credential files"
 
+# #58: -r also skips generated files (source maps, minified JS/CSS, lock files); named, still searched
+mkdir -p "$tmp/gen"
+for f in app.js.map app.min.js app.min.css package-lock.json yarn.lock pnpm-lock.yaml Cargo.lock poetry.lock composer.lock Gemfile.lock go.sum ok.txt; do printf 'cat\n' >"$tmp/gen/$f"; done
+eq "$($J -r -l -e cat "$tmp/gen")" "$tmp/gen/ok.txt" "-r skips generated files"
+eq "$($J -l -e cat "$tmp/gen/app.min.js")" "$tmp/gen/app.min.js" "a generated file named on the command line is still searched"
+
 # the response and the error body come from whatever server SYS1GREP_URL names
 printf 'cat @drop\n' >"$tmp/drop"
 code 2 "a missing answer is an error, not 0 (which would make -v match)" -- $J -v cat "$tmp/drop"
@@ -256,9 +262,10 @@ reset; $J --sentence -c -e '/猫/' "$tmp/ja" >/dev/null; eq "$(stat count)" "0" 
 R="$tmp/repo" GS="$E SYS1GREP_URL=$base/v1 node $PWD/../git-sys1grep.mjs" SG="$PWD/../sys1grep.mjs"
 mkdir -p "$R/sub" "$tmp/plain"
 printf 'cat\n' >"$R/a.txt"; printf 'cat\n' >"$R/sub/b.txt"; printf 'cat\n' >"$R/ignored.txt"; printf 'cat\n' >"$R/.env.sample"
+printf 'cat\n' >"$R/app.min.js"; printf 'cat\n' >"$R/package-lock.json"
 echo ignored.txt >"$R/.gitignore"
-(cd "$R" && git init -q && git add a.txt sub/b.txt .gitignore .env.sample)
-eq "$(cd "$R" && $GS -l -e cat | tr '\n' ' ')" "a.txt sub/b.txt " "git sys1grep: tracked files, not ignored ones or the skip list"
+(cd "$R" && git init -q && git add a.txt sub/b.txt .gitignore .env.sample app.min.js package-lock.json)
+eq "$(cd "$R" && $GS -l -e cat | tr '\n' ' ')" "a.txt sub/b.txt " "git sys1grep: tracked files, not ignored ones, the skip list or generated files (#58)"
 eq "$(cd "$R/sub" && $GS -l -e cat)" "b.txt" "git sys1grep: under the current directory"
 eq "$(cd "$R" && $GS -n -e cat a.txt)" "a.txt:1:cat" "git sys1grep: pathspec, file name even for one file"
 code 1 "git sys1grep: never stdin" -- sh -c "cd '$R' && echo cat | $GS -e cat -- nothing"
@@ -509,6 +516,42 @@ node -e "for (let i = 0; i < 3000; i++) console.log('cat ' + [...String(i % 300)
 $S --summarize --dedup --chunk 100 -e cat "$tmp/bigdd.txt" 2>&1 >/dev/null | grep -q '^sys1grep: --summarize: 3000 matching lines as 300 representatives ([0-9]* KB) are more than the 200 KB to summarize; narrow the expression$' || fail "--summarize --dedup over 200 KB: $($S --summarize --dedup --chunk 100 -e cat "$tmp/bigdd.txt" 2>&1 >/dev/null)"
 $S --summarize --dry-run -e cat "$F" | grep -q '^sys1grep: summarize: .* (stops over 200 KB)$' || fail "--dry-run shows the limit"
 
+# #58: an overlong unit is skipped outright, not truncated: it is never sent and cannot match. One stderr line per
+# file counts them, not with -q. -M / --max-columns raises (or lowers) the limit; default 2000 (8000 with -z)
+printf 'cat\n' >"$tmp/long.txt"; node -e "console.log('cat ' + 'x'.repeat(2000))" >>"$tmp/long.txt"
+reset; eq "$($J -n -e cat "$tmp/long.txt" | nums)" "1 " "an overlong line is skipped, cannot match"
+eq "$(stat asked)" "1" "the overlong line asks nothing"
+$J -n -e cat "$tmp/long.txt" 2>&1 >/dev/null | grep -qF "$tmp/long.txt: 1 line longer than 2000 characters skipped" || fail "the skip is counted on stderr"
+[ -z "$($J -q -n -e cat "$tmp/long.txt" 2>&1 >/dev/null)" ] || fail "-q: the skip count is silent"
+eq "$($J -n -M 3000 -e cat "$tmp/long.txt" | nums)" "1 2 " "-M raises the limit"
+code 2 "-M 0" -- $J -M 0 -e cat "$F"
+code 2 "-M not a number" -- $J -M abc -e cat "$F"
+
+# #58: every target is sized before the bulk of requests, and the estimated cost is checked too; one question
+# covers both, from a terminal; -y answers yes without asking; no terminal and a limit exceeded is exit 2
+node -e "for (let i = 0; i < 20000; i++) console.log('cat ' + i)" >"$tmp/huge.txt"
+reset; code 2 "--max-filesize exceeded, no terminal" -- sh -c "$J --max-filesize 10K -e cat '$tmp/huge.txt' </dev/null"
+eq "$(stat count)" "0" "a refused run (no terminal) sends nothing"
+$J --max-filesize 10K -e cat "$tmp/huge.txt" </dev/null 2>&1 >/dev/null | grep -q -- '--max-filesize 10K' || fail "the message names --max-filesize"
+reset; eq "$($J -y -c --max-filesize 10K -e cat "$tmp/huge.txt" </dev/null)" "20000" "-y answers yes, no asking"
+reset; out=$(asking "$J --max-filesize 10K -c -e cat '$tmp/huge.txt'" n)
+eq "$(stat count)" "0" "refused on a pty: nothing sent"
+echo "$out" | grep -q 'large files:.*--max-filesize 10K' || fail "the pty question names the large file: $out"
+echo "$out" | grep -q 'rc=1' || fail "refused: exit 1: $out"
+reset; out=$(asking "$J --max-filesize 10K -c -e cat '$tmp/huge.txt'" y)
+echo "$out" | grep -q '^20000' || fail "answered y: searched: $out"
+code 2 "--max-filesize, not a size" -- $J --max-filesize nope -e cat "$F"
+# --max-cost 0: any estimated price is over it, so even ordinary input asks
+reset; code 2 "--max-cost 0, no terminal" -- sh -c "$J --max-cost 0 -e cat '$F' </dev/null"
+$J --max-cost 0 -e cat "$F" </dev/null 2>&1 >/dev/null | grep -q -- 'input tokens.*--max-cost 0' || fail "the message names --max-cost"
+reset; eq "$($J -y --max-cost 0 -n -e cat "$F" | nums)" "1 4 " "-y bypasses --max-cost too"
+# -i already asks unconditionally, before anything is sent: the guard above does not ask a second time
+reset; out=$(asking "$JI -i --max-cost 0 -l -e cat '$P/a.md'" y)
+eq "$(printf '%s\n' "$out" | grep -c '\[y/N\]')" "1" "-i and the cost guard together: one question, not two"
+# --dry-run and -i show the same verdict the guard would ask about, so both stay consistent with it
+$J --dry-run --max-filesize 10K -e cat "$tmp/huge.txt" | grep -q 'large files:.*--max-filesize 10K.*would ask' || fail "--dry-run shows the size guard's verdict"
+$J --dry-run --max-cost 0 -e cat "$F" | grep -q 'over --max-cost 0, would ask' || fail "--dry-run shows the cost guard's verdict"
+
 # the spinner (#89): on a terminal, one line on stderr while waiting, erased before the output; never when not a terminal
 printf 'cat @slow\ndog\n' >"$tmp/slow.txt"
 eq "$($J -e cat "$tmp/slow.txt" 2>&1 >/dev/null | od -c | grep -c '\\r' || true)" "0" "no spinner when stderr is not a terminal"
@@ -528,7 +571,7 @@ case $out in *'summarizingwithclaude'*'033[KSUMMARY'*) ;; *) fail "spinner while
 # --help: exit 0, Japanese by locale, lists the options
 code 0 "--help" -- $E LANG=C node ../sys1grep.mjs --help
 eq "$($E LANG=C node ../sys1grep.mjs -h | head -1 | cut -c1-15)" "usage: sys1grep" "-h"
-for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename' '--summarize'; do
+for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename' '--summarize' '-M' '--max-filesize' '--max-cost' '-y, --yes'; do
   $E LANG=C node ../sys1grep.mjs --help | grep -q -- "$o" || fail "--help lacks $o"
 done
 $E LANG=C node ../sys1grep.mjs --help | grep -q 'grep by meaning' || fail "--help in English"

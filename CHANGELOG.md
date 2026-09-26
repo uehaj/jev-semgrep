@@ -6,6 +6,14 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
+- Guards against generated and oversized input (#58). `-r` and `git sys1grep` now also skip generated files
+  (`*.map`, `*.min.js`, `*.min.css`, `package-lock.json` and other lock files), named explicitly still searched.
+  A unit longer than `-M`/`--max-columns` (default 2000, 8000 with `-z`) is skipped outright, not truncated: it
+  is never sent and cannot match, and one stderr line per file counts how many were skipped (not with `-q`).
+  Before the bulk of judging requests, every target is sized (`--max-filesize`, K/M/G, default 10M) and the
+  input about to be sent is priced (`--max-cost`, default 1 USD); over either, one question asks to continue,
+  from a terminal; `-y`/`--yes` answers it yes without asking, and without a terminal it is exit 2. `-i` already
+  asks unconditionally and earlier, so it is not asked twice; `--dry-run` and `-i` show the same verdict.
 - `-g` / `--gitlog` searches the commits of `git log` instead of files, one record each (`%h %ad %s`, then the
   body). With one term, auto-scope turns into git log's arguments: a time into `--since`, a language into
   pathspecs, an author or "mine" into `--author`, this branch or not pushed into a range, so
