@@ -426,8 +426,8 @@ semgrep: scope: 3 of 120 files
   categories ("Python のテストコード"), the scopes intersect. Negated meanings (`-v`, `!`) are not asked. The
   meaning is sent unchanged.
 - The question costs one small request per meaning, sent only when `-r` / `git semgrep` found something to
-  narrow, and after `-i`'s answer. `--dry-run` shows it as `[scope]`. Files named on the command line and stdin are
-  never narrowed, as with `--include`. `--no-auto-scope` turns it off (`--auto-scope` turns it back on).
+  narrow, and after `-i`'s answer. `--dry-run` shows it as `[scope]`. As with `--include`, with `-r` a file named on
+  the command line and stdin are never narrowed, and `git semgrep`'s pathspecs are narrowed like the rest. `--no-auto-scope` turns it off (`--auto-scope` turns it back on).
 
 ### As a git subcommand (`git semgrep`)
 

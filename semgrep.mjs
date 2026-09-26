@@ -132,7 +132,8 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                commit since then, an uncommitted one its mtime
                (*.py *.pyi *.pyw; modified since then). Jev reads the whole meaning, so "案A、B、Cで" is not
                about C files. Per term: -e A -e B still searches B in the files A leaves out. Each scope goes
-               to stderr as semgrep: scope: ...; files named on the command line are never narrowed
+               to stderr as semgrep: scope: ...; with -r a file named on the command line is never narrowed,
+               git semgrep's pathspecs are narrowed like the rest (as with --include)
   --auto-scope turn it back on after --no-auto-scope in SEMGREP_OPTS
   -l           print only the names of files with a match, not the lines
   -H, --with-filename  prefix each line (and -c count) with its file name, even for a single file
@@ -251,7 +252,8 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                (コミット済みはそれ以降のコミットがあるもの、未コミットは mtime)。0.6 以上で yes なら、-r と git semgrep で見つけたファイルをそのファイル
                (*.py *.pyi *.pyw、それ以降に更新したもの) に絞る。Jev は意味全体を読むので、「案A、B、Cで」は
                C のファイルの話にならない。項ごとに効くので、-e A -e B は A が除いたファイルでも B を探す。
-               絞り込みは semgrep: scope: ... として stderr に出す。コマンドラインで指定したファイルは絞らない
+               絞り込みは semgrep: scope: ... として stderr に出す。-r ではコマンドラインで指定したファイルは
+               絞らない。git semgrep の pathspec は他と同じく絞る (--include と同じ)
   --auto-scope SEMGREP_OPTS の --no-auto-scope を打ち消して、絞り込みを有効に戻す
   -l           一致した行ではなくファイル名だけを表示
   -H, --with-filename  1 ファイルだけでも、各行 (と -c の件数) の前にファイル名を付ける

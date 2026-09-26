@@ -412,8 +412,8 @@ semgrep: scope: 3 of 120 files
   またぐとき (「Python のテストコード」) は絞り込みが重なります。否定した意味 (`-v`、`!`) は聞きません。意味の
   文面はそのまま送ります。
 - 問い合わせは意味 1 つにつき小さなリクエスト 1 つで、`-r` / `git semgrep` で絞れるファイルが見つかったとき
-  だけ、`-i` の答えの後に送ります。`--dry-run` では `[scope]` と表示します。コマンドラインで指定したファイルと
-  stdin は、`--include` と同じく絞りません。`--no-auto-scope` で止められます (`--auto-scope` で戻せます)。
+  だけ、`-i` の答えの後に送ります。`--dry-run` では `[scope]` と表示します。`--include` と同じく、`-r` では
+  コマンドラインで指定したファイルと stdin は絞らず、`git semgrep` の pathspec は他と同じく絞ります。`--no-auto-scope` で止められます (`--auto-scope` で戻せます)。
 
 ### git のサブコマンドとして (`git semgrep`)
 
