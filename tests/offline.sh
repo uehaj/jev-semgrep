@@ -273,37 +273,34 @@ $JI -r --include="[abc" -e cat "$P" 2>&1 | grep -q "^semgrep: --include: .\[abc.
 code 2 "--changed-within, a bare number is not a year" -- $JI -r --changed-within=7 -e cat "$P"
 eq "$($JI -r -l --include='*.md' --changed-within=today -e cat "$P" | tr '\n' ' ')" "$P/a.md $P/sub/e.md " "--changed-within=today"
 eq "$($JI -r -l --include='*.md' --changed-within=this-week -e cat "$P" | grep -c .)" "2" "--changed-within=this-week"
-# auto-scope: a meaning that names a language or a time of change narrows what -r finds, per term; named files never
-S="$tmp/scope"; mkdir -p "$S/sub"
-for f in a.py old.py sub/c.py; do printf 'Python で cat\n昨日変えた cat\n' >"$S/$f"; done
-printf 'Python で cat\ndog\n昨日変えた cat\n' >"$S/b.js"; touch -t 202001010000 "$S/old.py"
-eq "$($JI -r -l -e 'Python で cat' "$S" 2>/dev/null | tr '\n' ' ')" "$S/a.py $S/old.py $S/sub/c.py " "scope: a language"
-eq "$($JI -r -l -e 'Python で cat' "$S" 2>&1 >/dev/null | tr '\n' '|')" 'semgrep: scope: *.py *.pyi *.pyw (from "Python")|semgrep: scope: 3 of 4 files|' "scope: reported on stderr"
-eq "$($JI -r -l --no-scope -e 'Python で cat' "$S" 2>&1 | grep -c .)" "4" "--no-scope"
-eq "$($JI -r -l -e '昨日変えた cat' "$S" 2>/dev/null | tr '\n' ' ')" "$S/a.py $S/b.js $S/sub/c.py " "scope: a time of change, by mtime"
-eq "$($JI -r -l -e 'Python のような cat' "$S" 2>&1 | grep -c scope || true)" "0" "no scope from a likeness"
-for q in 'added a separator cat' 'removed a decorator cat' 'we changed that may call cat' '10日前後に変更した cat'; do
-  eq "$($JI -r -l -e "$q" "$S" 2>&1 | grep -c scope || true)" "0" "no time scope: $q"
-done
-eq "$($JI -r -l -e 'changed in May cat' "$S" 2>&1 | grep -c 'scope: modified since')" "1" "a month with in"
-eq "$($JI -r -n -e 'Python で cat' -e dog "$S" 2>/dev/null | grep -c "^$S/b.js:2:dog")" "1" "scope: another term still searches the file"
-eq "$($JI -r -n -e 'Python で cat' -e dog "$S" 2>/dev/null | grep -c "^$S/b.js:1:")" "0" "scope: the scoped term does not hold in it"
-eq "$($JI -r -n -e 'Python で cat' -a '!昨日変えた cat' "$S" 2>/dev/null | grep -c "^$S/b.js:1:")" "0" "scope: within an AND term"
-eq "$($JI -l -e 'Python で cat' "$S/b.js")" "$S/b.js" "scope: a named file is searched"
-eq "$($JI -r -q -e 'Python で cat' "$S" 2>&1)" "" "scope: -q prints nothing"
-eq "$($JI -p --color=never -e 'Python で cat' "$S/a.py" | head -1)" "$(printf 'Python で cat\t[0.90]')" "scope: no column in -p"
-# path roles: several in one meaning are alternatives; one listed with an unknown noun gives no scope
-W="$tmp/roles"; mkdir -p "$W/tests" "$W/src" "$W/docs"
-for f in tests/x.js src/y.js README.md docs/guide.txt app.log; do
-  printf 'テストコードで cat\nREADME か CHANGELOG に cat\nin the code cat\nin the tests and fixtures cat\n' >"$W/$f"
-done
-eq "$($JI -r -l -e 'テストコードで cat' "$W" 2>/dev/null | tr '\n' ' ')" "$W/tests/x.js " "scope: test files"
-eq "$($JI -r -l -e 'README か CHANGELOG に cat' "$W" 2>/dev/null | tr '\n' ' ')" "$W/README.md " "scope: README or CHANGELOG"
-eq "$($JI -r -l -e 'in the code cat' "$W" 2>/dev/null | tr '\n' ' ')" "$W/app.log $W/src/y.js $W/tests/x.js " "scope: code is what is not a document"
-eq "$($JI -r -l -e 'in the tests and fixtures cat' "$W" 2>/dev/null | grep -c .)" "5" "no scope when a role is listed with something else"
-for q in 'テストでもいいので cat' 'README にも書いてある cat' '仕様書でも触れている cat' '実装でもいいので cat'; do
-  eq "$($JI -r -l -e "$q" "$W" 2>&1 | grep -c 'scope:' || true)" "0" "no scope from also / even: $q"
-done
+# auto-scope: Jev is asked once per meaning which kinds of file it restricts its matches to (the fake says yes to
+# "@s:KEY" in the meaning); the files -r finds are narrowed per term; named files never
+S="$tmp/scope"; mkdir -p "$S/sub"; PY='Python で cat @s:l_python'; T='昨日変えた cat @s:t_yesterday @s:t_day30'; PT='cat @s:l_python @s:t_yesterday'
+for f in a.py old.py sub/c.py; do printf '%s\n' "$PY" "$T" "$PT" >"$S/$f"; done
+printf '%s\n' "$PY" dog "$T" "$PT" >"$S/b.js"; touch -t 202001010000 "$S/old.py"
+eq "$($JI -r -l -e "$PY" "$S" 2>/dev/null | tr '\n' ' ')" "$S/a.py $S/old.py $S/sub/c.py " "scope: a language"
+eq "$($JI -r -l -e "$PY" "$S" 2>&1 >/dev/null | tr '\n' '|')" 'semgrep: scope: *.py *.pyi *.pyw (from "Python files: 0.90")|semgrep: scope: 3 of 4 files|' "scope: reported on stderr"
+eq "$($JI -r -l --no-scope -e "$PY" "$S" 2>&1 | grep -c .)" "4" "--no-scope"
+eq "$($JI -r -l -e 'Python で cat' "$S" 2>&1 | grep -c 'semgrep: scope:' || true)" "0" "no scope when Jev says no"
+eq "$($JI -r -l -e "$T" "$S" 2>/dev/null | tr '\n' ' ')" "$S/a.py $S/b.js $S/sub/c.py " "scope: a time span, by mtime"
+eq "$($JI -r -l -e "$T" "$S" 2>&1 >/dev/null | grep -c 'modified since .* (from "what was changed yesterday: 0.90")')" "1" "scope: the narrowest span"
+eq "$($JI -r -l -e 'cat @s:l_javascript @s:l_typescript' "$S" 2>&1 >/dev/null | head -1)" 'semgrep: scope: *.js *.mjs *.cjs *.jsx | *.ts *.mts *.cts *.tsx (from "JavaScript files: 0.90", "TypeScript files: 0.90")' "scope: two languages are alternatives"
+eq "$($JI -r -l -e "$PT" "$S" 2>/dev/null | tr '\n' ' ')" "$S/a.py $S/sub/c.py " "scope: categories intersect"
+eq "$($JI -r --dry-run -e "$T" -e dog "$S" | grep -c '\[scope\]')" "2" "scope: one question request per meaning"
+eq "$($JI --dry-run -e "$T" "$S/a.py" | grep -c '\[scope\]' || true)" "0" "scope: no question for named files only"
+eq "$($JI -r --no-scope --dry-run -e "$T" "$S" | grep -c '\[scope\]' || true)" "0" "scope: no question with --no-scope"
+# places: by path; several are alternatives
+W="$tmp/roles"; mkdir -p "$W/tests" "$W/src" "$W/docs"; RT='cat @s:r_test'; RR='cat @s:r_readme @s:r_changelog'; RC='cat @s:r_code'
+for f in tests/x.js src/y.js README.md docs/guide.txt app.log; do printf '%s\n' "$RT" "$RR" "$RC" >"$W/$f"; done
+eq "$($JI -r -l -e "$RT" "$W" 2>/dev/null | tr '\n' ' ')" "$W/tests/x.js " "scope: test files"
+eq "$($JI -r -l -e "$RR" "$W" 2>/dev/null | tr '\n' ' ')" "$W/README.md " "scope: README or CHANGELOG"
+eq "$($JI -r -l -e "$RC" "$W" 2>/dev/null | tr '\n' ' ')" "$W/app.log $W/src/y.js $W/tests/x.js " "scope: code is what is not a document"
+eq "$($JI -r -n -e "$PY" -e dog "$S" 2>/dev/null | grep -c "^$S/b.js:2:dog")" "1" "scope: another term still searches the file"
+eq "$($JI -r -n -e "$PY" -e dog "$S" 2>/dev/null | grep -c "^$S/b.js:1:")" "0" "scope: the scoped term does not hold in it"
+eq "$($JI -r -n -e "$PY" -a '!昨日変えた cat' "$S" 2>/dev/null | grep -c "^$S/b.js:1:")" "0" "scope: within an AND term"
+eq "$($JI -l -e "$PY" "$S/b.js")" "$S/b.js" "scope: a named file is searched"
+eq "$($JI -r -q -e "$PY" "$S" 2>&1)" "" "scope: -q prints nothing"
+eq "$($JI -r -p --color=never -e "$PY" "$S" 2>/dev/null | head -1)" "$(printf '%s\t[0.90]' "$S/a.py:$PY")" "scope: no column in -p"
 eq "$($JI -r -l --include='*.md' --changed-within=this-month -e cat "$P" | grep -c .)" "2" "--changed-within=this-month"
 eq "$($JI -r -l --include='*.md' --changed-within=2019-12-31T12:00Z -e cat "$P" | grep -c .)" "3" "--changed-within an ISO date-time"
 (cd "$P" && git init -q && git add .)
@@ -329,8 +326,8 @@ reset; out=$(asking "$JI -i -l -e cat '$P/a.md'" n)
 eq "$(stat count)" "0" "-i, n: nothing sent"
 echo "$out" | grep -q "semgrep: file $P/a.md: 1 lines, 1 to send" || fail "-i shows the files: $out"
 echo "$out" | grep -q 'rc=1' || fail "-i, n: exit 1: $out"
-reset; out=$(asking "$JI -i -r -l -e 'Python で cat' '$S'" n)
-eq "$(echo "$out" | grep -c 'scope: \*.py')" "1" "-i: the scope line once, not again from its dry run"
+reset; out=$(asking "$JI -i -r -l -e '$PY' '$S'" n)
+eq "$(stat count)" "0" "-i: the scope question waits for the answer too"
 reset; out=$(asking "$JI -i -l -e cat '$P/a.md'" y)
 eq "$(stat count)" "1" "-i, y: searched: $out"
 echo "$out" | grep -q 'rc=0' || fail "-i, y: exit 0: $out"
