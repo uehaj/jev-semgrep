@@ -127,7 +127,7 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                minute / hour, today, yesterday, the last 1 / 2 / 3 / 7 / 30 days, this month, last week, last
                month, the last year, this fiscal year) or to a place (test code, migrations, the README, the
                changelog, documentation, source code, logs), a git state (uncommitted, staged, untracked, this
-               branch, not pushed, mine) or an author (the 30 with the most commits); a yes at 0.7 or more
+               branch, not pushed, mine) or an author (the 30 with the most commits); a yes at 0.6 or more
                searches only those files. In a repository a time goes by commits: a committed file needs a
                commit since then, an uncommitted one its mtime
                (*.py *.pyi *.pyw; modified since then). Jev reads the whole meaning, so "案A、B、Cで" is not
@@ -247,7 +247,7 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
                いるか、置き場所 (テストコード、マイグレーション、README、CHANGELOG、文書、ソースコード、ログ) に
                限定しているか、git の状態 (未コミット、ステージ、未追跡、このブランチ、未プッシュ、自分が書いた)
                や作者 (コミットの多い 30 人) に限定しているかを聞く。リポジトリでは時期をコミットで見る
-               (コミット済みはそれ以降のコミットがあるもの、未コミットは mtime)。0.7 以上で yes なら、-r と git semgrep で見つけたファイルをそのファイル
+               (コミット済みはそれ以降のコミットがあるもの、未コミットは mtime)。0.6 以上で yes なら、-r と git semgrep で見つけたファイルをそのファイル
                (*.py *.pyi *.pyw、それ以降に更新したもの) に絞る。Jev は意味全体を読むので、「案A、B、Cで」は
                C のファイルの話にならない。項ごとに効くので、-e A -e B は A が除いたファイルでも B を探す。
                絞り込みは semgrep: scope: ... として stderr に出す。コマンドラインで指定したファイルは絞らない
@@ -449,7 +449,9 @@ const wanted = (path, st) => {
 // it does is asked of Jev, one small request per meaning with a yes / no per candidate, as --dedup asks which values
 // matter. The candidates are fixed, so nothing has to be pulled out of the text, and Jev reads the whole meaning in
 // any language: "案A、B、Cで比較" is not about C files, a date quoted in a comment is not when the file changed. A
-// candidate counts at 0.7 or more, the threshold --dedup and --sentence use. Each scope is a literal of its meaning's
+// candidate counts at 0.6 or more: Jev answers these questions near 0.5 more often than the judging ones, and on
+// 100 blind rows (tests/scope-eval.mjs) 0.6 applied 1 wrong scope and missed 23, 0.7 1 and 30, 0.5 4 and 18; on 60
+// rows never tuned on, 0.6 applied none and missed 8. Each scope is a literal of its meaning's
 // AND term, so -e A -e B still searches B in the files A's scope leaves out. Files named on the command line and
 // stdin are never narrowed, as with --include. --no-auto-scope turns it off.
 // A candidate: { key, cat, what (the end of the question), test(file, stat) }. Within a category the yes answers are
@@ -586,7 +588,7 @@ function gitCandidates(found) {
 const scopeQuestions = text => Object.fromEntries(CANDIDATES.map(c => [c.key, { type: 'noul', instructions: `Does the meaning "${text}" restrict its matches to ${c.what}?` }]));
 // Jev's answers -> one scope per category that got a yes: { label, words, test }
 function scopesOf(answers) {
-  const yes = CANDIDATES.filter(c => answers[c.key].noul >= 0.7), out = [];
+  const yes = CANDIDATES.filter(c => answers[c.key].noul >= 0.6), out = [];
   for (const cat of new Set(yes.map(c => c.cat))) {
     let cs = yes.filter(c => c.cat === cat);
     if (cat === 'time') cs = [cs.reduce((a, b) => (b.from > a.from ? b : a))];
