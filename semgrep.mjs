@@ -507,10 +507,32 @@ function show(state, questions, label) {
   if (count.size > 3) trace(`       (+${count.size - 3} more)`);
   tracedQuestions += n; tracedChars += chars; tracedBytes += Buffer.byteLength(JSON.stringify({ model, state, questions }));
 }
+// A spinner on stderr while semgrep waits for Jev (#89): only on a terminal, drawn after 300 ms, erased before
+// anything else is written and on exit. Not with -q, --dry-run or --verbose (its trace lines would interleave).
+const spin = { on: process.stderr.isTTY && process.env.TERM !== 'dumb' && !opt.quiet && !dry && !opt.verbose, shown: false, tag: '', judged: 0, total: 0 };
+spin.erase = () => { if (spin.shown) { spin.shown = false; process.stderr.write('\r\x1b[K'); } };
+spin.start = () => {
+  if (!spin.on || spin.timer) return;
+  const t0 = Date.now();
+  let f = 0;
+  spin.timer = setInterval(() => {
+    if (Date.now() - t0 < 300) return;
+    spin.shown = true;
+    const what = spin.tag === 'judge' ? `${spin.judged} of ${spin.total} requests` : `asking Jev (${spin.tag})`;
+    process.stderr.write(`\r${'⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'[f++ % 10]} semgrep: ${what}\x1b[K`);
+  }, 100);
+  spin.timer.unref();
+  for (const k of ['log', 'error']) { const f0 = console[k]; console[k] = (...a) => { spin.erase(); f0(...a); }; }
+  process.on('exit', spin.erase);
+  process.on('SIGINT', () => { spin.erase(); process.exit(130); });
+};
+spin.stop = () => { clearInterval(spin.timer); spin.erase(); };
 // One request with retries: 429 / 529 / 5xx, connection errors and timeouts back off exponentially.
 async function post(state, questions, label) {
   if (trace) show(state, questions, label);
   if (dry) return Object.fromEntries(Object.keys(questions).map(k => [k, { noul: 0 }]));
+  spin.start();
+  spin.tag = label?.match(/^\[(\w+)\]/)?.[1] ?? "request";
   for (let attempt = 0; ; attempt++) {
     let res;
     try {
@@ -780,13 +802,16 @@ async function evaluate(chunk) {
   const [a, b] = [chunk[0], chunk.at(-1)];
   const answers = await post(state, questions, `[judge] ${a.file}:${a.no}-${a.file === b.file ? '' : `${b.file}:`}${b.no}, ${chunk.length} ${unitName}`);
   chunk.forEach((l, i) => keys[i].forEach((text, k) => asksByUnit.get(l).set(text, answers[`${id(i)}_${k}`].noul)));
+  spin.judged++;
 }
 const isHit = l => expr.some(term => termHolds(term, l));
 // -q: a failed request is reported and the rest still run, since a later match means exit 0 (grep -q).
+spin.total = chunks.length;
 await Promise.all(chunks.map(chunk => pooled(() => evaluate(chunk).then(() => {
   if (opt.quiet && chunk.some(isHit)) process.exit(0);
 }, e => { if (!opt.quiet) throw e; console.error(`semgrep: ${e.message}`); hadError = true; }))));
 
+spin.stop();
 const color = opt.color === 'always' || (opt.color === 'auto' && process.stdout.isTTY && !process.env.NO_COLOR);
 const paint = (code, s) => (color ? `\x1b[${code}m${s}\x1b[0m` : s);
 const paintProb = x => paint(x >= tPos ? 32 : x < tNeg ? 31 : 33, x.toFixed(2));

@@ -9,6 +9,8 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 - The `--dry-run` summary line (also shown by `-i`) estimates the input tokens and, for TypeSafe itself, the price:
   `…, 2315 chars, ~3178 input tokens, ~$0.000133; nothing sent`. The estimate is 650 tokens a request plus 0.21 a
   request-body byte, fitted on real requests in English and Japanese; it was within -8% to +12% of what Jev billed.
+- A spinner on a terminal's stderr while semgrep waits for Jev: `⠹ semgrep: 12 of 149 requests` (#89). Drawn after
+  300 ms and erased before any other output; never when stderr is piped, nor with `-q`, `--dry-run` or `--verbose`.
 
 ## [0.4.0] - 2026-09-26
 

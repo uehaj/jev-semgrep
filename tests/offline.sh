@@ -149,6 +149,10 @@ eq "$(stat asked)" "6" "--dedup: those two lines are still one group for the mea
 reset; eq "$($J -c --dedup -e '/cat/' "$F")" "2" "--dedup, regex terms only"
 eq "$(stat count)" "0" "--dedup, regex terms only: no requests, no pre-question"
 
+# The spinner (#89) is drawn only on a terminal: a piped stderr carries none of its bytes
+seq 1 200 | sed 's/^/line /' >"$tmp/many"
+$J -j 1 --chunk 5 -e cat "$tmp/many" 2>&1 >/dev/null | LC_ALL=C grep -q "$(printf '\r')" && fail "spinner on a piped stderr"
+
 # SEMGREP_URL: a compatible endpoint; the key goes there as a bearer token, no key means no header
 reset; $J -e cat "$F" >/dev/null; eq "$(stat auth)" "null" "no key, no authorization header"
 reset; $E SEMGREP_URL=$base/v1 SEMGREP_API_KEY=k1 node ../semgrep.mjs -e cat "$F" >/dev/null; eq "$(stat auth)" "Bearer k1" "SEMGREP_API_KEY"
