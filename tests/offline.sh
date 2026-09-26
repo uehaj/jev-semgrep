@@ -456,10 +456,16 @@ eq "$($S --summarize --dedup -e cat "$tmp/dd.txt")" "SUMMARY" "--summarize --ded
 eq "$(cat "$tmp/sum.in")" "cat 1   (×3 like it)" "--summarize --dedup: a representative and its count"
 grep -q 'stands for N matching lines' "$tmp/sum.argv" || fail "--summarize --dedup: the prompt says what ×N is"
 $S --summarize -e cat "$tmp/dd.txt" >/dev/null; grep -q 'like it' "$tmp/sum.argv" && fail "--summarize without --dedup: no ×N in the prompt"
+printf 'The cat 1 sat. A dog ran.\nThe cat 2 sat.\nThe cat 3\nsat.\n' >"$tmp/dds.txt"
+$S --summarize --dedup --sentence=rules -n -e cat "$tmp/dds.txt" >/dev/null
+eq "$(tr '\n' '|' <"$tmp/sum.in")" "1:The cat 1 sat. A dog ran.   (×3 like it)|" "--summarize --dedup --sentence: one representative for sentences across lines"
 node -e "for (let i = 0; i < 3000; i++) console.log('cat ' + 'x'.repeat(80) + ' ' + i)" >"$tmp/big.txt"
 rm -f "$tmp/sum.in"; code 2 "--summarize over 200 KB" -- $S --summarize -e '/cat/' "$tmp/big.txt"
 [ ! -e "$tmp/sum.in" ] || fail "--summarize over 200 KB runs the summarizer"
 $S --summarize -e '/cat/' "$tmp/big.txt" 2>&1 >/dev/null | grep -q '^semgrep: --summarize: 3000 matching lines (2[0-9][0-9] KB) are more than the 200 KB to summarize; narrow the expression or add --dedup$' || fail "--summarize over 200 KB: the message: $($S --summarize -e '/cat/' "$tmp/big.txt" 2>&1 >/dev/null)"
+# 300 templates (told apart by letters, which --dedup never folds), 10 lines each: 300 representatives, about 240 KB
+node -e "for (let i = 0; i < 3000; i++) console.log('cat ' + [...String(i % 300)].map(d => 'ghijklmnop'[d]).join('') + ' ' + 'x'.repeat(800) + ' ' + i)" >"$tmp/bigdd.txt"
+$S --summarize --dedup --chunk 100 -e cat "$tmp/bigdd.txt" 2>&1 >/dev/null | grep -q '^semgrep: --summarize: 3000 matching lines as 300 representatives ([0-9]* KB) are more than the 200 KB to summarize; narrow the expression$' || fail "--summarize --dedup over 200 KB: $($S --summarize --dedup --chunk 100 -e cat "$tmp/bigdd.txt" 2>&1 >/dev/null)"
 $S --summarize --dry-run -e cat "$F" | grep -q '^semgrep: summarize: .* (stops over 200 KB)$' || fail "--dry-run shows the limit"
 
 # the spinner (#89): on a terminal, one line on stderr while waiting, erased before the output; never when not a terminal

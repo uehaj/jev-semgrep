@@ -1185,9 +1185,13 @@ const piped = [];
 const write = summarizer ? s => piped.push(s) : s => process.stdout.write(s);
 const EOL = summarizer && opt.z ? '\n\n' : SEP;
 // --summarize --dedup (#98): a representative stands for its template, as it did for Jev: members share its answers
-// (the same Map), so each Map is piped once, with how many matching units it stands for.
-const likeIt = new Map(), pipedUnits = new Set();
-if (summarizer && opt.dedup) for (const h of hits.values()) for (const p of h.values()) likeIt.set(asksByUnit.get(p), (likeIt.get(asksByUnit.get(p)) ?? 0) + 1);
+// (the same Map), so each Map is piped once, with how many matching units it stands for: sentences, not the lines
+// they touch, so a sentence over two lines counts once.
+const likeIt = new Map(), pipedUnits = new Set(); // answer Map -> Set of the matching units sharing it
+if (summarizer && opt.dedup) for (const h of hits.values()) for (const p of h.values()) {
+  const g = asksByUnit.get(p);
+  likeIt.set(g, (likeIt.get(g) ?? new Set()).add(p));
+}
 for (const file of opt.quiet || dry ? [] : targets) {
   if (!sources.has(file)) continue;
   const h = hits.get(file);
@@ -1213,7 +1217,7 @@ for (const file of opt.quiet || dry ? [] : targets) {
       const text = src[k - 1], sentences = ranges.get(file)?.get(k);
       const matches = !p ? [] : sentences ? sentences.flatMap(([a, b, s]) => regexRanges(text, s, a, b)) : regexRanges(text, p);
       // Only data records carry the NUL terminator, as in grep -z; file names and counts stay on newlines.
-      const n = p && group && k === no ? likeIt.get(group) : 0, like = n > 1 ? `   (×${n} like it)` : '';
+      const n = p && group && k === no ? likeIt.get(group).size : 0, like = n > 1 ? `   (×${n} like it)` : '';
       if (partsOnly && matches.length) {
         let end = -1; // a match overlapping the last one printed is skipped; a skipped one does not hide later ones
         for (const [a, b] of matches) if (a >= end) { write(prefix + paint('01;31', text.slice(a, b)) + tail + like + EOL); end = b; }
@@ -1229,7 +1233,8 @@ const pipedBytes = Buffer.byteLength(piped.join(''));
 if (summarizer && !dry && matched && pipedBytes > SUMMARY_MAX) {
   // Not cut short: a summary of the first part would read as a summary of all of it.
   const size = pipedBytes >= 1024 * 1024 ? `${(pipedBytes / 1024 / 1024).toFixed(1)} MB` : `${Math.round(pipedBytes / 1024)} KB`;
-  console.error(`semgrep: --summarize: ${likeIt.size ? pipedUnits.size : matched} matching ${unitName} (${size}) are more than the ${SUMMARY_MAX / 1024} KB to summarize; narrow the expression${opt.dedup ? '' : ' or add --dedup'}`);
+  const count = likeIt.size ? `${matched} matching ${unitName} as ${pipedUnits.size} representatives` : `${matched} matching ${unitName}`;
+  console.error(`semgrep: --summarize: ${count} (${size}) are more than the ${SUMMARY_MAX / 1024} KB to summarize; narrow the expression${opt.dedup ? '' : ' or add --dedup'}`);
   summaryFailed = true;
 } else if (summarizer && !dry && matched) {
   // spawn, not spawnSync: the spinner's timer runs only while the event loop does. Its output erases the spinner.
