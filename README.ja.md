@@ -1,4 +1,4 @@
-# semgrep — 意味で探す grep
+# sys1grep — ファイルのための System 1、TypeSafe AI の Jev を使う
 
 [English version](README.md)
 
@@ -10,12 +10,12 @@ Jev は文章を生成せず、typed な質問に確率だけを返すモデル�
 「この行は『ネットワーク障害』の意味に合うか」と聞き、返ってきた確率を閾値で切ります。
 
 ```sh
-./semgrep -n -e "顧客が怒っている、または不満を持っている" tickets.txt
+./sys1grep -n -e "顧客が怒っている、または不満を持っている" tickets.txt
 ```
 
-[![semgrep のデモ: 日本語の意味で 6 言語の返金要求を探す / 「返金について」と「返金を求めている」の違い / -Q で答えを探す](docs/demo.svg)](https://uehaj.github.io/jev-semgrep/)
+[![sys1grep のデモ: 日本語の意味で 6 言語の返金要求を探す / 「返金について」と「返金を求めている」の違い / -Q で答えを探す](docs/demo.svg)](https://uehaj.github.io/sys1grep/)
 
-<sub>▶ デモをクリックするか <a href="https://uehaj.github.io/jev-semgrep/">uehaj.github.io/jev-semgrep</a> を開くと、ランディングページで全編のデモが見られます。</sub>
+<sub>▶ デモをクリックするか <a href="https://uehaj.github.io/sys1grep/">uehaj.github.io/sys1grep</a> を開くと、ランディングページで全編のデモが見られます。</sub>
 
 - 依存ゼロ。1 ファイル、Node.js 20.16 以降と `fetch` だけで動きます。
 - 速い。30 行を 1 リクエストにまとめ、8 本並列で投げます。210 行のファイルが 1 秒弱で終わります。
@@ -30,7 +30,7 @@ Jev は文章を生成せず、typed な質問に確率だけを返すモデル�
 **英語**の意味で**日本語**の行が見つかります。どの行にも angry / frustrated の語はなく、うち 2 行は日本語です。
 
 ```sh
-$ ./semgrep -n -e "customer is angry or frustrated" tests/corpus.txt
+$ ./sys1grep -n -e "customer is angry or frustrated" tests/corpus.txt
 14:ユーザー山田さんからの問い合わせ: 返金してほしい、商品が壊れていた
 16:ユーザー佐藤さんからの問い合わせ: 注文した覚えのない請求が来ています。至急確認してください
 18:I want my money back. The item arrived broken and customer service ignored me.
@@ -41,7 +41,7 @@ $ ./semgrep -n -e "customer is angry or frustrated" tests/corpus.txt
 **日本語**の意味で**英語**の行が、日本語の行と同じ確信度で見つかります。
 
 ```sh
-$ ./semgrep -n -p -e "返金の要求" tests/corpus.txt
+$ ./sys1grep -n -p -e "返金の要求" tests/corpus.txt
 14:ユーザー山田さんからの問い合わせ: 返金してほしい、商品が壊れていた	[0.97]
 18:I want my money back. The item arrived broken and customer service ignored me.	[0.95]
 ```
@@ -50,7 +50,7 @@ $ ./semgrep -n -p -e "返金の要求" tests/corpus.txt
 日本語の意味 1 つで 6 言語の返金要求がすべて見つかり、ロシア語で書いた意味でも同じ結果になります。
 
 ```sh
-$ ./semgrep -n -p -e "顧客が返金を求めている" tests/multi.txt
+$ ./sys1grep -n -p -e "顧客が返金を求めている" tests/multi.txt
 1:Je veux être remboursé, le produit est arrivé cassé.	[0.98]
 3:Я требую вернуть деньги, товар не работает.	[0.97]
 5:Ich möchte mein Geld zurück, das Gerät ist defekt.	[0.97]
@@ -58,7 +58,7 @@ $ ./semgrep -n -p -e "顧客が返金を求めている" tests/multi.txt
 9:我要求退款，商品坏了。	[0.97]
 11:환불해 주세요. 제품이 고장났어요.	[0.97]
 
-$ ./semgrep -n -p -e "клиент требует возврат денег" tests/multi.txt
+$ ./sys1grep -n -p -e "клиент требует возврат денег" tests/multi.txt
 1:Je veux être remboursé, le produit est arrivé cassé.	[0.94]
 3:Я требую вернуть деньги, товар не работает.	[0.97]
 5:Ich möchte mein Geld zurück, das Gerät ist defekt.	[0.92]
@@ -74,14 +74,14 @@ $ ./semgrep -n -p -e "клиент требует возврат денег" tes
 ## ベクトル検索と何が違うのか
 
 「X に関係のある行」が欲しいだけなら、埋め込みのコサイン類似度でも同じ行が出ます。違うのは判定の中身です。
-semgrep は話題の近さではなく、その行について **命題が成り立つか** を判定します。Jev は行と質問を同時に読んで
+sys1grep は話題の近さではなく、その行について **命題が成り立つか** を判定します。Jev は行と質問を同時に読んで
 答える（cross-encoder 型の）モデルなので、誰が何をしたか、否定、「求めている」のか「済んだ」のかで答えが変わります。
 行の埋め込みは質問を見る前に固定されるので、測れるのは話題の近さまでです。
 
 次の 6 行はどれも「返金の話」ですが、顧客が返金を求めているのは 2 行だけです。
 
 ```sh
-$ ./semgrep -n -p -t 0 -e "customer is asking for a refund" tests/contrast.txt
+$ ./sys1grep -n -p -t 0 -e "customer is asking for a refund" tests/contrast.txt
 1:返金してほしい。商品が壊れていた	[0.98]
 2:返金処理が完了しましたのでご確認ください	[0.10]
 3:当社の返金ポリシーは購入後30日以内です	[0.10]
@@ -95,14 +95,14 @@ $ ./semgrep -n -p -t 0 -e "customer is asking for a refund" tests/contrast.txt
 
 ```sh
 # 返金の話だが、顧客が求めているのではない → 完了報告、ポリシー、却下、日数
-$ ./semgrep -n -e "about a refund" -v "the customer is asking for a refund" tests/contrast.txt
+$ ./sys1grep -n -e "about a refund" -v "the customer is asking for a refund" tests/contrast.txt
 2:返金処理が完了しましたのでご確認ください
 3:当社の返金ポリシーは購入後30日以内です
 4:The manager denied the refund request yesterday
 6:Refunds are processed within 5 business days
 
 # 怒っている、かつ、それが顧客であってスタッフではない
-$ ./semgrep -n -e "someone is angry" -a "the customer, not the staff, is the one acting" tests/contrast.txt
+$ ./sys1grep -n -e "someone is angry" -a "the customer, not the staff, is the one acting" tests/contrast.txt
 5:I demand a full refund immediately
 8:顧客が怒って電話を切った
 ```
@@ -128,8 +128,8 @@ top-k か質問ごとの閾値調整が要ります。また索引を作らず�
 よう先頭にスペースを置けます。
 
 ```sh
-$ ./semgrep -e '/ERROR|FATAL/' app.log                               # リクエストなし
-$ ./semgrep -e '/timeout/i' -a '顧客に影響が出ている' app.log         # timeout を含む行だけ Jev へ
+$ ./sys1grep -e '/ERROR|FATAL/' app.log                               # リクエストなし
+$ ./sys1grep -e '/timeout/i' -a '顧客に影響が出ている' app.log         # timeout を含む行だけ Jev へ
 ```
 
 正規表現の名前付き・番号付きグループは、同じ AND 項の他の意味に `$<name>`、`$1`-`$99`、`$&`、`$$` として
@@ -139,7 +139,7 @@ $ ./semgrep -e '/timeout/i' -a '顧客に影響が出ている' app.log         
 文字として残るので、`$100 以上の請求` は影響を受けません。
 
 ```sh
-$ ./semgrep -e '/(?<date>\d{4}-\d\d-\d\d) (?<time>\d\d:\d\d)/' \
+$ ./sys1grep -e '/(?<date>\d{4}-\d\d-\d\d) (?<time>\d\d:\d\d)/' \
             -a '$<time> が深夜（0時〜5時）であり、$<date> が週末である' app.log
 #   2026-09-19 03:12 ... → 「03:12 が深夜（0時〜5時）であり、2026-09-19 が週末である」と尋ねる
 ```
@@ -151,7 +151,7 @@ $ ./semgrep -e '/(?<date>\d{4}-\d\d-\d\d) (?<time>\d\d:\d\d)/' \
 `-o` は一致をそれぞれ 1 行ずつ出します（`grep -o` と同じ）。意味には「一致した部分」がないので、意味だけで当たった行は行全体を出します。
 
 ```sh
-$ ./semgrep -o -n -e '/[A-Z]+-\d+/' -a 'チケットがまだ閉じていない' notes.txt   # チケット番号を 1 行ずつ
+$ ./sys1grep -o -n -e '/[A-Z]+-\d+/' -a 'チケットがまだ閉じていない' notes.txt   # チケット番号を 1 行ずつ
 ```
 
 ## 送る量を減らす
@@ -160,7 +160,7 @@ Jev に送る行が増えるほど、費用も時間もかかります。いち�
 大きく削れるものから順に並べます。
 
 - **どのファイルを探すか。** `-r` は `.git`、`node_modules`、バイナリ、秘密情報らしいファイル、git が無視する
-  ものを飛ばします。[`git semgrep`](#git-のサブコマンドとして-git-semgrep) は追跡しているファイルだけを探します。
+  ものを飛ばします。[`git sys1grep`](#git-のサブコマンドとして-git-sys1grep) は追跡しているファイルだけを探します。
   `--include` / `--exclude`（ファイル名のグロブ）と `--changed-within`（`30m`、`7d`、`today`、`this-week`、日付）で
   さらに絞れます。言語や変更時期を指定する意味は、それだけでファイルを絞ります
   ([意味からの絞り込み](#意味からの絞り込み))。
@@ -173,76 +173,74 @@ Jev に送る行が増えるほど、費用も時間もかかります。いち�
   （`~3178 input tokens, ~$0.000133`。誤差 1 割程度）。`-i` は同じ集計を端末に出し、`y` と答えたときだけ送ります。
 
 ```sh
-$ semgrep --dry-run -r --include='*.log' --changed-within=today -e '/ERROR|FATAL/' -a '顧客に影響が出ている' logs/
+$ sys1grep --dry-run -r --include='*.log' --changed-within=today -e '/ERROR|FATAL/' -a '顧客に影響が出ている' logs/
 ```
 
 ## インストール
 
 使い方は 2 通りあります。コマンドラインツールとして使う（この節）か、Claude Code のスキルとして使う
-（後述の [Claude Code から使う](#claude-code-から使う)）か。スキルは `npx @uehaj/semgrep` に自動で切り替わるので、
+（後述の [Claude Code から使う](#claude-code-から使う)）か。スキルは `npx @uehaj/sys1grep` に自動で切り替わるので、
 Claude Code からしか使わないならここでのインストールは不要で、API キーの設定だけで済みます。
 
 Node.js 20.16 以降が必要です。ほかの依存はありません。
 
 ```sh
-npm install -g @uehaj/semgrep
-semgrep --help
+npm install -g @uehaj/sys1grep
+sys1grep --help
 ```
 
 インストールせずに試すなら `npx` で実行できます（初回だけダウンロードし、2 回目以降はキャッシュから起動します）。
 
 ```sh
-npx @uehaj/semgrep -n -e "顧客が怒っている、または不満を持っている" tickets.txt
+npx @uehaj/sys1grep -n -e "顧客が怒っている、または不満を持っている" tickets.txt
 ```
 
 次に [TypeSafe のコンソール](https://console.typesafe.ai/) で取得した API キーを渡します。どれか 1 つで構いません。
 
 ```sh
-export SEMGREP_API_KEY=your-key                       # 環境変数
-echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env    # ユーザー単位 (先に mkdir -p)
+export SYS1GREP_API_KEY=your-key                       # 環境変数
+echo 'SYS1GREP_API_KEY=your-key' > ~/.config/sys1grep/.env    # ユーザー単位 (先に mkdir -p)
 ```
 
-環境変数が優先で、足りない分は `~/.config/semgrep/.env` から補います。カレントディレクトリの `.env` は読みません。
-clone したばかりのリポジトリのものかもしれず、`SEMGREP_URL` を通じてキーを別のサーバへ送らせ得るからです。
-プロジェクト単位の設定は、自分で読み込ませてください: `node --env-file=.env "$(command -v semgrep)" ...`。
-`SEMGREP_API_KEY` が無ければ `TYPESAFE_API_KEY` も使えます。
+環境変数が優先で、足りない分は `~/.config/sys1grep/.env` から補います。カレントディレクトリの `.env` は読みません。
+clone したばかりのリポジトリのものかもしれず、`SYS1GREP_URL` を通じてキーを別のサーバへ送らせ得るからです。
+プロジェクト単位の設定は、自分で読み込ませてください: `node --env-file=.env "$(command -v sys1grep)" ...`。
+`SYS1GREP_API_KEY` が無ければ `TYPESAFE_API_KEY` も使えます。
 
 ### 既定のオプション
 
-`SEMGREP_OPTS` に書いたオプションは毎回の呼び出しに付きます。読み方は上の設定と同じです。空白で区切って
+`SYS1GREP_OPTS` に書いたオプションは毎回の呼び出しに付きます。読み方は上の設定と同じです。空白で区切って
 コマンドラインの前に置くので、コマンドラインが優先します。後に書いた値が効き、`--no-X` で既定のフラグを消せます。
 
 ```sh
-export SEMGREP_OPTS='--level strict -j 8 -n'
-semgrep -e "決済の失敗" app.log                    # strict、8 並列、行番号付き
-semgrep --level loose --no-n -e "決済の失敗" app.log
+export SYS1GREP_OPTS='--level strict -j 8 -n'
+sys1grep -e "決済の失敗" app.log                    # strict、8 並列、行番号付き
+sys1grep --level loose --no-n -e "決済の失敗" app.log
 ```
 
-semgrep を呼ぶスクリプトもこの既定値を拾います（grep が `GREP_OPTIONS` を廃止した理由です）。スクリプトからは
-`SEMGREP_OPTS= semgrep ...` と空にして呼んでください。
+sys1grep を呼ぶスクリプトもこの既定値を拾います（grep が `GREP_OPTIONS` を廃止した理由です）。スクリプトからは
+`SYS1GREP_OPTS= sys1grep ...` と空にして呼んでください。
 
 ### 他のエンドポイント
 
-API の設定は `SEMGREP_API_KEY`（または `TYPESAFE_API_KEY`）、`SEMGREP_URL`、`SEMGREP_MODEL` の 3 つだけです。
-TypeSafe の `POST /v1/systemone` と同じ形で話すエンドポイントなら使えます。キーは `SEMGREP_URL` の先へそのまま
+API の設定は `SYS1GREP_API_KEY`（または `TYPESAFE_API_KEY`）、`SYS1GREP_URL`、`SYS1GREP_MODEL` の 3 つだけです。
+TypeSafe の `POST /v1/systemone` と同じ形で話すエンドポイントなら使えます。キーは `SYS1GREP_URL` の先へそのまま
 送られるので、2 つは組にして設定してください。コマンドラインの `--sys1-model=ID`、`--sys1-url=URL`、`--sys1-api-key=KEY` は
-この 3 つより優先します。コマンドラインのキーは `ps` やシェル履歴に残るので、キーはなるべく `~/.config/semgrep/.env` に書いてください。
+この 3 つより優先します。コマンドラインのキーは `ps` やシェル履歴に残るので、キーはなるべく `~/.config/sys1grep/.env` に書いてください。
 
 ```sh
 # OpenRouter
-SEMGREP_URL=https://openrouter.ai/api/v1/systemone SEMGREP_API_KEY=sk-or-... semgrep -e ...
+SYS1GREP_URL=https://openrouter.ai/api/v1/systemone SYS1GREP_API_KEY=sk-or-... sys1grep -e ...
 # Vercel AI Gateway
-SEMGREP_URL=https://ai-gateway.vercel.sh/typesafe/v1/systemone SEMGREP_MODEL=typesafe-ai/jev SEMGREP_API_KEY=vck_... semgrep -e ...
+SYS1GREP_URL=https://ai-gateway.vercel.sh/typesafe/v1/systemone SYS1GREP_MODEL=typesafe-ai/jev SYS1GREP_API_KEY=vck_... sys1grep -e ...
 # キーの要らない互換サーバ: Authorization ヘッダを付けずに送る
-SEMGREP_URL=http://localhost:8000/v1/systemone semgrep -e ...
+SYS1GREP_URL=http://localhost:8000/v1/systemone sys1grep -e ...
 ```
 
 集計行には、エンドポイントが返した費用（`usage.cost`）を出します。TypeSafe 本体の場合は定価での推定を `~` 付きで出します。
 
-ソースから使うなら `git clone https://github.com/uehaj/jev-semgrep.git && cd jev-semgrep && npm install -g .`、
-またはそのまま `node semgrep.mjs ...` で動きます。
-
-> 静的解析ツールの [Semgrep](https://semgrep.dev/) と同名です。両方使うならどちらかを別名にしてください。
+ソースから使うなら `git clone https://github.com/uehaj/sys1grep.git && cd sys1grep && npm install -g .`、
+またはそのまま `node sys1grep.mjs ...` で動きます。
 
 ## 例
 
@@ -252,7 +250,7 @@ SEMGREP_URL=http://localhost:8000/v1/systemone semgrep -e ...
 ### 概念で探す。言語は問わない
 
 ```sh
-$ ./semgrep -n -e "customer is angry or frustrated" tests/corpus.txt
+$ ./sys1grep -n -e "customer is angry or frustrated" tests/corpus.txt
 14:ユーザー山田さんからの問い合わせ: 返金してほしい、商品が壊れていた
 16:ユーザー佐藤さんからの問い合わせ: 注文した覚えのない請求が来ています。至急確認してください
 18:I want my money back. The item arrived broken and customer service ignored me.
@@ -269,8 +267,8 @@ $ ./semgrep -n -e "customer is angry or frustrated" tests/corpus.txt
 そのため、問いは尋ねるときのままの疑問文で書ける:
 
 ```sh
-$ echo "ジョブは失敗した" | ./semgrep -e "ジョブは成功しましたか?"
-$ echo "ジョブは失敗した" | ./semgrep -Q "ジョブは成功しましたか?"
+$ echo "ジョブは失敗した" | ./sys1grep -e "ジョブは成功しましたか?"
+$ echo "ジョブは失敗した" | ./sys1grep -Q "ジョブは成功しましたか?"
 ジョブは失敗した
 ```
 
@@ -280,7 +278,7 @@ $ echo "ジョブは失敗した" | ./semgrep -Q "ジョブは成功しました
 なる:
 
 ```sh
-$ ./semgrep -n -Q "whether the server is down" tests/intent.txt
+$ ./sys1grep -n -Q "whether the server is down" tests/intent.txt
 5:The server is down.
 6:The server is healthy and responding normally.
 2 of 17 lines matched; 17 sent to Jev in 1 request, 1087 input tokens, ~$0.000046
@@ -297,7 +295,7 @@ down?` は尋ねているだけで答えていないので一致しない。`-Q 
 ### OR で 2 つの意味。`-p` で確率も見る
 
 ```sh
-$ ./semgrep -n -p -e "返金の要求" -e "配送先の変更依頼" tests/corpus.txt
+$ ./sys1grep -n -p -e "返金の要求" -e "配送先の変更依頼" tests/corpus.txt
 14:ユーザー山田さんからの問い合わせ: 返金してほしい、商品が壊れていた	[0.97 0.02]
 17:ユーザー高橋さんからの問い合わせ: 配送先の住所を変更したいのですが	[0.01 0.96]
 18:I want my money back. The item arrived broken and customer service ignored me.	[0.96 0.01]
@@ -315,7 +313,7 @@ $ ./semgrep -n -p -e "返金の要求" -e "配送先の変更依頼" tests/corpu
 ### AND NOT。ネットワーク障害のうちリトライ中のものを除く
 
 ```sh
-$ ./semgrep -n -e "ネットワークやリモート接続の障害" -v "a retry is happening or was attempted" tests/corpus.txt
+$ ./sys1grep -n -e "ネットワークやリモート接続の障害" -v "a retry is happening or was attempted" tests/corpus.txt
 4:2026-09-19 08:02:30 ERROR connection reset by peer while calling payment-gateway
 6:2026-09-19 08:02:35 ERROR timeout after 5000ms waiting for payment-gateway
 9:2026-09-19 08:10:44 ERROR DNS lookup failed for api.example.com
@@ -331,7 +329,7 @@ $ ./semgrep -n -e "ネットワークやリモート接続の障害" -v "a retry
 ### 混合。(金融 AND 悪いニュース) OR 天気
 
 ```sh
-$ ./semgrep -n -e "about economy, finance or markets" -a "the news is negative or a decline" -e "about weather" tests/corpus.txt
+$ ./sys1grep -n -e "about economy, finance or markets" -a "the news is negative or a decline" -e "about weather" tests/corpus.txt
 36:今日の天気は晴れ、最高気温は28度です
 43:Stock prices fell 3% after the earnings report missed expectations.
 48:明日は雨の予報なので傘を持っていきます
@@ -343,11 +341,11 @@ $ ./semgrep -n -e "about economy, finance or markets" -a "the news is negative o
 ### 厳しさのプリセット
 
 ```sh
-$ ./semgrep --level strict -n -e "a security risk or dangerous destructive operation" tests/corpus.txt
+$ ./sys1grep --level strict -n -e "a security risk or dangerous destructive operation" tests/corpus.txt
 33:DROP TABLE sessions;
 49:API keys must never be committed to the repository.
 
-$ ./semgrep --level loose -n -e "a security risk or dangerous destructive operation" tests/corpus.txt
+$ ./sys1grep --level loose -n -e "a security risk or dangerous destructive operation" tests/corpus.txt
 11:2026-09-19 09:00:00 ERROR SSL handshake failed: certificate expired
 16:ユーザー佐藤さんからの問い合わせ: 注文した覚えのない請求が来ています。至急確認してください
 33:DROP TABLE sessions;
@@ -359,11 +357,11 @@ $ ./semgrep --level loose -n -e "a security risk or dangerous destructive operat
 ### ディレクトリを再帰検索、ファイル名だけ表示
 
 ```sh
-$ ./semgrep -r -n -e "customer is asking for a refund" tests/tickets/
+$ ./sys1grep -r -n -e "customer is asking for a refund" tests/tickets/
 tests/tickets/a.txt:7:Ticket #16: I want a refund, the item was broken.
 tests/tickets/sub/b.txt:1:The customer wants a refund for the broken lamp.
 
-$ ./semgrep -rl -e "customer is asking for a refund" tests/tickets/
+$ ./sys1grep -rl -e "customer is asking for a refund" tests/tickets/
 tests/tickets/a.txt
 tests/tickets/sub/b.txt
 ```
@@ -376,23 +374,23 @@ tests/tickets/sub/b.txt
 git リポジトリの中では、git が無視するもの（`.gitignore`、`.git/info/exclude`、グローバルの除外ファイル）も `-r` で
 飛ばすので、ビルド成果物や手元だけのファイルは送られません。追跡中のファイルは、無視パターンに当たっても検索します。
 コマンドラインで明示したファイルは、除外リストに該当しても、git が無視していても検索します。git が無視している
-ディレクトリも、名前を指定すれば検索します（`semgrep -r -e ... dist`）。
+ディレクトリも、名前を指定すれば検索します（`sys1grep -r -e ... dist`）。
 `-l` は一致したファイルを見つかった順に 1 回ずつ表示し、`-r` の有無にかかわらず使えます。`-c` は行の代わりにファイルごとの一致行数を出します。
 
 ### 意味からの絞り込み
 
 一致を特定の種類のファイルに限定している意味は、そういうファイルの中でしか当たりません。`-r` と
-`git semgrep` では、意味ごとにまず Jev へ小さなリクエストを 1 つ送り、候補ごとに yes / no を聞きます。0.6 以上で
+`git sys1grep` では、意味ごとにまず Jev へ小さなリクエストを 1 つ送り、候補ごとに yes / no を聞きます。0.6 以上で
 yes なら、ほかを送る前にファイルを絞ります。残りは読まず、送りもしません。絞り込みは Jev の答えとともに stderr
 に出るので、誤りに気づけます。
 
 ```sh
-$ semgrep -r -e 'Python でリトライ処理を書いている箇所' .
-semgrep: scope: *.py *.pyi *.pyw (from "Python files: 0.94")
-semgrep: scope: 12 of 340 files
-$ semgrep -r -e '昨日変えた箇所で認証を扱っている' src/
-semgrep: scope: modified since 2026-09-25 00:00 (from "what was changed yesterday: 0.91")
-semgrep: scope: 3 of 120 files
+$ sys1grep -r -e 'Python でリトライ処理を書いている箇所' .
+sys1grep: scope: *.py *.pyi *.pyw (from "Python files: 0.94")
+sys1grep: scope: 12 of 340 files
+$ sys1grep -r -e '昨日変えた箇所で認証を扱っている' src/
+sys1grep: scope: modified since 2026-09-25 00:00 (from "what was changed yesterday: 0.91")
+sys1grep: scope: 3 of 120 files
 ```
 
 - **言語・形式**: 26 の候補 (Python、JavaScript、TypeScript、Go、Rust、Java、Kotlin、Ruby、PHP、C、C++、C#、Swift、
@@ -418,17 +416,17 @@ semgrep: scope: 3 of 120 files
 - **項ごとに効く。** `-e A -e B` は A の絞り込みで除いたファイルでも B を探します。同じ AND 項の中と、カテゴリを
   またぐとき (「Python のテストコード」) は絞り込みが重なります。否定した意味 (`-v`、`!`) は聞きません。意味の
   文面はそのまま送ります。
-- 問い合わせは意味 1 つにつき小さなリクエスト 1 つで、`-r` / `git semgrep` で絞れるファイルが見つかったとき
+- 問い合わせは意味 1 つにつき小さなリクエスト 1 つで、`-r` / `git sys1grep` で絞れるファイルが見つかったとき
   だけ、`-i` の答えの後に送ります。`--dry-run` では `[scope]` と表示します。`--include` と同じく、`-r` では
-  コマンドラインで指定したファイルと stdin は絞らず、`git semgrep` の pathspec は他と同じく絞ります。`--no-auto-scope` で止められます (`--auto-scope` で戻せます)。
+  コマンドラインで指定したファイルと stdin は絞らず、`git sys1grep` の pathspec は他と同じく絞ります。`--no-auto-scope` で止められます (`--auto-scope` で戻せます)。
 
-### git のサブコマンドとして (`git semgrep`)
+### git のサブコマンドとして (`git sys1grep`)
 
-`npm install -g` すると `git-semgrep` も入るので、`git semgrep` で呼べます。`git grep` と同じく git が追跡している
+`npm install -g` すると `git-sys1grep` も入るので、`git sys1grep` で呼べます。`git grep` と同じく git が追跡している
 ファイルだけを探し（`.gitignore` 済みのものやビルド成果物は送られない）、FILE はカレントディレクトリからの pathspec です。
 
 ```sh
-$ cd tests && git semgrep -l -e "customer is asking for a refund" fixture.txt tickets
+$ cd tests && git sys1grep -l -e "customer is asking for a refund" fixture.txt tickets
 fixture.txt
 tickets/a.txt
 tickets/sub/b.txt
@@ -438,14 +436,14 @@ FILE を省くとカレントディレクトリ以下の追跡ファイルを全
 `--include`、`--exclude`、`--changed-within` は追跡ファイルを絞り込み、pathspec で指定したファイルも対象になります。
 `--changed-within` は git の履歴ではなく作業ツリーのファイルの更新時刻を見ます。clone や checkout の直後は、書き出されたファイルがすべて
 「いま変わった」扱いになります。
-ヘルプは `git semgrep -h` です（`--help` は git が横取りして man ページを探しに行きます）。
+ヘルプは `git sys1grep -h` です（`--help` は git が横取りして man ページを探しに行きます）。
 
 ### 「〜でない」行を全部
 
 ```sh
-./semgrep -v "a timestamped server log line" mixed.txt   # grep -v 相当
-./semgrep -e "source code or SQL" -v "SQL" src.txt       # コードだが SQL ではない
-cat app.log | ./semgrep -e "デプロイが失敗した、またはロールバックされた"
+./sys1grep -v "a timestamped server log line" mixed.txt   # grep -v 相当
+./sys1grep -e "source code or SQL" -v "SQL" src.txt       # コードだが SQL ではない
+cat app.log | ./sys1grep -e "デプロイが失敗した、またはロールバックされた"
 ```
 
 ### 複数行にまたがるレコード (`-z`)
@@ -458,9 +456,9 @@ cat app.log | ./semgrep -e "デプロイが失敗した、またはロールバ�
 その中のどの 1 行についてでもありません。
 
 ```sh
-$ git log -z --format='%h %s %b' | ./semgrep -z -n -e "ユーザーに見える振る舞いを変えている" -v "ドキュメントだけの変更"
-7:21120e9 Revert "feat: ship the /semgrep Claude Code skill" ...
-8:51ae333 feat: ship the /semgrep Claude Code skill
+$ git log -z --format='%h %s %b' | ./sys1grep -z -n -e "ユーザーに見える振る舞いを変えている" -v "ドキュメントだけの変更"
+7:21120e9 Revert "feat: ship the /sys1grep Claude Code skill" ...
+8:51ae333 feat: ship the /sys1grep Claude Code skill
 ```
 
 一致したレコードも NUL 終端で出力されるので、読むときは `tr '\0' '\n'` に通してください。
@@ -475,7 +473,7 @@ $ git log -z --format='%h %s %b' | ./semgrep -z -n -e "ユーザーに見える�
 段落が入っています。
 
 ```sh
-$ ./semgrep -n --sentence -e "the author admits they made a mistake" tests/prose.txt
+$ ./sys1grep -n --sentence -e "the author admits they made a mistake" tests/prose.txt
 1:I should have checked the input
 2:before shipping, and that was my
 3:mistake. Next time I will add a test
@@ -494,7 +492,7 @@ $ ./semgrep -n --sentence -e "the author admits they made a mistake" tests/prose
 中国語・タイ語・ラオ語・クメール語・ミャンマー語・チベット語も同様です。
 
 ```sh
-$ ./semgrep -n -o --sentence -e "the author admits they made a mistake" -e "customer is asking for a refund" tests/prose.txt
+$ ./sys1grep -n -o --sentence -e "the author admits they made a mistake" -e "customer is asking for a refund" tests/prose.txt
 1:I should have checked the input before shipping, and that was my mistake.
 8:先週買った掃除機が初日から動かないので返金してほしいです。
 ```
@@ -530,7 +528,7 @@ Jev は長い行の中からでも当たる文を自分で見つけるので、�
 その答えを残りの行にも使います。送るのはその行の原文で、出力も各行がそのまま出ます。
 
 ```sh
-$ ./semgrep --dedup -n -e "a request failed" app.log
+$ ./sys1grep --dedup -n -e "a request failed" app.log
 1:worker request 3fa9c1e27b failed: connection reset
 2:worker request 88d0e41a5c failed: connection reset
 4:worker request 0b7f2a9e13 failed: connection reset
@@ -561,12 +559,12 @@ Jev に聞き、その種類はまとめません（上の 2 リクエストの�
 ### 行の代わりに要約を出す (`--summarize`)
 
 一致した行が多いとき、欲しいのはたいてい要旨、つまりそれらの行が探した意味について何を言っているかです。
-`--summarize` は semgrep が出力するはずの内容を `claude -p --model haiku`（ツールなし・設定なし・CLAUDE.md なし）に渡し、
+`--summarize` は sys1grep が出力するはずの内容を `claude -p --model haiku`（ツールなし・設定なし・CLAUDE.md なし）に渡し、
 意味に照らして要約させ、行の代わりにその答えを表示します。
 
 ```sh
-$ semgrep -r -n --summarize -e "API キーをファイルから読んでいる" .
-キーは semgrep.mjs:19 で ~/.config/semgrep/.env から読み、./.env は読みません (semgrep.mjs:16)。...
+$ sys1grep -r -n --summarize -e "API キーをファイルから読んでいる" .
+キーは sys1grep.mjs:22 で ~/.config/sys1grep/.env から読み、./.env は読みません (sys1grep.mjs:18)。...
 ```
 
 高いモデルは Jev が残した分しか読みません。このリポジトリの `git log`（168 コミット）に「なぜ `./.env` を読まなくなったか」
@@ -575,7 +573,7 @@ $ semgrep -r -n --summarize -e "API キーをファイルから読んでいる" 
 
 - 一致した行はもう一度マシンの外へ、Anthropic に送られます。
 - `-n`・`-A/-B/-C`・`-p`・ファイル名は表示どおりに渡し、色は付けません。一致がなければ何も渡しません（終了コード 1）。
-- `SEMGREP_SUMMARIZER` は値を付けない `--summarize` の TOOL を（今は `claude` だけ）、`SEMGREP_SUMMARIZER_MODEL` はそのモデルを決めます。
+- `SYS1GREP_SUMMARIZER` は値を付けない `--summarize` の TOOL を（今は `claude` だけ）、`SYS1GREP_SUMMARIZER_MODEL` はそのモデルを決めます。
 - `-q`・`-l`・`-c` は行を出さないので、一緒には使えません。
 - `--dedup` では、Jev に送ったものと同じく、テンプレートごとの代表を 1 回だけ `(×N like it)` を付けて渡します。
   答えを使い回したすべての行は渡しません。
@@ -584,7 +582,7 @@ $ semgrep -r -n --summarize -e "API キーをファイルから読んでいる" 
 
 ## Claude Code から使う
 
-semgrep を代わりに走らせてくれる Claude Code のスキルがあります。探したいものを言葉で書くと、式を組み立てて
+sys1grep を代わりに走らせてくれる Claude Code のスキルがあります。探したいものを言葉で書くと、式を組み立てて
 検索し、`file:line` 付きで該当行を報告します。[`uehaj/uehaj-marketplace`](https://github.com/uehaj/uehaj-marketplace) マーケットプレースの
 `uehaj` プラグインとして公開しています。
 
@@ -593,31 +591,31 @@ claude plugin marketplace add uehaj/uehaj-marketplace
 claude plugin install uehaj@uehaj-marketplace
 ```
 
-コマンドラインツールを別途インストールする必要はありません。スキルは PATH に `semgrep` があればそれを、
-無ければ `npx @uehaj/semgrep` を使います。必要なのは API キーの設定だけです（[インストール](#インストール) を参照）。
+コマンドラインツールを別途インストールする必要はありません。スキルは PATH に `sys1grep` があればそれを、
+無ければ `npx @uehaj/sys1grep` を使います。必要なのは API キーの設定だけです（[インストール](#インストール) を参照）。
 
 あとは Claude Code の中で次のように打ちます。
 
 ```
-/uehaj:semgrep 返金を求めている問い合わせ tickets/*.txt
-/uehaj:semgrep 未テストのまま入った修正 git log --oneline -200
+/uehaj:sys1grep 返金を求めている問い合わせ tickets/*.txt
+/uehaj:sys1grep 未テストのまま入った修正 git log --oneline -200
 ```
 
 Claude Code のインストール単位はプラグインで、スキル単体は選べません。このスキルだけ欲しいときは
-[skills CLI](https://skills.sh/) が `~/.claude/skills/` にコピーしてくれ、その場合は `/semgrep` で呼びます。
+[skills CLI](https://skills.sh/) が `~/.claude/skills/` にコピーしてくれ、その場合は `/sys1grep` で呼びます。
 
 ```sh
-npx skills add uehaj/uehaj-marketplace --skill semgrep -a claude-code -g
+npx skills add uehaj/uehaj-marketplace --skill sys1grep -a claude-code -g
 ```
 
 スキルは意味を英語で書き、AND / OR / NOT を `-e` / `-a` / `-v` に振り分け、`-n` を付け、大きなディレクトリは
 課金に見合うファイルに絞り、最初の結果が怪しければ `--level loose` や `strict` で引き直します。
-API キーとエンドポイントの読み方はコマンドラインと同じです（`SEMGREP_API_KEY`、`~/.config/semgrep/.env`）。
+API キーとエンドポイントの読み方はコマンドラインと同じです（`SYS1GREP_API_KEY`、`~/.config/sys1grep/.env`）。
 
 ## 使い方
 
 ```
-usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
+usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
 
   -e MEANING   この意味に合う行 (複数指定は OR)
   -Q, --question QUESTION  QUESTION に答えている行 (尋ねている行ではない)。-e "the line answers: QUESTION"
@@ -636,9 +634,9 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                -t 0.6 -T 0.3 なら 0.3〜0.6 の曖昧な行はどちらにも当たらない
   -r           ディレクトリを再帰的に探す (FILE 省略時はカレント)。.git、node_modules、
                バイナリ、秘密情報らしいファイル、git が無視するものは飛ばす
-  --include=GLOB, --exclude=GLOB  -r と git semgrep で、名前が GLOB に合うファイルだけ (または合わないものだけ) を探す
-               (-r ではコマンドラインで指定したファイルは必ず探す。git semgrep の pathspec は絞り込む)
-  --changed-within=WHEN  -r と git semgrep で、30m / 2h / 7d / 2w 以内、日付か日時以降、today / this-week /
+  --include=GLOB, --exclude=GLOB  -r と git sys1grep で、名前が GLOB に合うファイルだけ (または合わないものだけ) を探す
+               (-r ではコマンドラインで指定したファイルは必ず探す。git sys1grep の pathspec は絞り込む)
+  --changed-within=WHEN  -r と git sys1grep で、30m / 2h / 7d / 2w 以内、日付か日時以降、today / this-week /
                this-month に更新したファイルだけを探す
   --no-auto-scope  意味の文面からファイルを絞り込まない (意味からの絞り込みを参照)。--auto-scope で戻す
   -l           一致した行ではなくファイル名だけを表示
@@ -665,7 +663,7 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
                否定側の閾値未満を赤、あいだを黄で表示。NO_COLOR にも従う
   --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
-               API の設定。SEMGREP_MODEL / SEMGREP_URL / SEMGREP_API_KEY より優先
+               API の設定。SYS1GREP_MODEL / SYS1GREP_URL / SYS1GREP_API_KEY より優先
   -h, --help   このヘルプ (LANG / LC_ALL / LC_MESSAGES が ja 以外なら英語)
   -V, --version  バージョンを表示して終了
 ```
@@ -732,14 +730,14 @@ node --no-warnings tests/judge.mts [--model sonnet] [--rejudge]
 
 ## よくある質問
 
-semgrep の前に標準のコマンドを置けば済むので、本体に入れなかったオプションがあります。その組み合わせ方です。
+sys1grep の前に標準のコマンドを置けば済むので、本体に入れなかったオプションがあります。その組み合わせ方です。
 
 ### 段落をまるごと 1 単位として判定したい。`--paragraph` はないのか
 
 先に段落を 1 行にまとめてから渡します。`fmt` は段落の中の行をつなぎ、段落の間の空行は残します。
 
 ```sh
-fmt -w 100000 essay.txt | semgrep -n -e "the author admits they made a mistake"
+fmt -w 100000 essay.txt | sys1grep -n -e "the author admits they made a mistake"
 ```
 
 出力の 1 行が 1 段落になり、`-n` は元のファイルではなく `fmt` の出力の行番号になります。`fmt` は日本語の行をつなぐとき
@@ -751,7 +749,7 @@ fmt -w 100000 essay.txt | semgrep -n -e "the author admits they made a mistake"
 `jq` で本文を取り出し、発言ごとに NUL で終えてから、`-z` でレコードとして判定します。
 
 ```sh
-jq -j '.content + "\u0000"' chat.jsonl | semgrep -z -n --sentence -e "the customer is asking for a refund" | tr '\0' '\n'
+jq -j '.content + "\u0000"' chat.jsonl | sys1grep -z -n --sentence -e "the customer is asking for a refund" | tr '\0' '\n'
 ```
 
 `.content` は、本文が入っている場所に合わせて書き換えてください。発言 1 件が 1 レコードになるので、文が次の話者の
@@ -763,8 +761,8 @@ jq -j '.content + "\u0000"' chat.jsonl | semgrep -z -n --sentence -e "the custom
 区切りを NUL に置き換えて `-z` を使います。`----` の行で区切られたレコードなら次のとおりです。
 
 ```sh
-perl -0777 -pe 's/\n----\n/\0/g' notes.txt | semgrep -z -e "a decision was made" | tr '\0' '\n'
-awk '/^----$/ { printf "%c", 0; next } { print }' notes.txt | semgrep -z -e "a decision was made" | tr '\0' '\n'
+perl -0777 -pe 's/\n----\n/\0/g' notes.txt | sys1grep -z -e "a decision was made" | tr '\0' '\n'
+awk '/^----$/ { printf "%c", 0; next } { print }' notes.txt | sys1grep -z -e "a decision was made" | tr '\0' '\n'
 ```
 
 `git log -z`、`find -print0`、`xargs -0` はもともと NUL で区切るので、`-z` でそのまま扱えます (#6)。

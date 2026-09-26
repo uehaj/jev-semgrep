@@ -1,13 +1,13 @@
-// Auto-scope accuracy (#44): runs semgrep -r --verbose on every row of a corpus (EXPECTED<TAB>QUESTION) against real
+// Auto-scope accuracy (#44): runs sys1grep -r --verbose on every row of a corpus (EXPECTED<TAB>QUESTION) against real
 // Jev, reads the candidates --verbose lists with Jev's answers, and scores them against the expected scopes at several thresholds.
 // Each row sends one request, the scope question: the directory searched is a small repository whose files hold
 // only blank lines, which are never sent.
-//   node tests/scope-eval.mjs [FILE.tsv...]   a table per corpus (default: both), the rows that differ at 0.6 (semgrep's threshold)
+//   node tests/scope-eval.mjs [FILE.tsv...]   a table per corpus (default: both), the rows that differ at 0.6 (sys1grep's threshold)
 //   --at=0.6                                  list the rows that differ at another threshold
-// Needs the API key (as semgrep reads it) and costs one small request per row. Both corpora were written blind by
+// Needs the API key (as sys1grep reads it) and costs one small request per row. Both corpora were written blind by
 // separate agents. Tune on scope-corpus.tsv only; scope-holdout.tsv gives the honest number.
 //
-// Scoring is per category, as semgrep combines them. A category Jev says yes to but the row does not expect narrows
+// Scoring is per category, as sys1grep combines them. A category Jev says yes to but the row does not expect narrows
 // what it should not: "wrong", which loses matches without a trace. Where the row expects something in that
 // category, the yes answers are alternatives, so they are safe when they include it, or a superset of it: source code
 // (whatever is not documentation) holds test code, migrations and logs; uncommitted holds staged and untracked; this
@@ -78,7 +78,7 @@ writeFileSync(`${dir}/x.txt`, '\n'); // scopes are asked only when -r finds a fi
 git('init', '-q', '-b', 'main'); git('config', 'user.email', 'me@x'); git('config', 'user.name', 'Me');
 git('add', 'x.txt'); git('commit', '-q', '--author=田中 <tanaka@x>', '-m', 'a');
 git('checkout', '-q', '-b', 'feat'); writeFileSync(`${dir}/y.txt`, '\n'); git('add', 'y.txt'); git('commit', '-q', '-m', 'b');
-const env = { ...process.env, SEMGREP_OPTS: '' };
+const env = { ...process.env, SYS1GREP_OPTS: '' };
 const run = promisify(execFile);
 let failed = 0;
 for (const [name, rows] of corpora) {
@@ -89,11 +89,11 @@ for (const [name, rows] of corpora) {
     while (next < rows.length) {
       const i = next++;
       let err;
-      try { err = (await run(process.execPath, [`${here}../semgrep.mjs`, '--verbose', '-r', '-e', rows[i][1], dir], { env })).stderr; }
+      try { err = (await run(process.execPath, [`${here}../sys1grep.mjs`, '--verbose', '-r', '-e', rows[i][1], dir], { env })).stderr; }
       catch (e) { err = e.code === 1 ? e.stderr : null; } // 1: no match, which every row is (the files are blank)
-      // --verbose names each candidate answered 0.2 or more: `semgrep:   ✓ Python files (*.py …)  0.93  keeps …`
+      // --verbose names each candidate answered 0.2 or more: `sys1grep:   ✓ Python files (*.py …)  0.93  keeps …`
       const lines = err?.split('\n');
-      answers[i] = lines?.some(l => l.startsWith('semgrep: scope "')) ? lines.map(l => l.match(/^semgrep: {3}[✓·] (.+?) +(\d\.\d\d) {2}/)).filter(Boolean).map(m => [keyOf(m[1]), +m[2]]) : null;
+      answers[i] = lines?.some(l => l.startsWith('sys1grep: scope "')) ? lines.map(l => l.match(/^sys1grep: {3}[✓·] (.+?) +(\d\.\d\d) {2}/)).filter(Boolean).map(m => [keyOf(m[1]), +m[2]]) : null;
     }
   }));
   failed += answers.filter(a => a === null).length;

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>semgrep — grep by meaning</title>
+<title>sys1grep — grep by meaning</title>
 <meta name="description" content="A grep that finds lines by what they mean, in any language. Powered by TypeSafe Jev. Zero dependencies, one file.">
 <style>
 :root{
@@ -105,21 +105,21 @@ footer{padding:32px 0 56px;color:var(--mute);font-size:.9rem;text-align:center;b
 </head>
 <body>
 <header class="wrap">
-  <h1>semgrep</h1>
+  <h1>sys1grep</h1>
   <p class="sub">grep by <span class="w">meaning</span></p>
   <p class="lead">It finds lines by <b>what they mean</b>, not by regular expressions — in any language, with AND / OR / NOT. Every line is judged by <a href="https://typesafe.ai/">TypeSafe Jev</a>, which answers “does this line match?” with a calibrated probability.</p>
   <div class="cta">
     <a class="p" href="#demo">▶ Watch the demo</a>
-    <a href="https://github.com/uehaj/jev-semgrep">GitHub</a>
-    <a href="https://www.npmjs.com/package/@uehaj/semgrep">npm</a>
+    <a href="https://github.com/uehaj/sys1grep">GitHub</a>
+    <a href="https://www.npmjs.com/package/@uehaj/sys1grep">npm</a>
     <a href="https://zenn.dev/uehaj/articles/jev-semgrep-grep-by-meaning">Design notes (日本語)</a>
   </div>
-  <div class="install">npx @uehaj/semgrep -n -e "customer is angry or frustrated" tickets.txt</div>
+  <div class="install">npx @uehaj/sys1grep -n -e "customer is angry or frustrated" tickets.txt</div>
 </header>
 
 <main class="wrap">
-  <div class="player" id="demo" aria-label="semgrep demo">
-    <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="ttl" id="ttl">semgrep</span></div>
+  <div class="player" id="demo" aria-label="sys1grep demo">
+    <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="ttl" id="ttl">sys1grep</span></div>
     <div class="stage" aria-live="polite">
       <h2 class="scene-h" id="sh"></h2>
       <p class="scene-c" id="sc"></p>
@@ -129,65 +129,65 @@ footer{padding:32px 0 56px;color:var(--mute);font-size:.9rem;text-align:center;b
       <div class="sents" id="sents"></div>
       <div class="note" id="note"></div>
       </div><aside class="side" id="side"></aside></div>
-      <noscript><p>The demo needs JavaScript. See the <a href="https://github.com/uehaj/jev-semgrep#examples">examples in the README</a>.</p></noscript>
+      <noscript><p>The demo needs JavaScript. See the <a href="https://github.com/uehaj/sys1grep#examples">examples in the README</a>.</p></noscript>
     </div>
     <div class="ctrl">
       <button id="pp" aria-label="Pause">❚❚</button>
       <div class="chap" id="chap"></div>
     </div>
   </div>
-  <p style="text-align:center;color:var(--mute);font-size:.85rem">Outputs are real runs, copied from the <a href="https://github.com/uehaj/jev-semgrep#readme">README</a>. Scenes marked ★ <span class="new" style="vertical-align:1px">new</span> are new in 0.4.0.</p>
+  <p style="text-align:center;color:var(--mute);font-size:.85rem">Outputs are real runs, copied from the <a href="https://github.com/uehaj/sys1grep#readme">README</a>. Scenes marked ★ <span class="new" style="vertical-align:1px">new</span> are new in 0.4.0.</p>
 
   <section>
     <h2>Why it is different</h2>
     <div class="grid">
-      <a class="card" href="https://github.com/uehaj/jev-semgrep#search-across-languages"><h3>🌐 Language-agnostic</h3><p>A Japanese meaning finds French, Russian, Chinese and Korean lines. No translation step, same speed, same cost.</p></a>
-      <a class="card" href="https://github.com/uehaj/jev-semgrep#how-this-differs-from-vector-search"><h3>⚖️ Propositions, not topics</h3><p>Jev reads the line and the question together, so negation and “asked for” vs “already done” change the answer. Embeddings can only measure closeness.</p></a>
-      <a class="card" href="https://github.com/uehaj/jev-semgrep#expression-grammar"><h3>🧮 Real booleans</h3><p>Each meaning yields an independent probability, so AND / OR / NOT are plain boolean operations. One threshold (0.5) works across queries.</p></a>
-      <a class="card" href="https://github.com/uehaj/jev-semgrep#how-it-works"><h3>📦 Zero dependencies</h3><p>One file, Node.js 20.16+ and <code>fetch</code>. 30 lines per request, 8 requests in parallel. No index to build.</p></a>
-      <a class="card" href="https://github.com/uehaj/jev-semgrep#one-sentence-at-a-time---sentence"><h3>✂️ Lines, sentences, records <span class="new card-b">new</span></h3><p><code>--sentence</code> finds sentences across line breaks and, with <code>--color</code>, colors just the matching sentence inside a line; <code>-z</code> judges NUL-terminated records like <code>git log -z</code>.</p></a>
-      <a class="card" href="https://github.com/uehaj/jev-semgrep#lines-that-answer-a-question--q"><h3>🎯 Find the answer <span class="new card-b">new</span></h3><p><code>-Q</code> / <code>--question</code> finds lines that <em>answer</em> X, where <code>-e X</code> finds lines that <em>say</em> X. <code>-q</code> stops at the first match, like <code>grep -q</code>.</p></a>
-      <a class="card" href="https://github.com/uehaj/jev-semgrep#regex-terms"><h3>🔣 Regex terms <span class="new card-b">new</span></h3><p><code>-e '/ERROR|FATAL/'</code> runs locally for free, prefilters what Jev sees, and hands captures to meanings as <code>$&lt;name&gt;</code>: <code>-a '$&lt;time&gt; is at night'</code> asks each line about its own time.</p></a>
-      <a class="card" href="https://github.com/uehaj/jev-semgrep#one-line-per-template---dedup"><h3>🗜️ One request per template <span class="new card-b">new</span></h3><p><code>--dedup</code> folds machine logs by skeleton: a 43,071-line system log becomes 550 templates, 1.2% of the bytes.</p></a>
-      <a class="card" href="https://github.com/uehaj/jev-semgrep#sending-less"><h3>💸 Send only what matters <span class="new card-b">new</span></h3><p>Narrow before you pay: <code>--include</code> / <code>--exclude</code>, <code>--changed-within=7d</code>, <code>.gitignore</code>, binary and secret skips, regex terms, <code>--dedup</code>. <code>--dry-run</code> / <code>-i</code> show the totals first.</p></a>
-      <a class="card" href="https://github.com/uehaj/jev-semgrep#as-a-git-subcommand-git-semgrep"><h3>🌿 git semgrep <span class="new card-b">new</span></h3><p><code>git semgrep</code> searches tracked files like <code>git grep</code>. <code>SEMGREP_OPTS</code> sets default options; <code>--sys1-url</code> / <code>--sys1-model</code> override the endpoint per run.</p></a>
-      <a class="card" href="https://github.com/uehaj/jev-semgrep#other-endpoints"><h3>🔑 Any endpoint</h3><p>TypeSafe by default; OpenRouter, Vercel AI Gateway or any server that speaks <code>POST /v1/systemone</code> via <code>SEMGREP_URL</code>.</p></a>
-      <a class="card" href="https://github.com/uehaj/jev-semgrep#use-it-from-claude-code"><h3>🤖 Claude Code skill</h3><p>Describe what you want in plain words; the skill builds the expression, runs it and reports <code>file:line</code> hits.</p></a>
+      <a class="card" href="https://github.com/uehaj/sys1grep#search-across-languages"><h3>🌐 Language-agnostic</h3><p>A Japanese meaning finds French, Russian, Chinese and Korean lines. No translation step, same speed, same cost.</p></a>
+      <a class="card" href="https://github.com/uehaj/sys1grep#how-this-differs-from-vector-search"><h3>⚖️ Propositions, not topics</h3><p>Jev reads the line and the question together, so negation and “asked for” vs “already done” change the answer. Embeddings can only measure closeness.</p></a>
+      <a class="card" href="https://github.com/uehaj/sys1grep#expression-grammar"><h3>🧮 Real booleans</h3><p>Each meaning yields an independent probability, so AND / OR / NOT are plain boolean operations. One threshold (0.5) works across queries.</p></a>
+      <a class="card" href="https://github.com/uehaj/sys1grep#how-it-works"><h3>📦 Zero dependencies</h3><p>One file, Node.js 20.16+ and <code>fetch</code>. 30 lines per request, 8 requests in parallel. No index to build.</p></a>
+      <a class="card" href="https://github.com/uehaj/sys1grep#one-sentence-at-a-time---sentence"><h3>✂️ Lines, sentences, records <span class="new card-b">new</span></h3><p><code>--sentence</code> finds sentences across line breaks and, with <code>--color</code>, colors just the matching sentence inside a line; <code>-z</code> judges NUL-terminated records like <code>git log -z</code>.</p></a>
+      <a class="card" href="https://github.com/uehaj/sys1grep#lines-that-answer-a-question--q"><h3>🎯 Find the answer <span class="new card-b">new</span></h3><p><code>-Q</code> / <code>--question</code> finds lines that <em>answer</em> X, where <code>-e X</code> finds lines that <em>say</em> X. <code>-q</code> stops at the first match, like <code>grep -q</code>.</p></a>
+      <a class="card" href="https://github.com/uehaj/sys1grep#regex-terms"><h3>🔣 Regex terms <span class="new card-b">new</span></h3><p><code>-e '/ERROR|FATAL/'</code> runs locally for free, prefilters what Jev sees, and hands captures to meanings as <code>$&lt;name&gt;</code>: <code>-a '$&lt;time&gt; is at night'</code> asks each line about its own time.</p></a>
+      <a class="card" href="https://github.com/uehaj/sys1grep#one-line-per-template---dedup"><h3>🗜️ One request per template <span class="new card-b">new</span></h3><p><code>--dedup</code> folds machine logs by skeleton: a 43,071-line system log becomes 550 templates, 1.2% of the bytes.</p></a>
+      <a class="card" href="https://github.com/uehaj/sys1grep#sending-less"><h3>💸 Send only what matters <span class="new card-b">new</span></h3><p>Narrow before you pay: <code>--include</code> / <code>--exclude</code>, <code>--changed-within=7d</code>, <code>.gitignore</code>, binary and secret skips, regex terms, <code>--dedup</code>. <code>--dry-run</code> / <code>-i</code> show the totals first.</p></a>
+      <a class="card" href="https://github.com/uehaj/sys1grep#as-a-git-subcommand-git-sys1grep"><h3>🌿 git sys1grep <span class="new card-b">new</span></h3><p><code>git sys1grep</code> searches tracked files like <code>git grep</code>. <code>SYS1GREP_OPTS</code> sets default options; <code>--sys1-url</code> / <code>--sys1-model</code> override the endpoint per run.</p></a>
+      <a class="card" href="https://github.com/uehaj/sys1grep#other-endpoints"><h3>🔑 Any endpoint</h3><p>TypeSafe by default; OpenRouter, Vercel AI Gateway or any server that speaks <code>POST /v1/systemone</code> via <code>SYS1GREP_URL</code>.</p></a>
+      <a class="card" href="https://github.com/uehaj/sys1grep#use-it-from-claude-code"><h3>🤖 Claude Code skill</h3><p>Describe what you want in plain words; the skill builds the expression, runs it and reports <code>file:line</code> hits.</p></a>
     </div>
   </section>
 
   <section>
     <h2>Get started</h2>
 <pre><span class="c"># install (or just use npx)</span>
-npm install -g @uehaj/semgrep
+npm install -g @uehaj/sys1grep
 
 <span class="c"># API key from https://console.typesafe.ai/</span>
-export SEMGREP_API_KEY=your-key
+export SYS1GREP_API_KEY=your-key
 
 <span class="c"># search the files git tracks, like git grep</span>
-git semgrep -l -e "customer is asking for a refund"
+git sys1grep -l -e "customer is asking for a refund"
 
 <span class="c"># other endpoints: set the URL and its key together</span>
-export SEMGREP_URL=https://openrouter.ai/api/v1/systemone SEMGREP_API_KEY=sk-or-...
+export SYS1GREP_URL=https://openrouter.ai/api/v1/systemone SYS1GREP_API_KEY=sk-or-...
 
 <span class="c"># meanings combine: (A and B) or C, and NOT with -v</span>
-semgrep -n -e "network or remote connection failure" -v "a retry is happening" app.log</pre>
+sys1grep -n -e "network or remote connection failure" -v "a retry is happening" app.log</pre>
 <pre><span class="c"># as a Claude Code skill</span>
 claude plugin marketplace add uehaj/uehaj-marketplace
 claude plugin install uehaj@uehaj-marketplace
 <span class="c"># then, inside Claude Code</span>
-/uehaj:semgrep customer is asking for a refund tickets/*.txt</pre>
-    <p style="color:var(--mute);font-size:.9rem">Every line searched is sent to the TypeSafe API (or the endpoint in <code>SEMGREP_URL</code>). The name collides with the static-analysis tool <a href="https://semgrep.dev/">Semgrep</a>; rename one if you use both.</p>
+/uehaj:sys1grep customer is asking for a refund tickets/*.txt</pre>
+    <p style="color:var(--mute);font-size:.9rem">Every line searched is sent to the TypeSafe API (or the endpoint in <code>SYS1GREP_URL</code>).</p>
   </section>
 </main>
-<footer>MIT License · <a href="https://github.com/uehaj/jev-semgrep">uehaj/jev-semgrep</a> · <a href="https://github.com/uehaj/jev-semgrep/blob/main/README.ja.md">日本語 README</a></footer>
+<footer>MIT License · <a href="https://github.com/uehaj/sys1grep">uehaj/sys1grep</a> · <a href="https://github.com/uehaj/sys1grep/blob/main/README.ja.md">日本語 README</a></footer>
 
 <script>
 // rows: [line, text, prob|null, keep, ask?]. <m>…</m> is what --color paints; <u>…</u> is a page annotation.
 const S = [
  {h:"Ask in one language, find every language",
   c:"One Japanese meaning, “the customer is asking for a refund”, finds refund requests in French, Russian, German, Spanish, Chinese and Korean — and skips the thank-you notes.",
-  cmd:'semgrep -n -p -e "顧客が返金を求めている" tests/multi.txt',
+  cmd:'sys1grep -n -p -e "顧客が返金を求めている" tests/multi.txt',
   rows:[[1,"Je veux être remboursé, le produit est arrivé cassé.",.98,1],[2,"Merci beaucoup, le support a été excellent.",null,0],
    [3,"Я требую вернуть деньги, товар не работает.",.97,1],[4,"Спасибо, проблема решена, всё отлично.",null,0],
    [5,"Ich möchte mein Geld zurück, das Gerät ist defekt.",.97,1],[6,"Vielen Dank für die schnelle Hilfe!",null,0],
@@ -197,24 +197,24 @@ const S = [
    [13,"Le serveur ne répond plus, connexion refusée sur le port 443.",null,0],[14,"Сервер недоступен: тайм-аут соединения с базой данных.",null,0]]},
  {h:"Propositions, not topics",
   c:"Six of these lines are “about a refund”. Only two are a customer asking for one. Vector search sees six neighbours; Jev sees two true statements.",
-  cmd:'semgrep -n -p -t 0 -e "customer is asking for a refund" tests/contrast.en.txt',bars:1,
+  cmd:'sys1grep -n -p -t 0 -e "customer is asking for a refund" tests/contrast.en.txt',bars:1,
   rows:[[1, "I want a refund. The item was broken.", 0.99, 1], [2, "The refund has been processed. Please check your account.", 0.11, 0], [3, "Our refund policy is within 30 days of purchase.", 0.09, 0], [4, "The manager denied the refund request yesterday", 0.17, 0], [5, "I demand a full refund immediately", 0.93, 1], [6, "Refunds are processed within 5 business days", 0.07, 0], [7, "The support agent got angry and hung up the phone.", 0.05, 0], [8, "The customer got angry and hung up the phone.", 0.06, 0]],
   note:"Threshold 0.5 — calibrated probabilities, no per-query tuning."},
  {h:"-Q finds the answer",new:1,
   c:"Ask the question as you would ask it. -e X finds lines that say X; -Q X finds lines that answer X. “The job failed.” does not say the job succeeded, but it answers whether it did: no.",
-  steps:[{cmd:'echo "The job failed." | semgrep -n -e "Did the job succeed?"',rows:[]},
-         {cmd:'echo "The job failed." | semgrep -n -Q "Did the job succeed?"',rows:[[1,"The job failed.",null,1]]},
-         {cmd:'semgrep -n -e "how to get a refund" tests/intent.txt',rows:[[12,"Email support with your order number to receive a refund.",null,1],[13,"How do I get a refund?",null,1]]},
-         {cmd:'semgrep -n -Q "how to get a refund" tests/intent.txt',rows:[[12,"Email support with your order number to receive a refund.",null,1]]}],
+  steps:[{cmd:'echo "The job failed." | sys1grep -n -e "Did the job succeed?"',rows:[]},
+         {cmd:'echo "The job failed." | sys1grep -n -Q "Did the job succeed?"',rows:[[1,"The job failed.",null,1]]},
+         {cmd:'sys1grep -n -e "how to get a refund" tests/intent.txt',rows:[[12,"Email support with your order number to receive a refund.",null,1],[13,"How do I get a refund?",null,1]]},
+         {cmd:'sys1grep -n -Q "how to get a refund" tests/intent.txt',rows:[[12,"Email support with your order number to receive a refund.",null,1]]}],
   note:"A “no” answers a yes/no question too; a line that asks it (13) answers nothing. -Q X is shorthand for -e \"the line answers: X\"."},
  {h:"AND / NOT are just booleans",
   c:"Someone is angry AND it is the customer, not the staff. Lines 7 and 8 differ only in who hung up — their embeddings are nearly identical.",
-  cmd:'semgrep -n -e "someone is angry" -a "the customer, not the staff, is the one acting" tests/contrast.en.txt',
+  cmd:'sys1grep -n -e "someone is angry" -a "the customer, not the staff, is the one acting" tests/contrast.en.txt',
   rows:[[1, "I want a refund. The item was broken.", null, 0], [2, "The refund has been processed. Please check your account.", null, 0], [3, "Our refund policy is within 30 days of purchase.", null, 0], [4, "The manager denied the refund request yesterday", null, 0], [5, "I demand a full refund immediately", null, 1], [6, "Refunds are processed within 5 business days", null, 0], [7, "The support agent got angry and hung up the phone.", null, 0], [8, "The customer got angry and hung up the phone.", null, 1]],
   note:"Line 7, where the support agent hung up angrily, fails the second meaning and is excluded."},
  {h:"Regex where regex is enough",new:1,
   c:"A meaning written as /…/flags is matched locally, with no request. Combined with -a, only the lines it matches are sent to Jev, and named groups flow into the meaning as $<name>.",
-  cmd:"semgrep -n -e '/ERROR|FATAL/' tests/corpus.txt",
+  cmd:"sys1grep -n -e '/ERROR|FATAL/' tests/corpus.txt",
   rows:[[1,"2026-09-19 08:00:01 INFO  server started on port 8080",null,0],[2,"2026-09-19 08:00:02 INFO  connected to database primary",null,0],[3,"2026-09-19 08:01:15 WARN  slow query took 3200ms: SELECT * FROM orders",null,0],
    [4,"2026-09-19 08:02:30 ERROR connection reset by peer while calling payment-gateway",null,1],[5,"2026-09-19 08:02:31 INFO  retrying payment-gateway request (attempt 2/3)",null,0],
    [6,"2026-09-19 08:02:35 ERROR timeout after 5000ms waiting for payment-gateway",null,1],[7,"2026-09-19 08:05:00 INFO  scheduled backup completed successfully",null,0],
@@ -224,18 +224,18 @@ const S = [
   note:"0 requests — same lines as grep -E."},
  {h:"Captures flow into meanings",new:1,
   c:"Named groups of a regex term are handed to the meanings of the same AND term — -e, -a, -v and -Q alike. Each line is sent with its own question; lines the regex misses are never sent.",
-  cmd:"semgrep -n -e '/(?<time>\\d\\d:\\d\\d):\\d\\d (ERROR|FATAL)/' -a '$<time> is outside business hours (09:00–18:00)' tests/corpus.txt",ask:1,
+  cmd:"sys1grep -n -e '/(?<time>\\d\\d:\\d\\d):\\d\\d (ERROR|FATAL)/' -a '$<time> is outside business hours (09:00–18:00)' tests/corpus.txt",ask:1,
   rows:[[1, "2026-09-19 08:00:01 INFO  server started on port 8080", null, 0], [2, "2026-09-19 08:00:02 INFO  connected to database primary", null, 0], [3, "2026-09-19 08:01:15 WARN  slow query took 3200ms: SELECT * FROM orders", null, 0], [4, "2026-09-19 <u>08:02:30 ERROR</u> connection reset by peer while calling payment-gateway", null, 1, "08:02 is outside business hours (09:00–18:00)"], [5, "2026-09-19 08:02:31 INFO  retrying payment-gateway request (attempt 2/3)", null, 0], [6, "2026-09-19 <u>08:02:35 ERROR</u> timeout after 5000ms waiting for payment-gateway", null, 1, "08:02 is outside business hours (09:00–18:00)"], [7, "2026-09-19 08:05:00 INFO  scheduled backup completed successfully", null, 0], [8, "2026-09-19 08:06:12 WARN  disk usage at 91% on /var/lib/postgresql", null, 0], [9, "2026-09-19 <u>08:10:44 ERROR</u> DNS lookup failed for api.example.com", null, 1, "08:10 is outside business hours (09:00–18:00)"], [10, "2026-09-19 08:10:45 INFO  DNS lookup succeeded on retry", null, 0], [11, "2026-09-19 <u>09:00:00 ERROR</u> SSL handshake failed: certificate expired", null, 0, "09:00 is outside business hours (09:00–18:00)"], [12, "2026-09-19 <u>09:30:00 FATAL</u> out of memory: killed process 4412 (java)", null, 0, "09:30 is outside business hours (09:00–18:00)"]],
   note:"5 of 51 lines sent, each with its own expanded question; 3 match — 09:00 and 09:30 are inside business hours. $<name> survives double quotes in sh / bash / zsh; $1 does not."},
  {h:"English meaning, Japanese hits",
   c:"None of these lines contain “angry” or “frustrated”. Two of them are in Japanese. 51 lines of logs, tickets, code and small talk — 5 hits.",
-  cmd:'semgrep -n -e "customer is angry or frustrated" tests/corpus.txt',
+  cmd:'sys1grep -n -e "customer is angry or frustrated" tests/corpus.txt',
   rows:[[14,"ユーザー山田さんからの問い合わせ: 返金してほしい、商品が壊れていた",null,1],[16,"ユーザー佐藤さんからの問い合わせ: 注文した覚えのない請求が来ています。至急確認してください",null,1],
    [18,"I want my money back. The item arrived broken and customer service ignored me.",null,1],[21,"Your product ruined my weekend. Never buying from you again.",null,1],
    [23,"This is the third time I'm writing. Nobody has replied to my previous emails.",null,1]],},
  {h:"Sentences across line breaks",new:1,
   c:"--sentence finds sentences across line breaks — English and Japanese alike — and judges each one. With --color, only the matching sentence inside a line changes color.",
-  cmd:'semgrep -n --color --sentence -e "the author admits they made a mistake" -e "customer is asking for a refund" tests/prose.txt',
+  cmd:'sys1grep -n --color --sentence -e "the author admits they made a mistake" -e "customer is asking for a refund" tests/prose.txt',
   rows:[[1,"<m>I should have checked the input</m>",null,1],[2,"<m>before shipping, and that was my</m>",null,1],[3,"<m>mistake.</m> Next time I will add a test",null,1],
    [4,"first.",null,0],[6,"The weather was lovely all week, and",null,0],[7,"we walked to the lake every morning.",null,0],
    [8,"<m>先週買った掃除機が初日から動かないので</m>",null,1],[9,"<m>返金してほしいです。</m>よろしくお願いします。",null,1]],
@@ -244,16 +244,16 @@ const S = [
    ["The weather was lovely all week, and we walked to the lake every morning.",0,[4,5]],["先週買った掃除機が初日から動かないので返金してほしいです。",1,[6,7]],["よろしくお願いします。",0,[7]]]},
  {h:"Pay once per template",new:1,
   c:"--dedup masks ids, hashes, numbers, dates, paths and URLs, sends one line per template and reuses the answer. Jev is asked first which values could change a match, so “disk usage is above 90%” keeps 95% and 12% apart.",
-  cmd:'semgrep --dedup -n -e "a request failed" app.log',
+  cmd:'sys1grep --dedup -n -e "a request failed" app.log',
   rows:[[1,"worker request <u>3fa9c1e27b</u> failed: connection reset",null,1],[2,"worker request <u>88d0e41a5c</u> failed: connection reset",null,1],[4,"worker request <u>0b7f2a9e13</u> failed: connection reset",null,1]],
   note:"3 of 6 lines matched; 4 sent to Jev (2 folded by --dedup, ~235 input tokens / ~$0.000010 saved, 21%) in 2 requests, 907 input tokens, ~$0.000038"},
  {h:"Records, not just lines",
   c:"-z judges NUL-terminated records, as in grep -z. “Changes user-visible behaviour” is true of a whole commit, not of any one line in it.",
-  cmd:"git log -z --format='%h %s %b' | semgrep -z -n -e \"the change alters user-visible behaviour\" -v \"documentation only\"",
-  rows:[[7,'21120e9 Revert "feat: ship the /semgrep Claude Code skill" ...',null,1],[8,"51ae333 feat: ship the /semgrep Claude Code skill",null,1]]},
+  cmd:"git log -z --format='%h %s %b' | sys1grep -z -n -e \"the change alters user-visible behaviour\" -v \"documentation only\"",
+  rows:[[7,'21120e9 Revert "feat: ship the /sys1grep Claude Code skill" ...',null,1],[8,"51ae333 feat: ship the /sys1grep Claude Code skill",null,1]]},
  {h:"Search what git tracks",new:1,
-  c:"npm install -g also installs git-semgrep, so git runs it as git semgrep. Like git grep, it searches only the files git tracks, and ignored files and build output are never sent.",
-  cmd:'cd tests && git semgrep -l -e "customer is asking for a refund" fixture.txt tickets',
+  c:"npm install -g also installs git-sys1grep, so git runs it as git sys1grep. Like git grep, it searches only the files git tracks, and ignored files and build output are never sent.",
+  cmd:'cd tests && git sys1grep -l -e "customer is asking for a refund" fixture.txt tickets',
   rows:[[null,"fixture.txt",null,1],[null,"tickets/a.txt",null,1],[null,"tickets/sub/b.txt",null,1]]},
 ];
 const $=id=>document.getElementById(id), still=matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -285,7 +285,7 @@ function stepEl(st){
 async function play(i){
   const t=++token, s=S[i];
   [...$("chap").children].forEach((b,j)=>{b.classList.toggle("done",j<i);b.classList.toggle("cur-c",j===i);b.firstChild.style.width=j===i?"0":""});
-  $("sh").innerHTML=esc(s.h)+(s.new?'<span class="new">new in 0.4.0</span>':""); $("sc").textContent=s.c; $("ttl").textContent="semgrep — "+(i+1)+"/"+S.length;
+  $("sh").innerHTML=esc(s.h)+(s.new?'<span class="new">new in 0.4.0</span>':""); $("sc").textContent=s.c; $("ttl").textContent="sys1grep — "+(i+1)+"/"+S.length;
   $("rows").innerHTML=""; $("sents").innerHTML=""; $("side").className="side"; $("side").innerHTML=s.side||""; $("note").className="note"; $("note").textContent=s.note||"";
   if(s.steps) return playSteps(i,t,s);
   const els=s.rows.map(r=>row(r,s.bars)); $("rows").append(...els);

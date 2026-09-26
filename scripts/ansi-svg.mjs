@@ -1,5 +1,5 @@
-// Turns semgrep's colored output (ANSI SGR codes) into a static terminal-like SVG for the README.
-//   semgrep --color=always ... | node scripts/ansi-svg.mjs '$ semgrep ... \' '    ...' > docs/NAME.svg
+// Turns sys1grep's colored output (ANSI SGR codes) into a static terminal-like SVG for the README.
+//   sys1grep --color=always ... | node scripts/ansi-svg.mjs '$ sys1grep ... \' '    ...' > docs/NAME.svg
 // The arguments are the command shown above the output, one line each.
 import { readFileSync } from 'node:fs';
 

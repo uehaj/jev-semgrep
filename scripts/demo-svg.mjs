@@ -23,7 +23,7 @@ function linesOf(s) {
   for (const st of s.steps ?? [{ cmd: s.cmd, rows: s.rows }]) {
     lines.push([['$ ', C.mute], [cut(st.cmd, COLS - 2), C.fg]]);
     for (const [n, text, p, keep] of st.rows) {
-      if (!keep && !s.bars) continue; // what semgrep prints: only matches, unless -t 0 shows every line
+      if (!keep && !s.bars) continue; // what sys1grep prints: only matches, unless -t 0 shows every line
       const prob = p == null ? [] : [[`  [${p.toFixed(2)}]`, p >= 0.5 ? C.green : C.red]];
       lines.push([[String(n), C.green], [':', C.cyan], [cut(plain(text), COLS - 12), C.fg], ...prob]);
     }
@@ -50,7 +50,7 @@ timed.forEach(({ start, end, lines }, i) => lines.forEach((spans, j) => {
 }));
 
 process.stdout.write(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
-<title>semgrep demo: ${scenes.map(s => s.h).join(' / ')}</title>
+<title>sys1grep demo: ${scenes.map(s => s.h).join(' / ')}</title>
 <style>
 .a{opacity:0}
 ${css}@media (prefers-reduced-motion:reduce){.a{animation:none}.s0{opacity:1}}
@@ -58,6 +58,6 @@ ${css}@media (prefers-reduced-motion:reduce){.a{animation:none}.s0{opacity:1}}
 <rect width="100%" height="100%" rx="10" fill="#1e1e2e"/>
 <rect width="100%" height="28" rx="10" fill="#181825"/><rect y="18" width="100%" height="10" fill="#181825"/>
 <circle cx="18" cy="14" r="5" fill="#ff5f57"/><circle cx="36" cy="14" r="5" fill="#febc2e"/><circle cx="54" cy="14" r="5" fill="#28c840"/>
-<text x="74" y="18" fill="${C.mute}" font-size="12">semgrep — real runs · full demo: uehaj.github.io/jev-semgrep</text>
+<text x="74" y="18" fill="${C.mute}" font-size="12">sys1grep — real runs · full demo: uehaj.github.io/sys1grep</text>
 ${body}</svg>
 `);

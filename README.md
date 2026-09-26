@@ -1,4 +1,4 @@
-# semgrep — grep by meaning
+# sys1grep — System 1 for your files; uses TypeSafe AI's Jev
 
 [日本語版はこちら](README.ja.md)
 
@@ -7,16 +7,16 @@ Background and design notes (Japanese): [Jevのキラーアプリ、「意味で
 A grep that finds lines by **what they mean**, not by regular expressions.
 Matching is done by **Jev**, the System One model from [TypeSafe AI](https://typesafe.ai/).
 Jev does not generate text. It answers typed questions with probabilities, so for every line
-semgrep asks "does this line match the meaning *network failure*?", gets a probability back,
+sys1grep asks "does this line match the meaning *network failure*?", gets a probability back,
 and applies a threshold.
 
 ```sh
-./semgrep -n -e "customer is angry or frustrated" tickets.txt
+./sys1grep -n -e "customer is angry or frustrated" tickets.txt
 ```
 
-[![semgrep demo: a Japanese meaning finds refund requests in six languages; "asking for a refund" vs "about a refund"; -Q finds the answer](docs/demo.svg)](https://uehaj.github.io/jev-semgrep/)
+[![sys1grep demo: a Japanese meaning finds refund requests in six languages; "asking for a refund" vs "about a refund"; -Q finds the answer](docs/demo.svg)](https://uehaj.github.io/sys1grep/)
 
-<sub>▶ Click the demo, or open <a href="https://uehaj.github.io/jev-semgrep/">uehaj.github.io/jev-semgrep</a>, for the full demo on the landing page.</sub>
+<sub>▶ Click the demo, or open <a href="https://uehaj.github.io/sys1grep/">uehaj.github.io/sys1grep</a>, for the full demo on the landing page.</sub>
 
 - Zero dependencies. One file, Node.js 20.16+ and `fetch`.
 - Fast. 30 lines go into one request, requests run 8 at a time. A 210-line file finishes in under a second.
@@ -31,7 +31,7 @@ so one query finds matching lines in every language the file contains.
 An **English** meaning finds **Japanese** lines. None of the hits contain "angry" or "frustrated", and two of them are in Japanese:
 
 ```sh
-$ ./semgrep -n -e "customer is angry or frustrated" tests/corpus.txt
+$ ./sys1grep -n -e "customer is angry or frustrated" tests/corpus.txt
 14:ユーザー山田さんからの問い合わせ: 返金してほしい、商品が壊れていた
 16:ユーザー佐藤さんからの問い合わせ: 注文した覚えのない請求が来ています。至急確認してください
 18:I want my money back. The item arrived broken and customer service ignored me.
@@ -42,7 +42,7 @@ $ ./semgrep -n -e "customer is angry or frustrated" tests/corpus.txt
 A **Japanese** meaning finds **English** lines, with the same confidence as the Japanese ones:
 
 ```sh
-$ ./semgrep -n -p -e "返金の要求" tests/corpus.txt
+$ ./sys1grep -n -p -e "返金の要求" tests/corpus.txt
 14:ユーザー山田さんからの問い合わせ: 返金してほしい、商品が壊れていた	[0.97]
 18:I want my money back. The item arrived broken and customer service ignored me.	[0.95]
 ```
@@ -52,7 +52,7 @@ Russian, German, Spanish, Chinese and Korean. One Japanese meaning finds all six
 meaning does the same:
 
 ```sh
-$ ./semgrep -n -p -e "顧客が返金を求めている" tests/multi.txt
+$ ./sys1grep -n -p -e "顧客が返金を求めている" tests/multi.txt
 1:Je veux être remboursé, le produit est arrivé cassé.	[0.98]
 3:Я требую вернуть деньги, товар не работает.	[0.97]
 5:Ich möchte mein Geld zurück, das Gerät ist defekt.	[0.97]
@@ -60,7 +60,7 @@ $ ./semgrep -n -p -e "顧客が返金を求めている" tests/multi.txt
 9:我要求退款，商品坏了。	[0.97]
 11:환불해 주세요. 제품이 고장났어요.	[0.97]
 
-$ ./semgrep -n -p -e "клиент требует возврат денег" tests/multi.txt
+$ ./sys1grep -n -p -e "клиент требует возврат денег" tests/multi.txt
 1:Je veux être remboursé, le produit est arrivé cassé.	[0.94]
 3:Я требую вернуть деньги, товар не работает.	[0.97]
 5:Ich möchte mein Geld zurück, das Gerät ist defekt.	[0.92]
@@ -69,14 +69,14 @@ $ ./semgrep -n -p -e "клиент требует возврат денег" tes
 11:환불해 주세요. 제품이 고장났어요.	[0.89]
 ```
 
-This makes semgrep useful for mixed-language logs and ticket dumps, and for teams whose members
+This makes sys1grep useful for mixed-language logs and ticket dumps, and for teams whose members
 query in different languages. One caveat: TypeSafe documents English as the most accurate language,
 and in our tests Japanese meanings wobble a little more near the threshold. When a query is borderline,
 phrasing the meaning in English is the safer choice.
 
 ## How this differs from vector search
 
-If all you want is "lines about X", embedding similarity gives you the same lines. semgrep differs in
+If all you want is "lines about X", embedding similarity gives you the same lines. sys1grep differs in
 *what* it judges: not how close a line is to a topic, but whether a **proposition** holds for that line.
 Jev reads the line and the question together (a cross-encoder shape), so who did what, negation, and
 "asked for" versus "already done" all change the answer. An embedding of the line is fixed before it
@@ -87,7 +87,7 @@ English as `tests/contrast.en.txt` — see [Search across languages](#search-acr
 the case where the meaning and the text differ in language). Only two are a customer asking for one:
 
 ```sh
-$ ./semgrep -n -p -t 0 -e "customer is asking for a refund" tests/contrast.en.txt
+$ ./sys1grep -n -p -t 0 -e "customer is asking for a refund" tests/contrast.en.txt
 1:I want a refund. The item was broken.	[0.99]
 2:The refund has been processed. Please check your account.	[0.11]
 3:Our refund policy is within 30 days of purchase.	[0.09]
@@ -103,14 +103,14 @@ operations**, not a trick with set differences or "negative queries":
 
 ```sh
 # about a refund, but NOT a customer asking for one → completed, policy, denied, timelines
-$ ./semgrep -n -e "about a refund" -v "the customer is asking for a refund" tests/contrast.en.txt
+$ ./sys1grep -n -e "about a refund" -v "the customer is asking for a refund" tests/contrast.en.txt
 2:The refund has been processed. Please check your account.
 3:Our refund policy is within 30 days of purchase.
 4:The manager denied the refund request yesterday
 6:Refunds are processed within 5 business days
 
 # angry AND it is the customer, not the staff
-$ ./semgrep -n -e "someone is angry" -a "the customer, not the staff, is the one acting" tests/contrast.en.txt
+$ ./sys1grep -n -e "someone is angry" -a "the customer, not the staff, is the one acting" tests/contrast.en.txt
 5:I demand a full refund immediately
 8:The customer got angry and hung up the phone.
 ```
@@ -123,7 +123,7 @@ exists in the repository or its history to rerun. The argument stands on the wor
 of line 7 has no way to see that "support agent" changes who the sentence is about.)
 
 Two more practical consequences. The probabilities are calibrated, so one threshold (0.5) works across
-queries, where cosine scores need top-k or per-query tuning. And there is no index to build: semgrep reads
+queries, where cosine scores need top-k or per-query tuning. And there is no index to build: sys1grep reads
 the files in front of you. The flip side is that every query pays for the whole corpus again, so for
 repeated queries over a large, fixed corpus a vector index is cheaper and faster.
 
@@ -140,8 +140,8 @@ break; use `--sentence=rules` to stay offline. Anything that isn't shaped like `
 and ends with `/` can be written with a leading space to dodge the regex reading.
 
 ```sh
-$ ./semgrep -e '/ERROR|FATAL/' app.log                               # no requests at all
-$ ./semgrep -e '/timeout/i' -a '顧客に影響が出ている' app.log         # only lines with "timeout" go to Jev
+$ ./sys1grep -e '/ERROR|FATAL/' app.log                               # no requests at all
+$ ./sys1grep -e '/timeout/i' -a '顧客に影響が出ている' app.log         # only lines with "timeout" go to Jev
 ```
 
 A regex's named and numbered groups pass to the other meanings of the *same* AND term as
@@ -151,7 +151,7 @@ an error rather than an empty string (so is a reference to a negated regex's gro
 no group stays literal, as in ECMAScript, so `$100 以上の請求` is unaffected.
 
 ```sh
-$ ./semgrep -e '/(?<date>\d{4}-\d\d-\d\d) (?<time>\d\d:\d\d)/' \
+$ ./sys1grep -e '/(?<date>\d{4}-\d\d-\d\d) (?<time>\d\d:\d\d)/' \
             -a '$<time> が深夜（0時〜5時）であり、$<date> が週末である' app.log
 #   2026-09-19 03:12 ... → asks "03:12 が深夜（0時〜5時）であり、2026-09-19 が週末である"
 ```
@@ -164,7 +164,7 @@ is never colored. `-o` prints each match on a line of its own, as `grep -o`; a l
 whole, since a meaning has no matching part.
 
 ```sh
-$ ./semgrep -o -n -e '/[A-Z]+-\d+/' -a 'the ticket is still open' notes.txt   # the ticket ids, one per line
+$ ./sys1grep -o -n -e '/[A-Z]+-\d+/' -a 'the ticket is still open' notes.txt   # the ticket ids, one per line
 ```
 
 ## Sending less
@@ -173,7 +173,7 @@ Every line sent to Jev costs money and time, so the cheapest line is the one nev
 to the narrowest:
 
 - **Which files.** `-r` skips `.git`, `node_modules`, binary files, likely secrets and what git ignores;
-  [`git semgrep`](#as-a-git-subcommand-git-semgrep) searches tracked files only. `--include` / `--exclude`
+  [`git sys1grep`](#as-a-git-subcommand-git-sys1grep) searches tracked files only. `--include` / `--exclude`
   (file-name globs) and `--changed-within` (`30m`, `7d`, `today`, `this-week`, a date) narrow them further.
   A meaning that restricts itself to a language or a time of change narrows them by itself: see
   [Scope from the meaning](#scope-from-the-meaning).
@@ -187,77 +187,75 @@ to the narrowest:
   after `y`.
 
 ```sh
-$ semgrep --dry-run -r --include='*.log' --changed-within=today -e '/ERROR|FATAL/' -a 'a customer is affected' logs/
+$ sys1grep --dry-run -r --include='*.log' --changed-within=today -e '/ERROR|FATAL/' -a 'a customer is affected' logs/
 ```
 
 ## Install
 
 Two ways to use it: as a command-line tool (this section), or as a Claude Code skill
-(see [Use it from Claude Code](#use-it-from-claude-code) below). The skill falls back to `npx @uehaj/semgrep`,
+(see [Use it from Claude Code](#use-it-from-claude-code) below). The skill falls back to `npx @uehaj/sys1grep`,
 so if you only use it through Claude Code you can skip the install here entirely and just set the API key.
 
 Requires Node.js 20.16 or later. No other dependencies.
 
 ```sh
-npm install -g @uehaj/semgrep
-semgrep --help
+npm install -g @uehaj/sys1grep
+sys1grep --help
 ```
 
 To try it without installing, run it through `npx` (the first run downloads the package, later runs use the cache):
 
 ```sh
-npx @uehaj/semgrep -n -e "customer is angry or frustrated" tickets.txt
+npx @uehaj/sys1grep -n -e "customer is angry or frustrated" tickets.txt
 ```
 
 Then give it an API key from the [TypeSafe console](https://console.typesafe.ai/). Any one of these works:
 
 ```sh
-export SEMGREP_API_KEY=your-key                       # environment variable
-echo 'SEMGREP_API_KEY=your-key' > ~/.config/semgrep/.env    # per user (mkdir -p first)
+export SYS1GREP_API_KEY=your-key                       # environment variable
+echo 'SYS1GREP_API_KEY=your-key' > ~/.config/sys1grep/.env    # per user (mkdir -p first)
 ```
 
-Variables already in the environment win; otherwise `~/.config/semgrep/.env` fills them in. A `.env` in the current
+Variables already in the environment win; otherwise `~/.config/sys1grep/.env` fills them in. A `.env` in the current
 directory is never read: it may belong to a repository you just cloned, and could send your key elsewhere through
-`SEMGREP_URL`. For per-project settings, load a file yourself: `node --env-file=.env "$(command -v semgrep)" ...`.
-`TYPESAFE_API_KEY` is accepted too when `SEMGREP_API_KEY` is not set.
+`SYS1GREP_URL`. For per-project settings, load a file yourself: `node --env-file=.env "$(command -v sys1grep)" ...`.
+`TYPESAFE_API_KEY` is accepted too when `SYS1GREP_API_KEY` is not set.
 
 ### Default options
 
-`SEMGREP_OPTS` holds options to apply on every call, read like the settings above. It is split on spaces and put in
+`SYS1GREP_OPTS` holds options to apply on every call, read like the settings above. It is split on spaces and put in
 front of the command line, so the command line wins: a later value counts, and `--no-X` turns a default flag off.
 
 ```sh
-export SEMGREP_OPTS='--level strict -j 8 -n'
-semgrep -e "payment failed" app.log                  # strict, 8 at once, line numbers
-semgrep --level loose --no-n -e "payment failed" app.log
+export SYS1GREP_OPTS='--level strict -j 8 -n'
+sys1grep -e "payment failed" app.log                  # strict, 8 at once, line numbers
+sys1grep --level loose --no-n -e "payment failed" app.log
 ```
 
-A script calling semgrep would pick these up too (grep dropped `GREP_OPTIONS` for that reason). Call it as
-`SEMGREP_OPTS= semgrep ...` in scripts.
+A script calling sys1grep would pick these up too (grep dropped `GREP_OPTIONS` for that reason). Call it as
+`SYS1GREP_OPTS= sys1grep ...` in scripts.
 
 ### Other endpoints
 
-The API is configured by exactly three settings: `SEMGREP_API_KEY` (or `TYPESAFE_API_KEY`), `SEMGREP_URL` and `SEMGREP_MODEL`.
-Any endpoint that speaks TypeSafe's `POST /v1/systemone` works. The key is sent to `SEMGREP_URL` as is, so set the
+The API is configured by exactly three settings: `SYS1GREP_API_KEY` (or `TYPESAFE_API_KEY`), `SYS1GREP_URL` and `SYS1GREP_MODEL`.
+Any endpoint that speaks TypeSafe's `POST /v1/systemone` works. The key is sent to `SYS1GREP_URL` as is, so set the
 two together. On the command line, `--sys1-model=ID`, `--sys1-url=URL` and `--sys1-api-key=KEY` override
-the three. A key given this way shows up in `ps` and shell history, so prefer `~/.config/semgrep/.env` for it.
+the three. A key given this way shows up in `ps` and shell history, so prefer `~/.config/sys1grep/.env` for it.
 
 ```sh
 # OpenRouter
-SEMGREP_URL=https://openrouter.ai/api/v1/systemone SEMGREP_API_KEY=sk-or-... semgrep -e ...
+SYS1GREP_URL=https://openrouter.ai/api/v1/systemone SYS1GREP_API_KEY=sk-or-... sys1grep -e ...
 # Vercel AI Gateway
-SEMGREP_URL=https://ai-gateway.vercel.sh/typesafe/v1/systemone SEMGREP_MODEL=typesafe-ai/jev SEMGREP_API_KEY=vck_... semgrep -e ...
+SYS1GREP_URL=https://ai-gateway.vercel.sh/typesafe/v1/systemone SYS1GREP_MODEL=typesafe-ai/jev SYS1GREP_API_KEY=vck_... sys1grep -e ...
 # A compatible server that needs no key: no Authorization header is sent
-SEMGREP_URL=http://localhost:8000/v1/systemone semgrep -e ...
+SYS1GREP_URL=http://localhost:8000/v1/systemone sys1grep -e ...
 ```
 
 The summary line shows the cost the endpoint reports (`usage.cost`), or for TypeSafe itself an estimate at list
 price marked `~`.
 
-From source: `git clone https://github.com/uehaj/jev-semgrep.git && cd jev-semgrep && npm install -g .`,
-or run it in place with `node semgrep.mjs ...`.
-
-> The name collides with the static-analysis tool [Semgrep](https://semgrep.dev/). Rename one of them if you use both.
+From source: `git clone https://github.com/uehaj/sys1grep.git && cd sys1grep && npm install -g .`,
+or run it in place with `node sys1grep.mjs ...`.
 
 ## Examples
 
@@ -270,7 +268,7 @@ shown once, in [Search across languages](#search-across-languages) above.
 ### Find lines by a concept, in any language
 
 ```sh
-$ ./semgrep -n -e "customer is angry or frustrated" tests/corpus.en.txt
+$ ./sys1grep -n -e "customer is angry or frustrated" tests/corpus.en.txt
 14:Inquiry from user Yamada: I want a refund, the item was broken
 16:Inquiry from user Sato: I'm being charged for an order I never placed, it looks like fraud, please check urgently
 18:I want my money back. The item arrived broken and customer service ignored me.
@@ -287,8 +285,8 @@ None of these lines contain the words "angry" or "frustrated".
 so you can write the question as you would ask it:
 
 ```sh
-$ echo "The job failed." | ./semgrep -e "Did the job succeed?"
-$ echo "The job failed." | ./semgrep -Q "Did the job succeed?"
+$ echo "The job failed." | ./sys1grep -e "Did the job succeed?"
+$ echo "The job failed." | ./sys1grep -Q "Did the job succeed?"
 The job failed.
 ```
 
@@ -297,7 +295,7 @@ the line answers it: no, it failed (0.83). A line that *asks* the question is cl
 answers nothing, and for a yes/no question a line that *denies* it still answers it:
 
 ```sh
-$ ./semgrep -n -Q "whether the server is down" tests/intent.txt
+$ ./sys1grep -n -Q "whether the server is down" tests/intent.txt
 5:The server is down.
 6:The server is healthy and responding normally.
 2 of 17 lines matched; 17 sent to Jev in 1 request, 1087 input tokens, ~$0.000046
@@ -311,7 +309,7 @@ would match it instead. `-Q X` is shorthand for `-e "the line answers: X"`, so i
 ### OR: two meanings, and see the probabilities with `-p`
 
 ```sh
-$ ./semgrep -n -p -e "customer is asking for a refund" -e "delivery address change request" tests/corpus.en.txt
+$ ./sys1grep -n -p -e "customer is asking for a refund" -e "delivery address change request" tests/corpus.en.txt
 14:Inquiry from user Yamada: I want a refund, the item was broken	[0.99 0.01]
 17:Inquiry from user Takahashi: I'd like to change the delivery address	[0.01 0.99]
 18:I want my money back. The item arrived broken and customer service ignored me.	[0.96 0.01]
@@ -329,7 +327,7 @@ green at or above `-t`, red below `-T`, yellow in between. Line numbers and file
 ### AND NOT: network errors, excluding retries
 
 ```sh
-$ ./semgrep -n -e "network or remote connection failure" -v "a retry is happening or was attempted" tests/corpus.txt
+$ ./sys1grep -n -e "network or remote connection failure" -v "a retry is happening or was attempted" tests/corpus.txt
 4:2026-09-19 08:02:30 ERROR connection reset by peer while calling payment-gateway
 6:2026-09-19 08:02:35 ERROR timeout after 5000ms waiting for payment-gateway
 9:2026-09-19 08:10:44 ERROR DNS lookup failed for api.example.com
@@ -345,7 +343,7 @@ Line 5, `retrying payment-gateway request (attempt 2/3)`, is a network failure b
 ### Mixed: (finance AND negative) OR weather
 
 ```sh
-$ ./semgrep -n -e "about economy, finance or markets" -a "the news is negative or a decline" -e "about weather" tests/corpus.en.txt
+$ ./sys1grep -n -e "about economy, finance or markets" -a "the news is negative or a decline" -e "about weather" tests/corpus.en.txt
 36:Today's weather is sunny, high of 28 degrees
 43:Stock prices fell 3% after the earnings report missed expectations.
 48:Tomorrow's forecast is rain so I'll bring an umbrella
@@ -357,11 +355,11 @@ $ ./semgrep -n -e "about economy, finance or markets" -a "the news is negative o
 ### Strictness presets
 
 ```sh
-$ ./semgrep --level strict -n -e "a security risk or dangerous destructive operation" tests/corpus.en.txt
+$ ./sys1grep --level strict -n -e "a security risk or dangerous destructive operation" tests/corpus.en.txt
 33:DROP TABLE sessions;
 49:API keys must never be committed to the repository.
 
-$ ./semgrep --level loose -n -e "a security risk or dangerous destructive operation" tests/corpus.en.txt
+$ ./sys1grep --level loose -n -e "a security risk or dangerous destructive operation" tests/corpus.en.txt
 11:2026-09-19 09:00:00 ERROR SSL handshake failed: certificate expired
 16:Inquiry from user Sato: I'm being charged for an order I never placed, it looks like fraud, please check urgently
 33:DROP TABLE sessions;
@@ -373,11 +371,11 @@ $ ./semgrep --level loose -n -e "a security risk or dangerous destructive operat
 ### Recursive search and file names only
 
 ```sh
-$ ./semgrep -r -n -e "customer is asking for a refund" tests/tickets/
+$ ./sys1grep -r -n -e "customer is asking for a refund" tests/tickets/
 tests/tickets/a.txt:7:Ticket #16: I want a refund, the item was broken.
 tests/tickets/sub/b.txt:1:The customer wants a refund for the broken lamp.
 
-$ ./semgrep -rl -e "customer is asking for a refund" tests/tickets/
+$ ./sys1grep -rl -e "customer is asking for a refund" tests/tickets/
 tests/tickets/a.txt
 tests/tickets/sub/b.txt
 ```
@@ -389,24 +387,24 @@ that usually hold secrets (`.env*`, `.netrc`, `.npmrc`, `.pypirc`, `.pgpass`, `.
 you mean to scan. Inside a git repository, `-r` also skips what git ignores (`.gitignore`, `.git/info/exclude`, the
 global excludes file), so build output and local files stay home; a tracked file is searched even if it matches.
 A file named explicitly on the command line is always searched, even if it matches the skip list or is ignored;
-so is a directory that git ignores, when you name it (`semgrep -r -e ... dist`). `-l` prints each
+so is a directory that git ignores, when you name it (`sys1grep -r -e ... dist`). `-l` prints each
 matching file once, in the order matches are found, and works with or without `-r`. `-c` prints the number of
 matching lines per file instead.
 
 ### Scope from the meaning
 
 A meaning that restricts its matches to some kind of file can only match in such files. With `-r` and
-`git semgrep`, each meaning first asks Jev, in one small request, a yes / no per candidate, and a yes at 0.6 or
+`git sys1grep`, each meaning first asks Jev, in one small request, a yes / no per candidate, and a yes at 0.6 or
 more narrows the files before anything else is sent. The rest is never read or sent. Each scope is reported on
 stderr with Jev's answer, so a wrong one is visible:
 
 ```sh
-$ semgrep -r -e 'Python でリトライ処理を書いている箇所' .
-semgrep: scope: *.py *.pyi *.pyw (from "Python files: 0.94")
-semgrep: scope: 12 of 340 files
-$ semgrep -r -e '昨日変えた箇所で認証を扱っている' src/
-semgrep: scope: modified since 2026-09-25 00:00 (from "what was changed yesterday: 0.91")
-semgrep: scope: 3 of 120 files
+$ sys1grep -r -e 'Python でリトライ処理を書いている箇所' .
+sys1grep: scope: *.py *.pyi *.pyw (from "Python files: 0.94")
+sys1grep: scope: 12 of 340 files
+$ sys1grep -r -e '昨日変えた箇所で認証を扱っている' src/
+sys1grep: scope: modified since 2026-09-25 00:00 (from "what was changed yesterday: 0.91")
+sys1grep: scope: 3 of 120 files
 ```
 
 - **Language or format**: 26 candidates (Python, JavaScript, TypeScript, Go, Rust, Java, Kotlin, Ruby, PHP, C, C++,
@@ -433,18 +431,18 @@ semgrep: scope: 3 of 120 files
 - **Per term.** `-e A -e B` still searches B in the files A's scope leaves out; within an AND term, and across
   categories ("Python のテストコード"), the scopes intersect. Negated meanings (`-v`, `!`) are not asked. The
   meaning is sent unchanged.
-- The question costs one small request per meaning, sent only when `-r` / `git semgrep` found something to
+- The question costs one small request per meaning, sent only when `-r` / `git sys1grep` found something to
   narrow, and after `-i`'s answer. `--dry-run` shows it as `[scope]`. As with `--include`, with `-r` a file named on
-  the command line and stdin are never narrowed, and `git semgrep`'s pathspecs are narrowed like the rest. `--no-auto-scope` turns it off (`--auto-scope` turns it back on).
+  the command line and stdin are never narrowed, and `git sys1grep`'s pathspecs are narrowed like the rest. `--no-auto-scope` turns it off (`--auto-scope` turns it back on).
 
-### As a git subcommand (`git semgrep`)
+### As a git subcommand (`git sys1grep`)
 
-`npm install -g` also installs `git-semgrep`, so git runs it as `git semgrep`. Like `git grep`, it searches only
+`npm install -g` also installs `git-sys1grep`, so git runs it as `git sys1grep`. Like `git grep`, it searches only
 the files git tracks (ignored files and build output are never sent), and FILE arguments are pathspecs relative
 to the current directory.
 
 ```sh
-$ cd tests && git semgrep -l -e "customer is asking for a refund" fixture.txt tickets
+$ cd tests && git sys1grep -l -e "customer is asking for a refund" fixture.txt tickets
 fixture.txt
 tickets/a.txt
 tickets/sub/b.txt
@@ -453,14 +451,14 @@ tickets/sub/b.txt
 Without FILE it searches every tracked file under the current directory. The `-r` skip list (`.env*`, keys, ...)
 applies even to tracked files. `--include`, `--exclude` and `--changed-within` filter the tracked files, those named
 by a pathspec included. `--changed-within` reads the working tree's modification times, not git history: right after
-a clone or a checkout, every file it wrote counts as just changed. For help use `git semgrep -h`: git takes `--help` itself and looks for a man page.
+a clone or a checkout, every file it wrote counts as just changed. For help use `git sys1grep -h`: git takes `--help` itself and looks for a man page.
 
 ### Everything that is *not* something
 
 ```sh
-./semgrep -v "a timestamped server log line" mixed.txt   # like grep -v
-./semgrep -e "source code or SQL" -v "SQL" src.txt       # code, but not SQL
-cat app.log | ./semgrep -e "the deploy failed or was rolled back"
+./sys1grep -v "a timestamped server log line" mixed.txt   # like grep -v
+./sys1grep -e "source code or SQL" -v "SQL" src.txt       # code, but not SQL
+cat app.log | ./sys1grep -e "the deploy failed or was rolled back"
 ```
 
 ### Records that span several lines (`-z`)
@@ -473,9 +471,9 @@ A proposition like "this commit changes user-visible behaviour" is true of a who
 line in it:
 
 ```sh
-$ git log -z --format='%h %s %b' | ./semgrep -z -n -e "the change alters user-visible behaviour" -v "documentation only"
-7:21120e9 Revert "feat: ship the /semgrep Claude Code skill" ...
-8:51ae333 feat: ship the /semgrep Claude Code skill
+$ git log -z --format='%h %s %b' | ./sys1grep -z -n -e "the change alters user-visible behaviour" -v "documentation only"
+7:21120e9 Revert "feat: ship the /sys1grep Claude Code skill" ...
+8:51ae333 feat: ship the /sys1grep Claude Code skill
 ```
 
 Matching records are printed NUL-terminated too, so pipe them through `tr '\0' '\n'` to read them.
@@ -490,7 +488,7 @@ Wrapped lines are joined before splitting, so a sentence that runs over several 
 [`tests/prose.txt`](tests/prose.txt) wraps an English paragraph and a Japanese one:
 
 ```sh
-$ ./semgrep -n --sentence -e "the author admits they made a mistake" tests/prose.txt
+$ ./sys1grep -n --sentence -e "the author admits they made a mistake" tests/prose.txt
 1:I should have checked the input
 2:before shipping, and that was my
 3:mistake. Next time I will add a test
@@ -509,7 +507,7 @@ inside a line: lines 3 and 9 are colored only up to the end of the matching sent
 Thai, Lao, Khmer, Myanmar and Tibetan, which do not put spaces between words:
 
 ```sh
-$ ./semgrep -n -o --sentence -e "the author admits they made a mistake" -e "customer is asking for a refund" tests/prose.txt
+$ ./sys1grep -n -o --sentence -e "the author admits they made a mistake" -e "customer is asking for a refund" tests/prose.txt
 1:I should have checked the input before shipping, and that was my mistake.
 8:先週買った掃除機が初日から動かないので返金してほしいです。
 ```
@@ -524,7 +522,7 @@ with at least one sentence that is not X; to find lines that are not X as a whol
 
 Japanese and Chinese entries often end without `。`: a chat message, a support ticket, a memo line. Joining
 them would glue separate entries into one "sentence". So by default (`--sentence`, the same as
-`--sentence=jev`) semgrep asks Jev about each unpunctuated break next to a script written without word
+`--sentence=jev`) sys1grep asks Jev about each unpunctuated break next to a script written without word
 spaces: "does this line break end a sentence or entry, or is it a wrap inside a sentence?" It sends 30 lines
 per request with one yes/no per break, and keeps the lines apart when the answer is 0.7 or more. On
 [`tests/corpus.txt`](tests/corpus.txt) this keeps the four one-line Japanese tickets apart, so
@@ -548,7 +546,7 @@ the result, sends one line per group and reuses its answer for the rest. What is
 original text, and every line is printed as itself:
 
 ```sh
-$ ./semgrep --dedup -n -e "a request failed" app.log
+$ ./sys1grep --dedup -n -e "a request failed" app.log
 1:worker request 3fa9c1e27b failed: connection reset
 2:worker request 88d0e41a5c failed: connection reset
 4:worker request 0b7f2a9e13 failed: connection reset
@@ -579,12 +577,12 @@ threshold can be judged differently than in a full pass.
 ### A summary instead of the lines (`--summarize`)
 
 When many lines match, what you want is often the gist: what they say about the meaning you searched for.
-`--summarize` pipes what semgrep would print to `claude -p --model haiku` (no tools, no settings, no CLAUDE.md),
+`--summarize` pipes what sys1grep would print to `claude -p --model haiku` (no tools, no settings, no CLAUDE.md),
 asks it to summarize the lines as they bear on the meanings, and prints its answer instead of the lines.
 
 ```sh
-$ semgrep -r -n --summarize -e "the API key is read from a file" .
-The key is read in semgrep.mjs:19 from ~/.config/semgrep/.env, never from ./.env (semgrep.mjs:16), ...
+$ sys1grep -r -n --summarize -e "the API key is read from a file" .
+The key is read in sys1grep.mjs:22 from ~/.config/sys1grep/.env, never from ./.env (sys1grep.mjs:18), ...
 ```
 
 The expensive model reads only what Jev kept. Asking why `./.env` is no longer read of this repository's
@@ -593,7 +591,7 @@ $0.094 to $0.013, with the same answer (#69). It pays when the answer sits in a 
 
 - The matching lines leave the machine a second time, to Anthropic.
 - `-n`, `-A/-B/-C`, `-p` and file names go in as they would print; colors never do. No match runs nothing (exit 1).
-- `SEMGREP_SUMMARIZER` picks the TOOL of a bare `--summarize` (only `claude` so far), `SEMGREP_SUMMARIZER_MODEL` its model.
+- `SYS1GREP_SUMMARIZER` picks the TOOL of a bare `--summarize` (only `claude` so far), `SYS1GREP_SUMMARIZER_MODEL` its model.
 - `-q`, `-l` and `-c` print no lines, so they cannot be combined with it.
 - With `--dedup`, the TOOL gets what Jev got: each template's representative once, marked `(×N like it)`,
   not every line its answer was reused for.
@@ -602,7 +600,7 @@ $0.094 to $0.013, with the same answer (#69). It pays when the answer sits in a 
 
 ## Use it from Claude Code
 
-There is a Claude Code skill that runs semgrep for you: describe what you are looking for in plain words
+There is a Claude Code skill that runs sys1grep for you: describe what you are looking for in plain words
 and it builds the expression, runs the search and reports `file:line` hits. It is published in the
 [`uehaj/uehaj-marketplace`](https://github.com/uehaj/uehaj-marketplace) marketplace as the `uehaj` plugin.
 
@@ -611,31 +609,31 @@ claude plugin marketplace add uehaj/uehaj-marketplace
 claude plugin install uehaj@uehaj-marketplace
 ```
 
-No separate install of the command-line tool is needed: the skill uses `semgrep` from your PATH if present,
-otherwise `npx @uehaj/semgrep`. Only the API key has to be set (see [Install](#install)).
+No separate install of the command-line tool is needed: the skill uses `sys1grep` from your PATH if present,
+otherwise `npx @uehaj/sys1grep`. Only the API key has to be set (see [Install](#install)).
 
 Then, inside Claude Code:
 
 ```
-/uehaj:semgrep customer is asking for a refund tickets/*.txt
-/uehaj:semgrep a fix that shipped without a test git log --oneline -200
+/uehaj:sys1grep customer is asking for a refund tickets/*.txt
+/uehaj:sys1grep a fix that shipped without a test git log --oneline -200
 ```
 
 Claude Code installs plugins, not single skills. If you want just this one skill, the
-[skills CLI](https://skills.sh/) copies it into `~/.claude/skills/` and it is invoked as `/semgrep`:
+[skills CLI](https://skills.sh/) copies it into `~/.claude/skills/` and it is invoked as `/sys1grep`:
 
 ```sh
-npx skills add uehaj/uehaj-marketplace --skill semgrep -a claude-code -g
+npx skills add uehaj/uehaj-marketplace --skill sys1grep -a claude-code -g
 ```
 
 The skill writes the meaning in English, picks `-e` / `-a` / `-v` for AND / OR / NOT, adds `-n`, narrows large
 directories to files worth paying for, and re-runs with `--level loose` or `strict` when the first result looks off.
-The API key and endpoint are read the same way as on the command line (`SEMGREP_API_KEY`, `~/.config/semgrep/.env`).
+The API key and endpoint are read the same way as on the command line (`SYS1GREP_API_KEY`, `~/.config/sys1grep/.env`).
 
 ## Usage
 
 ```
-usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
+usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
 
   -e MEANING   lines matching this meaning (several -e are OR'd)
   -Q, --question QUESTION  lines that answer QUESTION, not lines asking it; the same as
@@ -654,9 +652,9 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                with -t 0.6 -T 0.3 a line at 0.3..0.6 matches neither X nor not-X
   -r           recurse into directories (current directory when FILE is omitted);
                skips .git, node_modules, binary files, likely secrets and what git ignores
-  --include=GLOB, --exclude=GLOB  with -r and git semgrep, only files whose name matches GLOB, or not
-               (with -r a file named on the command line is always searched; git semgrep's pathspecs are filtered)
-  --changed-within=WHEN  with -r and git semgrep, only files modified within 30m / 2h / 7d / 2w, since a date
+  --include=GLOB, --exclude=GLOB  with -r and git sys1grep, only files whose name matches GLOB, or not
+               (with -r a file named on the command line is always searched; git sys1grep's pathspecs are filtered)
+  --changed-within=WHEN  with -r and git sys1grep, only files modified within 30m / 2h / 7d / 2w, since a date
                or date-time, today, this-week or this-month
   --no-auto-scope  do not narrow those files by what a meaning says about them (see Scope from the meaning);
                --auto-scope turns it back on
@@ -685,7 +683,7 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                green at or above the positive threshold, red below the negative one,
                yellow in between. NO_COLOR is honored
   --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
-               the API settings, overriding SEMGREP_MODEL, SEMGREP_URL, SEMGREP_API_KEY
+               the API settings, overriding SYS1GREP_MODEL, SYS1GREP_URL, SYS1GREP_API_KEY
   -h, --help   this help (Japanese when LANG / LC_ALL / LC_MESSAGES starts with ja)
   -V, --version  print the version and exit
 ```
@@ -733,7 +731,7 @@ per minute at the defaults.
 
 `tests/` holds an LLM-as-judge test. Each of the 10 cases in `tests/cases.json` runs against
 `tests/corpus.txt` (51 lines). Claude (`claude -p`) decides which lines truly match each meaning;
-the runner evaluates the boolean expression on those verdicts and compares with semgrep's output,
+the runner evaluates the boolean expression on those verdicts and compares with sys1grep's output,
 reporting precision and recall. It also sweeps `-t` × `-T` in 0.05 steps and reports the best pair.
 
 ```sh
@@ -754,7 +752,7 @@ The result is written to `tests/report.md`. Latest: precision 0.94, recall 0.98.
 
 ## FAQ
 
-Some options were left out because a standard tool in front of semgrep already does the job. These are the
+Some options were left out because a standard tool in front of sys1grep already does the job. These are the
 combinations.
 
 ### How do I judge a whole paragraph as one unit? Why is there no `--paragraph`?
@@ -763,7 +761,7 @@ Join each paragraph into one line first. `fmt` joins the lines of a paragraph an
 between paragraphs:
 
 ```sh
-fmt -w 100000 essay.txt | semgrep -n -e "the author admits they made a mistake"
+fmt -w 100000 essay.txt | sys1grep -n -e "the author admits they made a mistake"
 ```
 
 Each output line is then a whole paragraph, and `-n` counts the lines of `fmt`'s output, not of the file.
@@ -775,7 +773,7 @@ wrapped lines you need neither: `--sentence` already joins them.
 Take the text out with `jq` and end each message with NUL, then judge records with `-z`:
 
 ```sh
-jq -j '.content + "\u0000"' chat.jsonl | semgrep -z -n --sentence -e "the customer is asking for a refund" | tr '\0' '\n'
+jq -j '.content + "\u0000"' chat.jsonl | sys1grep -z -n --sentence -e "the customer is asking for a refund" | tr '\0' '\n'
 ```
 
 Adjust `.content` to where your log keeps the text. Each message becomes one record, so a sentence never
@@ -787,8 +785,8 @@ also works as is, one JSON object per line; `jq` just gives cleaner units.
 Turn the separator into NUL and use `-z`. For records separated by a `----` line:
 
 ```sh
-perl -0777 -pe 's/\n----\n/\0/g' notes.txt | semgrep -z -e "a decision was made" | tr '\0' '\n'
-awk '/^----$/ { printf "%c", 0; next } { print }' notes.txt | semgrep -z -e "a decision was made" | tr '\0' '\n'
+perl -0777 -pe 's/\n----\n/\0/g' notes.txt | sys1grep -z -e "a decision was made" | tr '\0' '\n'
+awk '/^----$/ { printf "%c", 0; next } { print }' notes.txt | sys1grep -z -e "a decision was made" | tr '\0' '\n'
 ```
 
 NUL is what `git log -z`, `find -print0` and `xargs -0` already emit, so `-z` covers them directly (#6).

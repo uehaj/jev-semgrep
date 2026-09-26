@@ -1,5 +1,5 @@
 {
-  "name": "@uehaj/semgrep",
+  "name": "@uehaj/sys1grep",
   "version": "0.4.0",
   "description": "grep by meaning, across languages. TypeSafe Jev scores every line against a meaning; combine meanings with AND/OR/NOT.",
   "keywords": [
@@ -15,16 +15,16 @@
   "author": "Junji UEHARA",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/uehaj/jev-semgrep.git"
+    "url": "git+https://github.com/uehaj/sys1grep.git"
   },
   "type": "module",
   "bin": {
-    "semgrep": "semgrep.mjs",
-    "git-semgrep": "git-semgrep.mjs"
+    "sys1grep": "sys1grep.mjs",
+    "git-sys1grep": "git-sys1grep.mjs"
   },
   "files": [
-    "semgrep.mjs",
-    "git-semgrep.mjs",
+    "sys1grep.mjs",
+    "git-sys1grep.mjs",
     "README.md",
     "README.ja.md",
     "docs/color.svg",

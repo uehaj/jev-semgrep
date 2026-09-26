@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1093.7600000000002" height="225" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
 <rect width="100%" height="100%" rx="6" fill="#1e1e2e"/>
 <g fill="#cdd6f4">
-<text x="16" y="29" xml:space="preserve">$ semgrep -n -p --color=always -t 0.6 -T 0.4 -e "ネットワークやリモート接続の障害" -e "customer is asking for a refund" tests/corpus.txt</text>
+<text x="16" y="29" xml:space="preserve">$ sys1grep -n -p --color=always -t 0.6 -T 0.4 -e "ネットワークやリモート接続の障害" -e "customer is asking for a refund" tests/corpus.txt</text>
 <text x="16" y="49" xml:space="preserve"><tspan fill="#8ce99a">4</tspan><tspan fill="#66d9e8">:</tspan>2026-09-19 08:02:30 ERROR connection reset by peer while calling payment-gateway    [<tspan fill="#8ce99a">0.95</tspan> <tspan fill="#ff6b6b">0.01</tspan>]</text>
 <text x="16" y="69" xml:space="preserve"><tspan fill="#8ce99a">5</tspan><tspan fill="#66d9e8">:</tspan>2026-09-19 08:02:31 INFO  retrying payment-gateway request (attempt 2/3)    [<tspan fill="#8ce99a">0.73</tspan> <tspan fill="#ff6b6b">0.01</tspan>]</text>
 <text x="16" y="89" xml:space="preserve"><tspan fill="#8ce99a">6</tspan><tspan fill="#66d9e8">:</tspan>2026-09-19 08:02:35 ERROR timeout after 5000ms waiting for payment-gateway    [<tspan fill="#8ce99a">0.89</tspan> <tspan fill="#ff6b6b">0.01</tspan>]</text>

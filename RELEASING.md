@@ -1,6 +1,6 @@
 # リリース手順
 
-npm パッケージ `@uehaj/semgrep` と GitHub のタグ・Release を同じコミットから出すための手順。
+npm パッケージ `@uehaj/sys1grep` と GitHub のタグ・Release を同じコミットから出すための手順。
 スクリプト `scripts/release.sh` が下の 1〜6 をまとめて行う。
 
 ```sh
@@ -8,6 +8,8 @@ sh scripts/release.sh patch     # 0.2.1 -> 0.2.2  (バグ修正、README)
 sh scripts/release.sh minor     # 0.2.1 -> 0.3.0  (オプション追加など互換のある機能)
 sh scripts/release.sh major     # 0.2.1 -> 1.0.0  (オプションの意味変更など互換のない変更)
 sh scripts/release.sh 0.3.0     # 番号を直接指定
+sh scripts/release.sh next            # プレリリース。npm の "next" dist-tag、GitHub Release は prerelease
+sh scripts/release.sh 0.5.0-next.0    # 最初の next は明示指定が要る（prerelease はパッチしか進めない）
 ```
 
 ## 前提（スクリプトが確認する）
@@ -34,8 +36,8 @@ npm の 0.2.0 にはレビュー対応が入っていない）。
 ## 手で確認すること
 
 ```sh
-npm view @uehaj/semgrep version        # 反映まで数分かかることがある
-npx @uehaj/semgrep@X.Y.Z --help
+npm view @uehaj/sys1grep version        # 反映まで数分かかることがある
+npx @uehaj/sys1grep@X.Y.Z --help
 ```
 
 ## 失敗したときの戻し方
@@ -43,7 +45,7 @@ npx @uehaj/semgrep@X.Y.Z --help
 - `npm version` の後、`git push` の前に失敗した: `git tag -d vX.Y.Z && git reset --hard HEAD~1`
 - push 後、`npm publish` で失敗した: 原因を直して `npm publish --access public` だけ再実行。タグはそのまま使う
 - publish 後に間違いに気づいた: npm は同じ番号に上書きできない。直して次の番号を出す。
-  公開から 72 時間以内なら `npm unpublish @uehaj/semgrep@X.Y.Z` で取り下げられる
+  公開から 72 時間以内なら `npm unpublish @uehaj/sys1grep@X.Y.Z` で取り下げられる
 
 ## 版番号の目安
 

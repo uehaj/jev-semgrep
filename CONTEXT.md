@@ -1,13 +1,13 @@
-# semgrep
+# sys1grep
 
-grep by meaning: lines are judged by Jev against meanings written in natural language. `git semgrep` searches what git knows about, as `git grep` does.
+grep by meaning: lines are judged by Jev against meanings written in natural language. `git sys1grep` searches what git knows about, as `git grep` does.
 
 ## Language
 
-### Where to search (git semgrep)
+### Where to search (git sys1grep)
 
 **Working tree**:
-The checked-out files of a repository; what `git semgrep` searches by default.
+The checked-out files of a repository; what `git sys1grep` searches by default.
 _Avoid_: worktree files, local files
 
 **Index**:
