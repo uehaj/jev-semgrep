@@ -168,12 +168,27 @@ Jev に送る行が増えるほど、費用も時間もかかります。いち�
   尋ねられます。空行は送りません。
 - **何回判定するか。** [`--dedup`](#テンプレートごとに-1-行だけ判定する---dedup) は、ID・数値・時刻・パスだけが
   違う行をまとめて、テンプレートごとに 1 行だけ判定します。
-- **払う前に確かめる。** `--dry-run` は何も送らず、検索するファイル、ファイルごとの送る行数、各リクエストと
-  その質問を表示します。最後の行には入力トークン数と、TypeSafe 本体なら料金の見積もりが出ます
-  （`~3178 input tokens, ~$0.000133`。誤差 1 割程度）。`-i` は同じ集計を端末に出し、`y` と答えたときだけ送ります。
+- **払う前に確かめる。** `--dry-run` は何も送らず、この検索が使う設定、検索するファイル、ファイルごとの
+  送る行数、各リクエストとその質問を表示します。最後の行には入力トークン数と、TypeSafe 本体なら料金の
+  見積もりが出ます（`~3178 input tokens, ~$0.000133`。誤差 1 割程度）。`-i` は同じ集計を端末に出し、
+  `y` と答えたときだけ送ります。
 
 ```sh
 $ sys1grep --dry-run -r --include='*.log' --changed-within=today -e '/ERROR|FATAL/' -a '顧客に影響が出ている' logs/
+```
+
+`--verbose`（や `--dry-run`）は、コマンドラインで指定しなかった設定が*どこから*来たか
+（`SYS1GREP_OPTS`、環境変数、`~/.config/sys1grep/.env`、プリセットの既定値のいずれか）も表示するので、
+想定と違う結果をその設定まで辿れます。キーの値は表示せず、どのオプションや変数が渡したかだけを表示します。
+
+```sh
+$ SYS1GREP_OPTS='--level strict' sys1grep --verbose -e "APIキーがファイルから読まれている" .
+sys1grep: endpoint api.typesafe.ai/v1/systemone (default), model jev-latest (default)
+sys1grep: key: SYS1GREP_API_KEY (~/.config/sys1grep/.env)
+sys1grep: SYS1GREP_OPTS: --level strict
+sys1grep: options: --level strict (SYS1GREP_OPTS) = -t 0.7 -T 0.3, --chunk 30, -j 8, scope on
+sys1grep: file ./a.py: 120 lines, 120 to send
+…
 ```
 
 ## インストール
@@ -655,7 +670,8 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
   --sentence[=HOW] 行ではなく文ごとに判定する。HOW は jev (既定) か rules (前述の「1 文ずつ判定する」を参照)
   -o           --sentence と併用し、当たった文だけを出す
   -p           各意味の確率を行末に表示 (閾値調整用)
-  --dry-run    何も送らず、送信先・検索するファイル・各リクエストとその質問を表示
+  --dry-run    何も送らず、この検索が使う設定 (コマンドラインでなければその出どころも)・検索するファイル・
+               各リクエストとその質問を表示
   --verbose    同じ表示を検索しながら stderr に出す
   -i, --interactive  --dry-run と同じ内容を見せ、端末で y と答えたときだけ検索する
   --dedup      テンプレートごとに 1 行だけ判定し、その答えを残りにも使う (前述の「テンプレートごとに 1 行だけ判定する」を参照)

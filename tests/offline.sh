@@ -509,6 +509,57 @@ node -e "for (let i = 0; i < 3000; i++) console.log('cat ' + [...String(i % 300)
 $S --summarize --dedup --chunk 100 -e cat "$tmp/bigdd.txt" 2>&1 >/dev/null | grep -q '^sys1grep: --summarize: 3000 matching lines as 300 representatives ([0-9]* KB) are more than the 200 KB to summarize; narrow the expression$' || fail "--summarize --dedup over 200 KB: $($S --summarize --dedup --chunk 100 -e cat "$tmp/bigdd.txt" 2>&1 >/dev/null)"
 $S --summarize --dry-run -e cat "$F" | grep -q '^sys1grep: summarize: .* (stops over 200 KB)$' || fail "--dry-run shows the limit"
 
+# --verbose / --dry-run print the settings a search ran with, and where each not on the command line came from (#90).
+# The key's value never appears; only which option or variable supplied it does.
+reset
+eq "$($J -n -e cat "$F" 2>&1 >/dev/null)" "" "no settings lines without --verbose or --dry-run"
+hostport=$(echo "$base" | sed 's#^[a-z]*://##')
+out=$($E node ../sys1grep.mjs --dry-run -e /cat/ "$F")
+echo "$out" | grep -qx 'sys1grep: endpoint api.typesafe.ai/v1/systemone (default), model jev-latest (default)' || fail "endpoint/model default: $out"
+echo "$out" | grep -qx 'sys1grep: options: --level normal = -t 0.5 -T 0.5, --chunk 30, -j 8, scope on' || fail "options, all defaults: $out"
+echo "$out" | grep -q '^sys1grep: key: ' && fail "no key line with regex-only meanings (nothing is ever sent): $out"
+out=$($J --dry-run -e cat "$F")
+echo "$out" | grep -qF "sys1grep: endpoint $hostport/v1 (SYS1GREP_URL), model jev-latest (default)" || fail "endpoint from an environment variable: $out"
+echo "$out" | grep -qx "sys1grep: key: SYS1GREP_API_KEY" && fail "no key line: \$J sets no key" || true
+out=$($E SYS1GREP_URL=$base/v1 SYS1GREP_API_KEY=sekrit9 node ../sys1grep.mjs --verbose -e cat "$F" 2>&1 >/dev/null)
+echo "$out" | grep -qx 'sys1grep: key: SYS1GREP_API_KEY' || fail "key: the env var name, not its value: $out"
+[ "$(echo "$out" | grep -c sekrit9)" = 0 ] || fail "the key's value must never print: $out"
+out=$($E SYS1GREP_URL=$base/v1 node ../sys1grep.mjs --verbose --sys1-api-key=sekrit9 -e cat "$F" 2>&1 >/dev/null)
+echo "$out" | grep -qx 'sys1grep: key: --sys1-api-key' || fail "key: the option name: $out"
+[ "$(echo "$out" | grep -c sekrit9)" = 0 ] || fail "the key's value must never print (--sys1-api-key): $out"
+out=$($E SYS1GREP_URL=$base/v1 TYPESAFE_API_KEY=sekrit9 node ../sys1grep.mjs --verbose -e cat "$F" 2>&1 >/dev/null)
+echo "$out" | grep -qx 'sys1grep: key: TYPESAFE_API_KEY' || fail "key: the TYPESAFE_API_KEY fallback: $out"
+out=$($E SYS1GREP_URL=$base/v1 node ../sys1grep.mjs --verbose -e cat "$F" 2>&1 >/dev/null)
+echo "$out" | grep -qx 'sys1grep: key: none (no auth header sent)' || fail "key: none, with a custom endpoint and no key: $out"
+out=$($E SEMGREP_URL=$base/v1 SEMGREP_API_KEY=sekrit9 node ../sys1grep.mjs --verbose -e cat "$F" 2>&1 >/dev/null)
+echo "$out" | grep -qx 'sys1grep: key: SEMGREP_API_KEY' || fail "key: the deprecated var name it actually used: $out"
+mkdir -p "$tmp/.config/sys1grep"; printf 'SYS1GREP_API_KEY=sekrit9\n' >"$tmp/.config/sys1grep/.env"
+out=$($E SYS1GREP_URL=$base/v1 node ../sys1grep.mjs --verbose -e cat "$F" 2>&1 >/dev/null)
+echo "$out" | grep -qx 'sys1grep: key: SYS1GREP_API_KEY (~/.config/sys1grep/.env)' || fail "key: the var name plus which .env file: $out"
+[ "$(echo "$out" | grep -c sekrit9)" = 0 ] || fail "the key's value must never print (.env): $out"
+rm -rf "$tmp/.config"
+out=$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS='--level strict --color=never' node ../sys1grep.mjs --verbose -e cat "$F" 2>&1 >/dev/null)
+echo "$out" | grep -qx 'sys1grep: SYS1GREP_OPTS: --level strict --color=never' || fail "the raw SYS1GREP_OPTS line: $out"
+echo "$out" | grep -qx 'sys1grep: options: --level strict (SYS1GREP_OPTS) = -t 0.7 -T 0.3, --chunk 30, -j 8, scope on' || fail "options names --level's source: $out"
+out=$($J --verbose -e cat "$F" 2>&1 >/dev/null)
+echo "$out" | grep -q '^sys1grep: SYS1GREP_OPTS:' && fail "no SYS1GREP_OPTS line when it is empty: $out"
+out=$($J --verbose -t 0.6 -e cat "$F" 2>&1 >/dev/null)
+echo "$out" | grep -qx 'sys1grep: options: -t 0.6, -T 0.5, --chunk 30, -j 8, scope on' || fail "-t alone overrides just one threshold: $out"
+out=$($J --verbose --no-auto-scope -e cat "$F" 2>&1 >/dev/null)
+echo "$out" | grep -qx 'sys1grep: options: --level normal = -t 0.5 -T 0.5, --chunk 30, -j 8, scope off' || fail "scope off: $out"
+out=$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS=--no-auto-scope node ../sys1grep.mjs --verbose -e cat "$F" 2>&1 >/dev/null)
+echo "$out" | grep -q 'scope off (SYS1GREP_OPTS)' || fail "scope off, its source: $out"
+out=$($S --verbose --summarize -e cat "$F" 2>&1 >/dev/null)
+echo "$out" | grep -qx 'sys1grep: summarize: claude (default), model haiku (default)' || fail "summarize: TOOL and model, each defaulted: $out"
+out=$($S --verbose --summarize=claude -e cat "$F" 2>&1 >/dev/null)
+echo "$out" | grep -qx 'sys1grep: summarize: claude, model haiku (default)' || fail "summarize: an explicit TOOL has no source tag: $out"
+out=$($E PATH=$tmp/bin:$PATH SUM=$tmp/sum SYS1GREP_URL=$base/v1 SYS1GREP_SUMMARIZER_MODEL=sonnet node ../sys1grep.mjs --verbose --summarize -e cat "$F" 2>&1 >/dev/null)
+echo "$out" | grep -qx 'sys1grep: summarize: claude (default), model sonnet (SYS1GREP_SUMMARIZER_MODEL)' || fail "summarize: the model's source: $out"
+reset; out=$(asking "$JI -i -l -e cat '$F'" n)
+echo "$out" | grep -q '^sys1grep: endpoint' || fail "-i shows the endpoint/model line too: $out"
+echo "$out" | grep -q '^sys1grep: options:' || fail "-i shows the options line too: $out"
+reset
+
 # the spinner (#89): on a terminal, one line on stderr while waiting, erased before the output; never when not a terminal
 printf 'cat @slow\ndog\n' >"$tmp/slow.txt"
 eq "$($J -e cat "$tmp/slow.txt" 2>&1 >/dev/null | od -c | grep -c '\\r' || true)" "0" "no spinner when stderr is not a terminal"
