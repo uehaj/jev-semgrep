@@ -766,7 +766,10 @@ if (opt.interactive && !dry) {
   }
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-let usedTokens = 0, usedCost = 0, requestCount = 0;
+let usedTokens = 0, usedCost = 0, requestCount = 0, dedupTokens = 0; // dedupTokens: what --dedup's own questions cost
+// Jev bills input tokens; without a response they can only be estimated from the request bodies. Fitted on 7 requests
+// to Jev (English and Japanese, 1-3 questions a line, 2026-09-26): 650 a request + 0.21 a body byte, within -8%..+12%.
+const estimateTokens = (requests, bytes) => Math.round(650 * requests + 0.21 * bytes);
 let traced = 0, tracedQuestions = 0, tracedChars = 0, tracedBytes = 0;
 const cut = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 // --dry-run / --verbose: one line per request, then its questions grouped by wording (line ids read Lnnn).
@@ -808,6 +811,7 @@ async function post(state, questions, label) {
     }
     requestCount++;
     usedTokens += usage.input_tokens ?? 0;
+    if (label.startsWith('[dedup]')) dedupTokens += usage.input_tokens ?? 0;
     usedCost += typeof usage.cost === 'number' ? usage.cost : 0;
     return answers;
   }
@@ -902,9 +906,13 @@ async function judgeBreaks(lines, file) { // -> Set of i where the break before 
   return split;
 }
 
+const execAt = (lit, text) => { lit.re.lastIndex = 0; return lit.re.exec(text); }; // reset: /re/g or /re/y would else carry state across units
 const sources = new Map(); // file -> the units printed (lines or records; sentences with -o); includes blank lines
 const spansOf = new Map(); // file -> spans of each sentence (--sentence only)
-const allLines = []; // { file, no, text }; includes blank lines; what the expression is evaluated over
+// { file, no, text }: the units some term's regexes hold for (every unit when a term has no regex), blank ones
+// included; what the expression is evaluated over. A unit no term's regexes hold for can never match, so it is not
+// kept: an object per unit of a large file cost more than reading it (#79). unitCount: file -> units read.
+const allLines = [], unitCount = new Map();
 const read = new Map(); // file -> units as read (lines, or records with -z)
 for (const file of targets) {
   let buf;
@@ -942,13 +950,13 @@ for (const [file, src] of read) {
     if (opt.o) sources.set(file, sentences.map(u => u.text));
     units = sentences.map(u => u.text);
   }
-  units.forEach((text, i) => allLines.push({ file, no: i + 1, text }));
+  unitCount.set(file, units.length);
+  units.forEach((text, i) => { const u = { file, no: i + 1, text }; if (expr.some(term => regexPart(term, u).ok)) allLines.push(u); });
 }
 // Local regex evaluation + prefilter: a term is only asked its meanings for a unit once every regex
 // literal in the term already holds; captures from the term's own non-negated regexes are then expanded
 // into the meaning text (ECMAScript's GetSubstitution, see SUBST above). A unit no term can hold for, and
 // blank/whitespace-only units, are never sent (blank units count as probability 0 for every meaning).
-const execAt = (lit, text) => { lit.re.lastIndex = 0; return lit.re.exec(text); }; // reset: /re/g or /re/y would else carry state across units
 function regexPart(term, { text, file }) { // -> { ok, matches }: matches are the non-negated regexes' exec results
   let ok = admitted(term, file); // a scope left this file out: the term cannot hold in it
   const matches = [];
@@ -989,10 +997,9 @@ for (const l of allLines) {
 }
 const lines = allLines.filter(l => asksByUnit.get(l).size);
 const unitName = opt.sentence ? 'sentences' : opt.z ? 'records' : 'lines';
-if (trace) for (const file of read.keys()) {
-  const units = allLines.filter(l => l.file === file);
-  trace(`file ${file}: ${units.length} ${unitName}, ${units.filter(l => asksByUnit.get(l).size).length} to send`);
-}
+const totalUnits = [...unitCount.values()].reduce((a, b) => a + b, 0);
+if (trace) for (const file of read.keys())
+  trace(`file ${file}: ${unitCount.get(file)} ${unitName}, ${lines.filter(l => l.file === file).length} to send`);
 // -q stops at the first match, like grep -q. Known before any request, --dedup's included: unsent units (blank, or
 // no term's regexes hold; their meanings score 0) and regex-only terms.
 // ponytail: process.exit may drop a warning still buffered for a stderr pipe; the exit status is what -q promises
@@ -1050,28 +1057,34 @@ if (opt.dedup && lines.length) {
 }
 
 // Chunk by line count and by characters. The API caps state + longest question at 32k tokens.
-const chunks = [];
-for (let i = 0; i < sent.length; ) {
-  const chunk = [];
-  let chars = 0;
-  while (i < sent.length && chunk.length < chunkLines && chars < 20000) {
-    chars += sent[i].text.length;
-    chunk.push(sent[i++]);
+const chunked = units => {
+  const out = [];
+  for (let i = 0; i < units.length; ) {
+    const chunk = [];
+    let chars = 0;
+    while (i < units.length && chunk.length < chunkLines && chars < 20000) {
+      chars += units[i].text.length;
+      chunk.push(units[i++]);
+    }
+    out.push(chunk);
   }
-  chunks.push(chunk);
-}
-
-async function evaluate(chunk) {
-  const id = i => `L${String(i).padStart(3, '0')}`;
+  return out;
+};
+const chunks = chunked(sent);
+const id = i => `L${String(i).padStart(3, '0')}`;
+function requestOf(chunk) { // -> { state, questions }: one judging request; question i_k asks unit i its k-th meaning
   const state = Object.fromEntries(chunk.map((l, i) => [id(i), l.text.slice(0, MAX_UNIT_CHARS)]));
-  const keys = chunk.map(l => [...asksByUnit.get(l).keys()]);
   const questions = {};
-  chunk.forEach((_, i) => keys[i].forEach((text, k) => {
+  chunk.forEach((l, i) => [...asksByUnit.get(l).keys()].forEach((text, k) => {
     questions[`${id(i)}_${k}`] = { type: 'noul', instructions: `Does line ${id(i)} match the meaning: "${text}"?` };
   }));
+  return { state, questions };
+}
+async function evaluate(chunk) {
+  const { state, questions } = requestOf(chunk);
   const [a, b] = [chunk[0], chunk.at(-1)];
   const answers = await post(state, questions, `[judge] ${a.file}:${a.no}-${a.file === b.file ? '' : `${b.file}:`}${b.no}, ${chunk.length} ${unitName}`);
-  chunk.forEach((l, i) => keys[i].forEach((text, k) => asksByUnit.get(l).set(text, answers[`${id(i)}_${k}`].noul)));
+  chunk.forEach((l, i) => [...asksByUnit.get(l).keys()].forEach((text, k) => asksByUnit.get(l).set(text, answers[`${id(i)}_${k}`].noul)));
 }
 const isHit = l => expr.some(term => termHolds(term, l));
 // -q: a failed request is reported and the rest still run, since a later match means exit 0 (grep -q).
@@ -1224,14 +1237,23 @@ if (summarizer && !dry && matched && pipedBytes > SUMMARY_MAX) {
 // Summary only when interactive; grep prints nothing to stderr when scripted.
 if (dry) {
   const assumed = [opt.dedup && '--dedup', opt.sentence === 'jev' && '--sentence'].filter(Boolean);
-  // Jev bills input tokens; the dry run can only estimate them from the request bodies. Fitted on 7 requests to
-  // Jev (English and Japanese, 1-3 questions a line, 2026-09-26): 650 a request + 0.21 a body byte, within -8%..+12%.
-  const tokens = Math.round(650 * traced + 0.21 * tracedBytes), price = customUrl ? '' : `, ~$${(tokens * 0.042 / 1e6).toFixed(6)}`;
-  trace(`dry run: ${traced} request${traced === 1 ? '' : 's'}, ${sent.length} of ${allLines.length} ${unitName} to send, ${tracedQuestions} questions, ${tracedChars} chars, ~${tokens} input tokens${price}; nothing sent${assumed.length ? ` (${assumed.join(' and ')} questions assumed no)` : ''}`);
+  const tokens = estimateTokens(traced, tracedBytes), price = customUrl ? '' : `, ~$${(tokens * 0.042 / 1e6).toFixed(6)}`;
+  trace(`dry run: ${traced} request${traced === 1 ? '' : 's'}, ${sent.length} of ${totalUnits} ${unitName} to send, ${tracedQuestions} questions, ${tracedChars} chars, ~${tokens} input tokens${price}; nothing sent${assumed.length ? ` (${assumed.join(' and ')} questions assumed no)` : ''}`);
 } else if ((process.stderr.isTTY || opt.verbose) && !opt.quiet) {
   // The API's own usage.cost when reported (OpenRouter does); else an estimate at Jev's list price, only for TypeSafe itself.
-  const cost = usedCost > 0 ? `, $${usedCost.toFixed(6)}` : customUrl ? '' : `, ~$${(usedTokens * 0.042 / 1e6).toFixed(6)}`;
-  console.error(`${matched}/${allLines.length} ${unitName} (${sent.length} sent${opt.dedup ? ` of ${lines.length}` : ''}), ${requestCount} requests, ${usedTokens} input tokens${cost}`);
+  const perToken = usedCost > 0 && usedTokens > 0 ? usedCost / usedTokens : customUrl ? 0 : 0.042 / 1e6;
+  const cost = usedCost > 0 ? `, $${usedCost.toFixed(6)}` : perToken ? `, ~$${(usedTokens * perToken).toFixed(6)}` : '';
+  // --dedup's savings: what the folded units would have cost as requests of their own (estimated, #92's fit), less
+  // what its questions did cost (reported). A net figure: on prose, which barely folds, it can come out negative.
+  let folded = '';
+  if (opt.dedup) {
+    const judged = new Set(sent), members = lines.filter(l => !judged.has(l));
+    const saved = chunked(members).reduce((t, c) => t + estimateTokens(1, Buffer.byteLength(JSON.stringify({ model, ...requestOf(c) }))), 0) - dedupTokens;
+    const share = saved + usedTokens > 0 ? `, ${Math.round((100 * saved) / (saved + usedTokens))}%` : '';
+    folded = ` (${members.length} folded by --dedup, ~${saved} input tokens${perToken ? ` / ~$${(saved * perToken).toFixed(6)}` : ''} saved${share})`;
+  }
+  const n = (k, w) => `${k} ${w}${k === 1 ? '' : 's'}`;
+  console.error(`${matched} of ${totalUnits} ${unitName} matched; ${requestCount ? `${sent.length} sent to Jev${folded} in ${n(requestCount, 'request')}, ${n(usedTokens, 'input token')}${cost}` : 'nothing sent'}`);
 }
 // process.exit() can drop buffered stdout when piped, so set exitCode instead.
 process.exitCode = dry ? (hadError ? 2 : 0) : matched && opt.quiet ? 0 : hadError || summaryFailed ? 2 : matched ? 0 : 1; // -q: a match wins over an error
