@@ -114,6 +114,8 @@ echo "$out" | grep -q "^semgrep: file $F: 8 lines, 7 to send" || fail "--dry-run
 echo "$out" | grep -q '4× Does line Lnnn match the meaning: "cat"?' || fail "--dry-run groups questions"
 code 0 "--dry-run, no match" -- $J --dry-run -e nothing "$F"
 reset; eq "$($J --dry-run -q -v cat "$F" | tail -1 | cut -d, -f1)" "semgrep: dry run: 1 request" "--dry-run ignores -q"
+$J --dry-run -e cat "$F" | tail -1 | grep -Eq ' chars, ~[0-9]+ input tokens; nothing sent$' || fail "--dry-run estimates tokens, no price for SEMGREP_URL"
+$E SEMGREP_API_KEY=unused node ../semgrep.mjs --dry-run -e cat "$F" | tail -1 | grep -Eq ' chars, ~[0-9]+ input tokens, ~\$0\.[0-9]{6}; nothing sent$' || fail "--dry-run estimates the price for TypeSafe"
 reset; eq "$($J --verbose -n -e cat "$F" 2>/dev/null | nums)" "1 4 " "--verbose keeps stdout"
 eq "$(stat count)" "1" "--verbose sends"
 eq "$($J --verbose -e cat "$F" 2>&1 >/dev/null | grep -c '^semgrep: request 1 \[judge\]')" "1" "--verbose on stderr"

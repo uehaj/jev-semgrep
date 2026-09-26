@@ -156,7 +156,8 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
   -p           print each meaning's probability at the end of the line (for tuning thresholds)
   --dry-run    send nothing; print to stdout the endpoint, each file searched (units, and how many would be
                sent) and each request with its questions, grouped by wording (line ids read Lnnn).
-               The --dedup and --sentence questions are answered no, so their counts are an estimate
+               The --dedup and --sentence questions are answered no, so their counts are an estimate.
+               The last line estimates the input tokens and, for TypeSafe itself, the price (~, within about 10%)
   --verbose    print the same to stderr while searching, and the summary line even when not a terminal
   -i, --interactive  first show what --dry-run would send (files, lines, requests) and ask on the
                terminal; search only on y. Nothing is sent before the answer; no terminal is an error
@@ -269,7 +270,8 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
   -p           各意味の確率を行末に表示 (閾値調整用)
   --dry-run    何も送らず、送信先・検索するファイル (単位の数と送る数)・各リクエストとその質問を stdout に
                表示する。質問は文面ごとにまとめて数える (行の ID は Lnnn と表示)。--dedup と --sentence の
-               事前の問い合わせは no と答えたものとして数えるので、その場合の数は目安
+               事前の問い合わせは no と答えたものとして数えるので、その場合の数は目安。最後の行に
+               入力トークン数と、TypeSafe 本体なら料金の見積もりを出す (~ 付き、誤差 1 割程度)
   --verbose    同じ表示を検索しながら stderr に出す。端末でなくても最後の集計行を出す
   -i, --interactive  まず --dry-run と同じ内容 (ファイル・行数・リクエスト数) を見せて端末で聞き、
                y のときだけ検索する。答えるまで何も送らない。端末が無ければエラー
@@ -546,7 +548,7 @@ if (opt.interactive && !dry) {
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let usedTokens = 0, usedCost = 0, requestCount = 0;
-let traced = 0, tracedQuestions = 0, tracedChars = 0;
+let traced = 0, tracedQuestions = 0, tracedChars = 0, tracedBytes = 0;
 const cut = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 // --dry-run / --verbose: one line per request, then its questions grouped by wording (line ids read Lnnn).
 // --dry-run answers every question no (0), which also decides what --dedup folds and where --sentence joins.
@@ -557,7 +559,7 @@ function show(state, questions, label) {
   trace(`request ${++traced} ${label}, ${n} question${n === 1 ? '' : 's'}, ${chars} chars`);
   [...count].slice(0, 3).forEach(([q, k]) => trace(`  ${String(k).padStart(3)}× ${cut(q, 100)}`));
   if (count.size > 3) trace(`       (+${count.size - 3} more)`);
-  tracedQuestions += n; tracedChars += chars;
+  tracedQuestions += n; tracedChars += chars; tracedBytes += Buffer.byteLength(JSON.stringify({ model, state, questions }));
 }
 // One request with retries: 429 / 529 / 5xx, connection errors and timeouts back off exponentially.
 async function post(state, questions, label) {
@@ -952,7 +954,10 @@ if (summarizer && !dry && matched) {
 // Summary only when interactive; grep prints nothing to stderr when scripted.
 if (dry) {
   const assumed = [opt.dedup && '--dedup', opt.sentence === 'jev' && '--sentence'].filter(Boolean);
-  trace(`dry run: ${traced} request${traced === 1 ? '' : 's'}, ${sent.length} of ${allLines.length} ${unitName} to send, ${tracedQuestions} questions, ${tracedChars} chars; nothing sent${assumed.length ? ` (${assumed.join(' and ')} questions assumed no)` : ''}`);
+  // Jev bills input tokens; the dry run can only estimate them from the request bodies. Fitted on 7 requests to
+  // Jev (English and Japanese, 1-3 questions a line, 2026-09-26): 650 a request + 0.21 a body byte, within -8%..+12%.
+  const tokens = Math.round(650 * traced + 0.21 * tracedBytes), price = customUrl ? '' : `, ~$${(tokens * 0.042 / 1e6).toFixed(6)}`;
+  trace(`dry run: ${traced} request${traced === 1 ? '' : 's'}, ${sent.length} of ${allLines.length} ${unitName} to send, ${tracedQuestions} questions, ${tracedChars} chars, ~${tokens} input tokens${price}; nothing sent${assumed.length ? ` (${assumed.join(' and ')} questions assumed no)` : ''}`);
 } else if ((process.stderr.isTTY || opt.verbose) && !opt.quiet) {
   // The API's own usage.cost when reported (OpenRouter does); else an estimate at Jev's list price, only for TypeSafe itself.
   const cost = usedCost > 0 ? `, $${usedCost.toFixed(6)}` : customUrl ? '' : `, ~$${(usedTokens * 0.042 / 1e6).toFixed(6)}`;
