@@ -3,7 +3,7 @@
 // The arguments are the command shown above the output, one line each.
 import { readFileSync } from 'node:fs';
 
-const FG = '#cdd6f4', SGR = { 31: '#ff6b6b', 32: '#8ce99a', 33: '#ffd43b', 35: '#f5a3f5', 36: '#66d9e8', '01;31': '#ff5c7a' };
+const FG = '#cdd6f4', SGR = { 31: '#ff6b6b', 32: '#8ce99a', 33: '#ffd43b', 35: '#f5a3f5', 36: '#66d9e8', '01;31': '#ff5c7a', '01;33': '#ffd43b' };
 const LH = 20, X = 16, CELL = 7.83; // 13px monospace
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const wide = ch => /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/.test(ch);
@@ -15,7 +15,7 @@ const lines = [...process.argv.slice(2).map(l => [[l, FG]]), ...readFileSync(0, 
   for (const part of line.split(/(\x1b\[[\d;]*m)/)) {
     const m = part.match(/^\x1b\[([\d;]*)m$/);
     if (m) code = m[1] === '0' || m[1] === '' ? null : m[1];
-    else if (part) spans.push([part, SGR[code] ?? FG, code === '01;31']);
+    else if (part) spans.push([part, SGR[code] ?? FG, code?.startsWith('01;')]);
   }
   return spans;
 })];
