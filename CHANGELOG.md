@@ -32,6 +32,9 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   `OLLAMA_HOST` moves `ollama`'s host.
 - `--summarize=llm` runs Simon Willison's `llm -n -s PROMPT` (`-m` too, with `SYS1GREP_SUMMARIZER_MODEL`); tools
   stay off since sys1grep never passes `-T` / `--functions` (#77).
+- `--summarize=pi` runs `pi --print --no-tools --no-session --no-context-files --no-extensions --no-skills
+  --no-prompt-templates --thinking off --system-prompt PROMPT` (`--model` too, with `SYS1GREP_SUMMARIZER_MODEL`)
+  (#78). `codex`, `opencode` and `fm` stayed out: research on #78.
 - On a terminal, a one-line spinner on stderr while sys1grep waits for Jev (`12 of 149 requests`) or the summarizer,
   drawn after 300 ms and erased before any output (#89). Not with `-q`, `--dry-run`, `--verbose` or `TERM=dumb`,
   and never when stderr is not a terminal, so scripts see exactly what they saw before.
