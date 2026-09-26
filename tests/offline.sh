@@ -282,6 +282,10 @@ eq "$($JI -r -l -e 'Python で cat' "$S" 2>&1 >/dev/null | tr '\n' '|')" 'semgre
 eq "$($JI -r -l --no-scope -e 'Python で cat' "$S" 2>&1 | grep -c .)" "4" "--no-scope"
 eq "$($JI -r -l -e '昨日変えた cat' "$S" 2>/dev/null | tr '\n' ' ')" "$S/a.py $S/b.js $S/sub/c.py " "scope: a time of change, by mtime"
 eq "$($JI -r -l -e 'Python のような cat' "$S" 2>&1 | grep -c scope || true)" "0" "no scope from a likeness"
+for q in 'added a separator cat' 'removed a decorator cat' 'we changed that may call cat' '10日前後に変更した cat'; do
+  eq "$($JI -r -l -e "$q" "$S" 2>&1 | grep -c scope || true)" "0" "no time scope: $q"
+done
+eq "$($JI -r -l -e 'changed in May cat' "$S" 2>&1 | grep -c 'scope: modified since')" "1" "a month with in"
 eq "$($JI -r -n -e 'Python で cat' -e dog "$S" 2>/dev/null | grep -c "^$S/b.js:2:dog")" "1" "scope: another term still searches the file"
 eq "$($JI -r -n -e 'Python で cat' -e dog "$S" 2>/dev/null | grep -c "^$S/b.js:1:")" "0" "scope: the scoped term does not hold in it"
 eq "$($JI -r -n -e 'Python で cat' -a '!昨日変えた cat' "$S" 2>/dev/null | grep -c "^$S/b.js:1:")" "0" "scope: within an AND term"
