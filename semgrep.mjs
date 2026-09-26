@@ -122,19 +122,17 @@ As git semgrep, FILE arguments are pathspecs and every tracked file is searched,
                since a date or time (2026-09-01 is local midnight, 2026-09-01T09:00, ...Z); or today,
                this-week (from Monday) or this-month, in local time. By mtime, not git history
   --no-scope   do not narrow the files -r and git semgrep find by what a meaning says about them. By default
-               a meaning that names a language or format ("in Python", "Python で", "YAML files") searches
-               only those files (*.py *.pyi *.pyw), and one that says when the code changed ("changed
-               yesterday", "先週追加した") only files changed since then (in a repository: committed since
-               then, or uncommitted and modified since). git also answers who and what state: "code I
-               wrote", "Alice さんが書いた", "未コミットの", "staged", "untracked", "on this branch",
-               "not yet pushed". Only wording that makes it a
-               necessary condition counts: not "Python のような書き方", "port it to Go" or "SQL のクエリ" (SQL
-               sits inside other code). A place does too: test code ("テストコードで", "in the tests"),
-               migrations, the README, the CHANGELOG, documents ("ドキュメントに"; *.md *.rst *.txt docs/),
-               code (what is not a document) and logs ("ログファイルに"; *.log logs/), by path conventions.
-               Per term: -e A -e B still searches B in the files A leaves out.
-               Each scope goes to stderr as semgrep: scope: ...; files named on the command line are never
-               narrowed
+               each meaning first asks Jev, in one small request, whether it restricts its matches to a
+               language or format (Python files, YAML files, ...) or to what changed within a span (the last
+               minute / hour, today, yesterday, the last 1 / 2 / 3 / 7 / 30 days, this month, last week, last
+               month, the last year, this fiscal year) or to a place (test code, migrations, the README, the
+               changelog, documentation, source code, logs), a git state (uncommitted, staged, untracked, this
+               branch, not pushed, mine) or an author (the 30 with the most commits); a yes at 0.7 or more
+               searches only those files. In a repository a time goes by commits: a committed file needs a
+               commit since then, an uncommitted one its mtime
+               (*.py *.pyi *.pyw; modified since then). Jev reads the whole meaning, so "案A、B、Cで" is not
+               about C files. Per term: -e A -e B still searches B in the files A leaves out. Each scope goes
+               to stderr as semgrep: scope: ...; files named on the command line are never narrowed
   -l           print only the names of files with a match, not the lines
   -H, --with-filename  prefix each line (and -c count) with its file name, even for a single file
   --no-filename  never prefix file names, even with several files, -r or git semgrep
@@ -242,18 +240,16 @@ git semgrep として呼ぶと git grep と同じく FILE は pathspec になり
   --changed-within=WHEN  -r と git semgrep で、WHEN 以内に更新したファイルだけを探す。30m / 2h / 7d / 2w、
                日付か日時以降 (2026-09-01 はその日のローカル時刻 0 時、2026-09-01T09:00、...Z)、
                または today / this-week (月曜から) / this-month (ローカル時刻)。git の履歴ではなく mtime で見る
-  --no-scope   意味の文面からファイルを絞り込まない。既定では -r と git semgrep で見つけたファイルを、
-               言語・形式を指定する意味 (「Python で」「in Python」「YAML ファイル」) ならそのファイル
-               (*.py *.pyi *.pyw) に、変更時期を指定する意味 (「昨日変えた」「changed last week」) ならそれ以降に
-               変えたファイル (リポジトリでは、それ以降のコミットがあるか、未コミットでそれ以降に更新したもの)
-               に絞る。作者と状態も git で絞る: 「自分が書いた」「Alice さんが書いた」「未コミットの」「ステージした」
-               「未追跡の」「このブランチで」「未プッシュの」。必要条件になる言い方だけが対象で、「Python のような書き方」「Go に移植」
-               「SQL のクエリ」(SQL は他の言語のコードの中にもある) は絞らない。置き場所も同じで、テストコード
-               (「テストコードで」「in the tests」)、マイグレーション、README、CHANGELOG、文書 (「ドキュメントに」。
-               *.md *.rst *.txt docs/)、コード (文書以外)、ログ (「ログファイルに」。*.log logs/) をパスの慣習で絞る。
-               項ごとに効くので、-e A -e B は
-               A が除いたファイルでも B を探す。絞り込みは semgrep: scope: ... として stderr に出す。
-               コマンドラインで指定したファイルは絞らない
+  --no-scope   意味の文面からファイルを絞り込まない。既定では意味ごとにまず Jev へ小さなリクエストを 1 つ
+               送り、その意味が一致を言語・形式 (Python のファイル、YAML のファイル…) や変更時期 (1 分以内、
+               1 時間以内、今日、昨日、1・2・3・7・30 日以内、今月、先週、先月、この 1 年、今年度) に限定して
+               いるか、置き場所 (テストコード、マイグレーション、README、CHANGELOG、文書、ソースコード、ログ) に
+               限定しているか、git の状態 (未コミット、ステージ、未追跡、このブランチ、未プッシュ、自分が書いた)
+               や作者 (コミットの多い 30 人) に限定しているかを聞く。リポジトリでは時期をコミットで見る
+               (コミット済みはそれ以降のコミットがあるもの、未コミットは mtime)。0.7 以上で yes なら、-r と git semgrep で見つけたファイルをそのファイル
+               (*.py *.pyi *.pyw、それ以降に更新したもの) に絞る。Jev は意味全体を読むので、「案A、B、Cで」は
+               C のファイルの話にならない。項ごとに効くので、-e A -e B は A が除いたファイルでも B を探す。
+               絞り込みは semgrep: scope: ... として stderr に出す。コマンドラインで指定したファイルは絞らない
   -l           一致した行ではなくファイル名だけを表示
   -H, --with-filename  1 ファイルだけでも、各行 (と -c の件数) の前にファイル名を付ける
   --no-filename  複数ファイル・-r・git semgrep でもファイル名を付けない
@@ -446,117 +442,73 @@ const wanted = (path, st) => {
   return (!includes.length || includes.some(re => re.test(name))) && !excludes.some(re => re.test(name)) && (since === null || st.mtimeMs >= since);
 };
 
-// Auto-scope (#43): a meaning that says when its file changed, or what language or format the file is in, can only
-// match in such files, so the files -r and git semgrep find are narrowed before anything is sent. Only wording that
-// makes it a necessary condition counts ("in Python", "Python で", "Python files"; not "Python のような書き方" or "port
-// it to Python"): a wrong scope loses matches without a trace. Each scope is a literal of its meaning's AND term, so
-// -e A -e B still searches B in the files A's scope leaves out. Files named on the command line and stdin are never
-// narrowed, as with --include. --no-scope turns it off.
-// Extensions and file names after GitHub Linguist's languages.yml (MIT), cut down to common languages and formats.
-const LANGS = [ // [name pattern, globs, embedded]; a name that already says file or script needs no anchor around it.
-  // An embedded format often sits inside another language's code (SQL in strings, HTML in templates and JSX), so it
-  // scopes only when it names the file: "SQL ファイル", "HTML files", not "SQL のクエリ".
-  ['python|パイソン', '*.py *.pyi *.pyw'],
-  ['javascript|js|node\\.?js|ジャバスクリプト', '*.js *.mjs *.cjs *.jsx'],
-  ['typescript|ts|タイプスクリプト', '*.ts *.mts *.cts *.tsx'],
-  ['go|golang|ゴー', '*.go'],
-  ['rust', '*.rs'],
-  ['java|ジャバ', '*.java'],
-  ['kotlin|コトリン', '*.kt *.kts'],
-  ['ruby|ルビー', '*.rb *.rake Gemfile Rakefile'],
-  ['php', '*.php'],
-  ['c', '*.c *.h'],
-  ['c\\+\\+|cpp', '*.cpp *.cc *.cxx *.hpp *.hh *.hxx *.h'],
-  ['c#|csharp', '*.cs'],
-  ['swift', '*.swift'],
-  ['scala', '*.scala *.sc'],
-  ['r', '*.r *.R *.Rmd'],
-  ['(?:shell|bash|sh|zsh) ?scripts?|(?:シェル|bash|sh|zsh) ?スクリプト', '*.sh *.bash *.zsh'], // not "シェルで実行": code that runs a shell
-  ['sql', '*.sql', true],
-  ['html', '*.html *.htm', true],
-  ['css', '*.css *.scss *.sass *.less', true],
-  ['markdown|md|マークダウン', '*.md *.markdown *.mdx'],
-  ['yaml|yml', '*.yaml *.yml'],
-  ['json', '*.json *.jsonc *.json5 *.jsonl *.ndjson', true],
-  ['toml', '*.toml'],
-  ['xml', '*.xml', true],
-  ['dockerfiles?', 'Dockerfile Dockerfile.* *.dockerfile Containerfile'],
-  ['makefiles?', 'Makefile makefile GNUmakefile *.mk'],
+// Auto-scope (#43): a meaning that restricts its matches to some kind of file (Python files, what changed yesterday)
+// can only match in such files, so the files -r and git semgrep find are narrowed before anything is sent. Whether
+// it does is asked of Jev, one small request per meaning with a yes / no per candidate, as --dedup asks which values
+// matter. The candidates are fixed, so nothing has to be pulled out of the text, and Jev reads the whole meaning in
+// any language: "案A、B、Cで比較" is not about C files, a date quoted in a comment is not when the file changed. A
+// candidate counts at 0.7 or more, the threshold --dedup and --sentence use. Each scope is a literal of its meaning's
+// AND term, so -e A -e B still searches B in the files A's scope leaves out. Files named on the command line and
+// stdin are never narrowed, as with --include. --no-scope turns it off.
+// A candidate: { key, cat, what (the end of the question), test(file, stat) }. Within a category the yes answers are
+// alternatives ("JavaScript か TypeScript"), except time, where the narrowest span is taken; across categories they
+// intersect ("Python のテストコード").
+const CANDIDATES = [];
+// Language or format -> file names. Extensions and names after GitHub Linguist's languages.yml (MIT), cut down to
+// common languages and formats.
+const LANGS = [
+  ['Python', '*.py *.pyi *.pyw'], ['JavaScript', '*.js *.mjs *.cjs *.jsx'], ['TypeScript', '*.ts *.mts *.cts *.tsx'],
+  ['Go', '*.go'], ['Rust', '*.rs'], ['Java', '*.java'], ['Kotlin', '*.kt *.kts'], ['Ruby', '*.rb *.rake Gemfile Rakefile'],
+  ['PHP', '*.php'], ['C', '*.c *.h'], ['C++', '*.cpp *.cc *.cxx *.hpp *.hh *.hxx *.h'], ['C#', '*.cs'], ['Swift', '*.swift'],
+  ['Scala', '*.scala *.sc'], ['R', '*.r *.R *.Rmd'], ['shell script', '*.sh *.bash *.zsh'], ['SQL', '*.sql'],
+  ['HTML', '*.html *.htm'], ['CSS', '*.css *.scss *.sass *.less'], ['Markdown', '*.md *.markdown *.mdx'],
+  ['YAML', '*.yaml *.yml'], ['JSON', '*.json *.jsonc *.json5 *.jsonl *.ndjson'], ['TOML', '*.toml'], ['XML', '*.xml'],
+  ['Dockerfile', 'Dockerfile Dockerfile.* *.dockerfile Containerfile'], ['Makefile', 'Makefile makefile GNUmakefile *.mk'],
 ];
-// Around the name: "in [the|our|my] X" before it, or after it (言語 allowed in between) で (not でも / でない), の plus a
-// word for a file or its code, or a word for a file. The name is not part of a word, a hyphenated one ("non-Python",
-// "Go-style") included, and not after not / except / other than or like / as.
-const LANG_BEFORE = String.raw`(?<!(?:not|except|than|like|as|besides|of)\s+)\b(?:in|written in)\s+(?:the\s+|our\s+|my\s+|a\s+)?`;
-const LANG_AFTER = String.raw`(?:\s*言語)?\s*(?:で(?![もな]|はな)|の(?:コード|ファイル|スクリプト|ソース|実装|プログラム|中|なか|記述|設定|文書|ドキュメント|定義|クラス|メソッド|テスト)|(?:コード|ファイル|スクリプト|ソース|プログラム)|\s(?:source\s+)?(?:code|files?|scripts?|sources?|programs?|codebase|services?|projects?|configs?|configuration|documents?|docs|implementations?)\b)`;
-const FILE_AFTER = String.raw`\s*(?:の?ファイル|\sfiles?\b)`;
-// "Rust or Kotlin implementations", "JavaScript か TypeScript で", "in Go and Rust": the anchor covers every name in the list.
-const ANY = String.raw`(?<![\w+#.-])(?:${LANGS.map(([name]) => name).join('|')})(?![\w+#-]|'s)(?:\s*言語)?`;
-const AND = String.raw`\s*(?:,|、|/|・|\bor\b|\band\b|か|や|と)\s*`;
-const langRes = LANGS.map(([name, globs, embedded]) => {
-  const n = String.raw`(?<![\w+#.-])(?:${name})(?![\w+#-]|'s)`;
-  const re = /scripts?|スクリプト|files\?/.test(name) ? n : embedded ? `${n}(?:${AND}${ANY})*(?=${FILE_AFTER})`
-    : `${LANG_BEFORE}(?:${ANY}${AND})*${n}|${n}(?:${AND}${ANY})*(?=${LANG_AFTER})`;
-  return [new RegExp(re, 'i'), globs.split(' ')];
-});
-const EXT_RE = /(?<![\w.])\*?\.([a-z0-9]{1,10})(?=\s*(?:ファイル|files?\b|で|の中))/gi; // ".py ファイル", "*.go files"
-function langScope(text) {
-  const words = [], globs = new Set();
-  for (const [re, gs] of langRes) { const m = re.exec(text); if (m) { words.push(m[0].trim()); gs.forEach(g => globs.add(g)); } }
-  for (const [w, ext] of text.matchAll(EXT_RE)) {
-    words.push(w);
-    (langRes.find(([, gs]) => gs.includes(`*.${ext}`))?.[1] ?? [`*.${ext}`]).forEach(g => globs.add(g));
-  }
-  if (!globs.size) return null;
-  const res = [...globs].map(globRe('scope'));
-  return { label: [...globs].join(' '), words, test: f => res.some(re => re.test(f.split('/').at(-1))) };
+for (const [name, globs] of LANGS) {
+  const res = globs.split(' ').map(globRe('scope'));
+  CANDIDATES.push({ key: `l_${name.toLowerCase().replace(/\+/g, 'p').replace(/#/g, 's').replace(/\W/g, '')}`, cat: 'language', what: `${name} files`, label: globs, test: f => res.some(re => re.test(f.split('/').at(-1))) });
 }
-// Path role (#48): where a kind of file lives, by the conventions of JS, Python, Go, Java, Ruby, Rust and PHP. The
-// phrase must say the match is in such a file ("テストコードで", "in the tests", "README に"), not that the code
-// does something with one ("テストしている", "README を生成する"), and not that it may be there too ("テストでも",
-// "README にも"). Several roles in one meaning are alternatives
-// ("README か CHANGELOG に"). Each pattern is tested on the path; a directory in it that only looks like a role
-// ("/home/me/tests/proj/") admits more files, never fewer.
+// Place (#48): where a kind of file lives, by the conventions of JS, Python, Go, Java, Ruby, Rust and PHP. Each
+// pattern is tested on the path; a directory that only looks like a place ("/home/me/tests/proj/") admits more
+// files, never fewer.
 const DOC_EXT = String.raw`\.(?:md|markdown|mdx|rst|adoc|asciidoc|txt|org|tex|textile)$`;
-const ROLES = [ // [name, phrase, path pattern, what the path pattern is (for the report), bare noun]
+const PLACES = [ // [key, what the question names, path pattern, what the report says]
   // Rust keeps unit tests in the file they test (#[cfg(test)]), so every *.rs is a test file too.
-  ['test', /テスト(?:コード|ファイル|ケース|スイート)|テスト(?:で(?![きもな]|はな)|の中|内で(?![きもな]|はな))|\b(?:in|within|inside)\s+(?:the\s+|our\s+|my\s+)?(?:unit\s+|integration\s+|e2e\s+)?tests\b|\btest\s+(?:code|files?|suites?|cases?)\b|\bspec\s+files?\b/i,
-    /(?:^|\/)(?:tests?|__tests__|specs?|testing|e2e)\/|(?:^|\/)test_[^/]*\.py$|_test\.\w+$|\.(?:test|spec)\.\w+$|Tests?\.(?:java|kt|cs|php|swift)$|_spec\.rb$|(?:^|\/)conftest\.py$|\.rs$/,
-    'tests/ test/ __tests__/ spec/ e2e/ test_*.py *_test.* *.test.* *.spec.* *Test.java *_spec.rb *.rs', /テスト|tests?/i],
-  ['migration', /マイグレーション(?:ファイル|スクリプト|で|の中|のコード)|\bmigrations?\s+(?:files?|scripts?|code)\b|\bin\s+(?:the\s+|our\s+)?(?:db\s+|database\s+)?migrations\b/i,
-    /migrat|(?:^|\/)V\d+(?:_\d+)*__[^/]*\.sql$/i, '*migrat* V*__*.sql', /マイグレーション|migrations?/i],
-  ['readme', /README\s*(?:に(?!も)|で(?![きもな]|はな)|の中|の記述|の(?!生成|作成))|\bthe\s+README\s+(?:says?|mentions?|explains?|describes?|file)\b|\bin\s+(?:the\s+|our\s+)?README\b|\bREADME\s+files?\b/i,
-    /(?:^|\/)README[^/]*$/i, 'README*', /README/i],
-  ['changelog', /(?:CHANGELOG|変更履歴|更新履歴)\s*(?:に(?!も)|で(?![きもな]|はな)|の中|の記述|の(?!生成|作成))|\bin\s+(?:the\s+|our\s+)?changelog\b|\bchangelog\s+(?:entr(?:y|ies)|files?|says|mentions)\b/i,
-    /(?:^|\/)(?:CHANGELOG|CHANGES|HISTORY|NEWS)[^/]*$/i, 'CHANGELOG* CHANGES* HISTORY* NEWS*', /CHANGELOG|変更履歴|更新履歴/i],
-  ['docs', /(?:ドキュメント|文書|仕様書|設計書|マニュアル)\s*(?:に(?!も)|で(?![きもな]|はな)|の中)|\bin\s+(?:the\s+|our\s+)?(?:docs|documentation|documents|specs?|specifications?|manuals?)\b|\b(?:the\s+)?documentation\s+(?:says|mentions)\b/i,
-    new RegExp(`${DOC_EXT}|(?:^|/)(?:docs?|documentation|manual)/`, 'i'), '*.md *.rst *.adoc *.txt ... docs/ doc/', /ドキュメント|文書|仕様書|設計書|マニュアル|docs|documentation/i],
+  ['test', 'test code', /(?:^|\/)(?:tests?|__tests__|specs?|testing|e2e)\/|(?:^|\/)test_[^/]*\.py$|_test\.\w+$|\.(?:test|spec)\.\w+$|Tests?\.(?:java|kt|cs|php|swift)$|_spec\.rb$|(?:^|\/)conftest\.py$|\.rs$/,
+    'test files: tests/ test/ __tests__/ spec/ e2e/ test_*.py *_test.* *.test.* *.spec.* *Test.java *_spec.rb *.rs'],
+  ['migration', 'database migration files', /migrat|(?:^|\/)V\d+(?:_\d+)*__[^/]*\.sql$/i, 'migration files: *migrat* V*__*.sql'],
+  ['readme', 'the README', /(?:^|\/)README[^/]*$/i, 'readme files: README*'],
+  ['changelog', 'the changelog (CHANGELOG, CHANGES, HISTORY, NEWS)', /(?:^|\/)(?:CHANGELOG|CHANGES|HISTORY|NEWS)[^/]*$/i, 'changelog files: CHANGELOG* CHANGES* HISTORY* NEWS*'],
+  ['docs', 'documentation (not source code)', new RegExp(`${DOC_EXT}|(?:^|/)(?:docs?|documentation|manual)/`, 'i'), 'docs files: *.md *.rst *.adoc *.txt ... docs/ doc/'],
   // Code is what is not a document: a dictionary of languages would lose the ones it lacks.
-  ['code', /(?:実装|ソースコード|コード)\s*(?:の中|内で(?![きもな]|はな))|実装で(?![きもな]|はな)|\bin\s+(?:the\s+|our\s+)?(?:code|codebase|source(?:\s+code)?|implementation)\b/i,
-    new RegExp(`^(?!.*(?:${DOC_EXT}|(?:^|/)(?:docs?|documentation)/))`, 'i'), 'not *.md *.rst *.adoc *.txt ... docs/ doc/', /実装|コード|code/i],
-  ['log', /ログファイル|ログ(?:に(?:出て|残って|記録され|出力され)|の中[でに])|\bin\s+(?:the\s+|our\s+)?logs?\b(?!\s+(?:message|call|statement|level)s?\b)|\blog\s+files?\b/i,
-    /\.(?:log|out|err)(?:\.\d+)?$|(?:^|\/)(?:logs?|var\/log)\//i, '*.log *.log.N *.out *.err logs/ log/', /ログ|logs?/i],
+  ['code', 'source code (not documentation)', new RegExp(`^(?!.*(?:${DOC_EXT}|(?:^|/)(?:docs?|documentation)/))`, 'i'), 'code files: not *.md *.rst *.adoc *.txt ... docs/ doc/'],
+  ['log', 'log files', /\.(?:log|out|err)(?:\.\d+)?$|(?:^|\/)(?:logs?|var\/log)\//i, 'log files: *.log *.log.N *.out *.err logs/ log/'],
 ];
-// "README か CHANGELOG に", "in the docs or the README": a bare noun listed next to a matched phrase shares it.
-const AND_WORD = String.raw`\s*(?:,|、|/|・|\bor\b|\band\b|か|や|と|または|もしくは)\s*(?:the\s+|our\s+)?`;
-function roleScope(text) {
-  const hit = ROLES.map(([name, phrase, path, what]) => [name, phrase.exec(text), path, what]).filter(r => r[1]);
-  if (!hit.length) return null;
-  let lo = Math.min(...hit.map(r => r[1].index)), hi = Math.max(...hit.map(r => r[1].index + r[1][0].length));
-  for (let grew = true; grew; ) {
-    grew = false;
-    for (const [name, , path, what, noun] of ROLES) {
-      if (hit.some(r => r[0] === name)) continue;
-      const before = [...text.slice(0, lo).matchAll(new RegExp(`(?:${noun.source})${AND_WORD}$`, 'gi'))][0];
-      const after = new RegExp(`^${AND_WORD}(?:${noun.source})`, 'i').exec(text.slice(hi));
-      if (before) { hit.push([name, before, path, what]); lo = before.index; grew = true; }
-      else if (after) { hit.push([name, after, path, what]); hi += after[0].length; grew = true; }
-    }
-  }
-  // "in the tests and fixtures": something else listed with them may live anywhere, so no scope
-  if (/^\s*(?:\/|\bor\b|\band\b|か|や|と|または|もしくは)\s*(?:the\s+|our\s+)?[\p{L}\p{N}]/iu.test(text.slice(hi))
-    || /[\p{L}\p{N}]\s*(?:\/|\bor\b|\band\b|か|や|と|または|もしくは)\s*(?:the\s+|our\s+)?$/iu.test(text.slice(0, lo).replace(/\b(?:in|within|inside)\s*$/i, ''))) return null;
-  return { label: hit.map(([name, , , what]) => `${name} files: ${what}`).join(' | '), words: hit.map(r => r[1][0].trim()), test: f => hit.some(([, , path]) => path.test(f)) };
-}
+for (const [key, what, path, label] of PLACES) CANDIDATES.push({ key: `r_${key}`, cat: 'place', what, label, test: f => path.test(f) });
+// Time: fixed spans, by their start only: a later change moves the mtime, so a file changed yesterday may have been
+// modified today. The narrowest span answered yes is taken.
+// ponytail: a yes to too narrow a span loses matches; the report shows the span and Jev's answer.
+const NOW = Date.now(), TODAY = new Date().setHours(0, 0, 0, 0);
+const TIME_SPANS = [ // [key, the span in the question, its start]
+  ['min1', 'within the last minute', NOW - 6e4],
+  ['hour1', 'within the last hour', NOW - 36e5],
+  ['today', 'today', TODAY],
+  ['yesterday', 'yesterday', new Date(TODAY).setDate(new Date(TODAY).getDate() - 1)],
+  ['day1', 'within the last day (24 hours)', NOW - 864e5],
+  ['day2', 'within the last 2 days', NOW - 2 * 864e5],
+  ['day3', 'within the last 3 days', NOW - 3 * 864e5],
+  ['day7', 'within the last 7 days', NOW - 7 * 864e5],
+  ['day30', 'within the last 30 days', NOW - 30 * 864e5],
+  ['month', 'this calendar month', new Date(TODAY).setDate(1)],
+  ['lastweek', 'last week (the calendar week before this one, weeks starting on Monday)', (t => t.setDate(t.getDate() - (t.getDay() + 6) % 7 - 7))(new Date(TODAY))],
+  ['lastmonth', 'last calendar month', (t => new Date(t.getFullYear(), t.getMonth() - 1, 1).getTime())(new Date(TODAY))],
+  ['year', 'within the last year (365 days)', NOW - 365 * 864e5],
+  ['fiscal', 'this fiscal year (from April 1)', (t => new Date(t.getFullYear() - (t.getMonth() < 3 ? 1 : 0), 3, 1).getTime())(new Date(TODAY))],
+];
+const fmtTime = ms => new Date(ms - new Date(ms).getTimezoneOffset() * 6e4).toISOString().slice(0, 16).replace('T', ' ');
+for (const [key, span, from] of TIME_SPANS)
+  CANDIDATES.push({ key: `t_${key}`, cat: 'time', what: `what was changed ${span}`, from, label: `changed since ${fmtTime(from)} (git commits; the mtime for files git does not have committed)`, test: (f, st) => changedSince(from, f, st) });
 // git (#46): inside a repository, git says which files changed since a time, who wrote them and what is uncommitted,
 // staged, untracked, changed on this branch or not pushed. One git process per repository and question, over the
 // whole tree: `git log -1 -- FILE` per file took 50 ms a file on a 6,400-file repository (5 minutes), `git log
@@ -576,7 +528,7 @@ function gitPaths(top, ...args) {
   }
   return gitMemo.get(key);
 }
-const gitOut = (top, ...args) => { try { return execFileSync('git', ['-C', top, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return ''; } };
+const gitOut = (top, ...args) => { try { return execFileSync('git', ['-C', top, ...args], { encoding: 'utf8', maxBuffer: Infinity, stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return ''; } };
 const union = (...sets) => (sets.some(x => !x) ? null : new Set(sets.flatMap(x => [...x])));
 const untracked = top => gitPaths(top, 'ls-files', '-z', '--others', '--exclude-standard');
 const uncommitted = top => union(gitPaths(top, 'diff', '--name-only', '-z', 'HEAD'), untracked(top)); // worktree and index against HEAD
@@ -589,116 +541,65 @@ function branchChanges(top) {
 }
 // Commits not on the upstream; without one, commits on no remote branch.
 const unpushed = top => gitPaths(top, 'log', '--format=', '--name-only', '-z', '@{upstream}..HEAD') ?? gitPaths(top, 'log', '--format=', '--name-only', '-z', 'HEAD', '--not', '--remotes');
-// Author: every file a commit of theirs touched, by git's --author (a regex on "Name <email>", mailmap applied, any
-// case). An author with no commit at all (「田中さん」 against romanized names) gives no scope rather than no files.
+// Every file a commit by this e-mail touched (mailmap applied); me: user.email's, and the uncommitted files.
 // ponytail: a file renamed after they wrote it is missed; `git log --follow` per file if that matters.
-function byAuthor(top, who) {
-  const me = who === null, pat = me ? gitOut(top, 'config', 'user.email') || gitOut(top, 'config', 'user.name') : who;
-  if (!pat) return null;
-  const files = gitPaths(top, 'log', '--use-mailmap', '-i', `--author=${pat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, '--format=', '--name-only', '-z');
+function byAuthor(top, email) {
+  const me = email === null, who = me ? gitOut(top, 'config', 'user.email') : email;
+  if (!who) return null;
+  const files = gitPaths(top, 'log', '--use-mailmap', '-i', `--author=<${who.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}>`, '--format=', '--name-only', '-z');
   return !files?.size ? null : me ? union(files, uncommitted(top)) : files;
 }
-const GIT_STATES = [ // [name, phrase, files of a repository]
-  ['uncommitted', /未コミット|コミット(?:して|され)(?:い)?ない|作業中の(?:変更|ファイル)|\buncommitted\b|\bworking(?:\s+tree)?\s+changes\b|\bnot\s+(?:yet\s+)?committed\b/i, uncommitted],
-  ['staged', /ステージ(?:した|済み|され|ング)|インデックスに(?:入れ|追加)|\bstaged\b/i, top => gitPaths(top, 'diff', '--name-only', '-z', '--cached')],
-  ['untracked', /未追跡|(?:git|ギット)\s*に(?:まだ)?(?:入れて|追加して|add\s*して)(?:い)?ない|まだ\s*(?:git\s*)?add\s*して(?:い)?ない|\buntracked\b|\bnot\s+(?:yet\s+)?(?:added\s+to|tracked\s+by|in)\s+git\b/i, untracked],
-  ['branch', /(?:この|今の|現在の)ブランチで|\b(?:on|in)\s+(?:this|the\s+current|my)\s+branch\b|\bthis\s+branch's\b/i, branchChanges],
-  ['unpushed', /未プッシュ|(?:プッシュ|push)して(?:い)?ない|\bunpushed\b|\bnot\s+(?:yet\s+)?pushed\b/i, unpushed],
-];
-const AUTHOR = [ // -> the author named, or '' for me
-  [/([\p{Script=Han}\p{Script=Katakana}ー\w.-]{1,20})\s?(?:さん|氏|くん|君)が[^、。]{0,6}?(?:書|作|実装|入れ|追加|変更|変え|修正|コミット)/u, m => m[1]],
-  [/(?:自分|私|僕|俺|わたし)(?:が[^、。]{0,6}?(?:書|作|実装|入れ|追加|変え|変更|修正|コミット)|の(?:コミット|変更))/, () => ''],
-  [/\b(?:written|authored|added|committed|changed|touched|made|introduced)\s+by\s+(me|myself|[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)?)/, m => (/^(me|myself)$/.test(m[1]) ? '' : m[1])],
-  [/\bI\s+(?:wrote|added|committed|changed|touched|authored|introduced)\b|\bmy\s+(?:own\s+)?commits\b/i, () => ''],
-];
-// A git scope admits a file when its repository's set holds it; no repository or no answer from git admits it, and
-// a scope git answered for no file is not reported: it narrowed nothing.
-function inGit(files) {
-  const sets = new Map(), setOf = f => { const top = repoOf(dirname(resolve(f))); if (top && !sets.has(top)) sets.set(top, files(top)); return top && sets.get(top); };
-  return { test: f => { const set = setOf(f); return !set || set.has(resolve(f)); }, answered: f => !!setOf(f) };
+// A time in a repository: a committed file needs a commit at or after it (a checkout sets every mtime to now, and a
+// commit comes after the edit it records; the committer date, which a rebase moves later, never earlier). An
+// uncommitted file, or one outside a repository, needs its mtime at or after it.
+function changedSince(from, f, st) {
+  const abs = resolve(f), top = repoOf(dirname(abs));
+  const committed = top && gitPaths(top, 'log', `--since=${new Date(from).toISOString()}`, '--format=', '--name-only', '-z'), open = top && uncommitted(top);
+  return !committed || !open ? st.mtimeMs >= from : committed.has(abs) || (open.has(abs) && st.mtimeMs >= from);
 }
-function gitScopes(text) {
-  const out = GIT_STATES.map(([name, phrase, files]) => { const m = phrase.exec(text); return m && { label: `git-${name} files`, words: [m[0]], ...inGit(files) }; });
-  for (const [re, who] of AUTHOR) {
-    const m = re.exec(text);
-    if (!m) continue;
-    // "Alice さんが書いたような", "like code written by Alice": a likeness says nothing about who wrote the file
-    if (/^\p{Script=Hiragana}{0,3}(?:よう|みたい|風|っぽ)/u.test(text.slice(m.index + m[0].length))
-      || /\b(?:like|style\s+of|similar\s+to)\s+(?:\S+\s+){0,3}$/i.test(text.slice(0, m.index))) break;
-    const name = who(m);
-    out.push({ label: `git-author files: by ${name || 'me (user.email)'}`, words: [m[0]], ...inGit(top => byAuthor(top, name || null)) });
-    break;
+const inGit = files => f => { const abs = resolve(f), top = repoOf(dirname(abs)), set = top && files(top); return !set || set.has(abs); };
+const GIT_STATES = [ // [key, what the question names, files of a repository]
+  ['uncommitted', 'files with uncommitted changes (modified, staged or untracked)', uncommitted],
+  ['staged', 'files with staged changes', top => gitPaths(top, 'diff', '--name-only', '-z', '--cached')],
+  ['untracked', 'untracked files, not yet added to git', untracked],
+  ['branch', 'files changed on the current git branch', branchChanges],
+  ['unpushed', 'files changed in commits not yet pushed', unpushed],
+  ['mine', 'code written by me (the current git user)', top => byAuthor(top, null)],
+];
+// The candidates git adds, from the repositories of the files found: the states git can answer there (not "this
+// branch" on the default branch), and the 30 authors with the most commits. Only asked when there is a repository.
+function gitCandidates(found) {
+  const tops = [...new Set(found.map(f => repoOf(dirname(resolve(f)))).filter(Boolean))];
+  const out = GIT_STATES.filter(([key, , files]) => key === 'mine' || tops.some(t => files(t)))
+    .map(([key, what, files]) => ({ key: `g_${key}`, cat: key === 'mine' ? 'author' : `git-${key}`, what, label: `git-${key} files`, test: inGit(files) })); // mine and an author named as me are alternatives, not both required
+  const authors = new Map(); // e-mail -> { who, commits }
+  for (const t of tops) for (const line of gitOut(t, 'shortlog', '-sne', 'HEAD').split('\n')) {
+    const m = line.match(/^\s*(\d+)\s+(.*<(.+)>)$/);
+    if (m) authors.set(m[3], { who: m[2], commits: (authors.get(m[3])?.commits ?? 0) + +m[1] });
   }
-  return out.filter(Boolean);
+  for (const [email, { who }] of [...authors].sort((a, b) => b[1].commits - a[1].commits).slice(0, 30))
+    out.push({ key: `a_${email.replace(/\W/g, '_')}`, cat: 'author', what: `code written by ${who}`, label: `git-author files: by ${who}`, test: inGit(top => byAuthor(top, email)) });
+  return out;
 }
-// Time: a date or span next to a verb of change ("昨日変えた", "先週追加した", "changed yesterday", "last week's
-// commits"), so a date the line itself talks about ("9月20日のリリース", "logs from yesterday") is not taken. Resolved
-// in local time to [from, to). A file changed in it was modified at or after from; the mtime cannot say more, since
-// a later change moves it. In a repository a committed file needs a commit at or after from instead: a checkout
-// sets every mtime to now, and a commit comes after the edit it records. The committer date, as git log --since
-// reads it: a rebase or cherry-pick moves it later, never earlier. No upper bound either: "yesterday's change"
-// may be committed today. Uncommitted files go by their mtime. "Before" / "until" and 最近 / recently give no scope.
-const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-// Whole words only ("separator" is not September); longest first, so "sept" is not read as "sep" + "t".
-const MONTH_NAMES = 'january|february|march|april|june|july|august|september|sept|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
-const NUMS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
-const UNIT_MS = { 分: 6e4, minute: 6e4, 時間: 36e5, hour: 36e5, 日: 864e5, day: 864e5, 週: 6048e5, 週間: 6048e5, week: 6048e5, か月: 26784e5, month: 26784e5 };
-const TIME_WORDS = [ // [pattern, (match, midnight today) -> [from, to]]; the first pattern that matches wins
-  [/一昨日|おととい|the day before yesterday/i, (m, d) => [d - 2 * 864e5, d - 864e5]],
-  [/昨日|きのう|yesterday/i, (m, d) => [d - 864e5, d]],
-  [/今日|本日|きょう|今朝|today|this morning/i, (m, d) => [d, d + 864e5]],
-  [/(先々週|先週|今週|last week|this week)/i, (m, d) => {
-    const mon = d - ((new Date(d).getDay() + 6) % 7) * 864e5, back = { 先々週: 2, 先週: 1, 'last week': 1 }[m[1].toLowerCase()] ?? 0;
-    return [mon - back * 6048e5, mon - (back - 1) * 6048e5];
-  }],
-  [/(先月|今月|last month|this month)/i, (m, d) => { const t = new Date(d), back = /先|last/i.test(m[1]) ? 1 : 0; return [new Date(t.getFullYear(), t.getMonth() - back, 1).getTime(), new Date(t.getFullYear(), t.getMonth() - back + 1, 1).getTime()]; }],
-  [/(去年|昨年|今年|last year|this year)/i, (m, d) => { const y = new Date(d).getFullYear() - (/今|this/i.test(m[1]) ? 0 : 1); return [new Date(y, 0, 1).getTime(), new Date(y + 1, 0, 1).getTime()]; }],
-  [/(?:ここ|過去|直近)\s*(\d+)\s*(分|時間|日|週間?|か月|ヶ月|カ月|ヵ月)|(\d+)\s*(分|時間|日|週間?|か月|ヶ月|カ月|ヵ月)\s*(?:以内|の間)|(?:last|past|within)\s+(?:the\s+)?(\d+|an?|one|two|three|four|five|six|seven|eight|nine|ten)\s+(minute|hour|day|week|month)s?/i,
-    m => { const n = m[1] ?? m[3] ?? m[5], u = (m[2] ?? m[4] ?? m[6]).replace(/[ヶカヵ]月/, 'か月').toLowerCase(); return [Date.now() - (NUMS[n.toLowerCase()] ?? +n) * UNIT_MS[u], Infinity]; }],
-  [/(\d+)\s*日前(?!後)|(\d+|an?|one|two|three|four|five|six|seven|eight|nine|ten)\s+days?\s+ago/i, (m, d) => { const n = m[1] ?? m[2]; return [d - (NUMS[n.toLowerCase()] ?? +n) * 864e5, Infinity]; }],
-  // A date, or a month; with 以降 / から / since / after it opens to now. Without a year it is the latest one not in the future.
-  [new RegExp(String.raw`(?:(?:since|after|from)\s+)?(?:(\d{4})[-/](\d{1,2})(?:[-/](\d{1,2}))?(?![-/\d])|(?:(\d{4})\s*年\s*)?(\d{1,2})\s*月(?:\s*(\d{1,2})\s*日)?|(?:(?:in|during)\s+)?\b(${MONTH_NAMES})\.?(?![a-z])(?:\s+(\d{1,2})(?:st|nd|rd|th)?\b)?(?:,?\s+(\d{4}))?)(\s*(?:以降|から|より後))?`, 'i'),
-    (m, d) => {
-      // A month name alone needs in / since / ...: "may" is also a verb, "march" and "mar" too
-      if (m[7] && !m[8] && !m[9] && !/^(since|after|from|in|during)\s/i.test(m[0])) return null;
-      const y = +(m[1] ?? m[4] ?? m[9] ?? 0), mo = +(m[2] ?? m[5] ?? MONTHS.indexOf(m[7]?.slice(0, 3).toLowerCase()) + 1) - 1, day = +(m[3] ?? m[6] ?? m[8] ?? 0);
-      const at = yy => day ? [new Date(yy, mo, day).getTime(), new Date(yy, mo, day + 1).getTime()] : [new Date(yy, mo, 1).getTime(), new Date(yy, mo + 1, 1).getTime()];
-      let r = at(y || new Date(d).getFullYear());
-      if (!y && r[0] > Date.now()) r = at(new Date(d).getFullYear() - 1);
-      return /^(since|after|from)/i.test(m[0]) || m[10] ? [r[0], Infinity] : r;
-    }],
-];
-const CHANGE_JA = '(?:変え|変わ|変更|修正|直し|直さ|追加|足し|足さ|書い|書か|書き(?:直|換|替|足|加)|編集|更新|コミット|入れ|入っ|いじ|触っ|改修|リファクタ|削除|消し|消さ|作っ|作ら|作成|マージ|プッシュ)';
-const CHANGE_EN = String.raw`\b(?:chang|modif|edit|add|touch|commit|writ|wrote|updat|fix|refactor|introduc|remov|delet|creat|merg|push)\w*`;
-function timeScope(text) {
-  for (const [re, span] of TIME_WORDS) {
-    const m = re.exec(text);
-    if (!m) continue;
-    const t = m[0].trim(), before = text.slice(0, m.index), after = text.slice(m.index + m[0].length);
-    // before / until: the mtime is the last change, so a file changed before a date may have changed since
-    if (/(以前|まで|より前)/.test(after.slice(0, 4)) || /\b(before|until|prior to)\s*$/i.test(before)) return null;
-    const near = new RegExp(`^[^、。,.!?]{0,8}?${CHANGE_JA}`).test(after) || new RegExp(`^(?:'s)?\\s+(?:changes|commits|edits)\\b`, 'i').test(after)
-      || new RegExp(`${CHANGE_EN}(?:\\s+\\S+){0,3}?\\s+$`, 'i').test(before);
-    if (!near) return null;
-    const [from] = span(m, new Date().setHours(0, 0, 0, 0)) ?? [];
-    if (from === undefined) return null;
-    const fmt = ms => new Date(ms - new Date(ms).getTimezoneOffset() * 6e4).toISOString().slice(0, 16).replace('T', ' ');
-    const since = top => gitPaths(top, 'log', `--since=${new Date(from).toISOString()}`, '--format=', '--name-only', '-z');
-    return { label: `changed since ${fmt(from)} (git commits; the mtime for files git does not have committed)`, words: [t], test: (f, st) => {
-      const abs = resolve(f), top = repoOf(dirname(abs)), committed = top && since(top), open = top && uncommitted(top);
-      return !committed || !open ? st.mtimeMs >= from : committed.has(abs) || (open.has(abs) && st.mtimeMs >= from);
-    } };
+const scopeQuestions = text => Object.fromEntries(CANDIDATES.map(c => [c.key, { type: 'noul', instructions: `Does the meaning "${text}" restrict its matches to ${c.what}?` }]));
+// Jev's answers -> one scope per category that got a yes: { label, words, test }
+function scopesOf(answers) {
+  const yes = CANDIDATES.filter(c => answers[c.key].noul >= 0.7), out = [];
+  for (const cat of new Set(yes.map(c => c.cat))) {
+    let cs = yes.filter(c => c.cat === cat);
+    if (cat === 'time') cs = [cs.reduce((a, b) => (b.from > a.from ? b : a))];
+    out.push({ label: [...new Set(cs.map(c => c.label))].join(' | '), words: cs.map(c => `${c.what}: ${answers[c.key].noul.toFixed(2)}`), test: (f, st) => cs.some(c => c.test(f, st)) });
   }
-  return null;
+  return out;
 }
-// Each scope goes into its meaning's AND term as { kind: 's', label, words, test(file, stat) }; negated meanings say
+// Each scope goes into its meaning's AND term as { kind: 's', label, words, admits(file) }; negated meanings say
 // what a line is not, which says nothing about its file.
 const named = f => f === '-' || (!asGit && files.includes(f)); // stdin, or named on the command line: never narrowed
-if (opt.scope) for (const term of expr) for (const lit of term.filter(l => l.kind === 'm' && !l.not))
-  for (const sc of [langScope(lit.text), roleScope(lit.text), timeScope(lit.text), ...gitScopes(lit.text)]) if (sc) {
-    const seen = new Map(); // file -> admitted
-    term.push({ kind: 's', ...sc, admits: f => named(f) || (seen.has(f) ? seen.get(f) : seen.set(f, sc.test(f, statSync(f))).get(f)) });
-  }
+const addScope = (term, sc) => {
+  const seen = new Map(); // file -> admitted
+  term.push({ kind: 's', ...sc, admits: f => named(f) || (seen.has(f) ? seen.get(f) : seen.set(f, sc.test(f, statSync(f))).get(f)) });
+};
+const scoped = term => term.filter(l => l.kind === 'm' && !l.not); // the meanings that can scope their term
 const admitted = (term, file) => term.every(lit => lit.kind !== 's' || lit.admits(file));
 
 // The unit of judgement. Without -z it is a line; with -z it is a NUL-terminated record, which may
@@ -754,16 +655,9 @@ const gitFiles = () => [...new Set(lsFiles().split('\0'))] // a conflicted file 
   .map(p => (p === '-' ? './-' : p)); // a tracked file named -, not stdin
 const found = asGit ? gitFiles()
   : (files.length ? files : [opt.r ? '.' : '-']).flatMap(f => (f === '-' ? [f] : expand(f)));
-// A file no term admits is not read. Each scope is reported when it can narrow something (not with named files only),
-// with -q silent; the -i dry run does not repeat it.
-const targets = found.filter(f => expr.some(term => admitted(term, f)));
-if (!opt.quiet && found.some(f => !named(f))) {
-  const scoped = [...new Set(expr.flat().filter(lit => lit.kind === 's' && (!lit.answered || found.some(f => !named(f) && lit.answered(f)))).map(lit => `semgrep: scope: ${safe(lit.label)} (from ${lit.words.map(w => `"${safe(w)}"`).join(', ')})`))];
-  if (scoped.length) scoped.push(`semgrep: scope: ${targets.length} of ${found.length} files`);
-  for (const m of scoped) { console.error(m); warned.push(m); }
-}
+const narrowable = opt.scope && found.some(f => !named(f)); // -r or git semgrep found something scopes could leave out
 // Standard input is read once: -i hands it to its dry run, and the search reads it again from here.
-const stdinBuf = targets.includes('-') ? readFileSync(0) : null;
+const stdinBuf = found.includes('-') ? readFileSync(0) : null;
 // -i: run this same command once with --dry-run, show its files and totals on the terminal, and search only on a yes.
 // Nothing is sent before the answer. The answer comes from /dev/tty, so stdin can still carry the data.
 if (opt.interactive && !dry) {
@@ -775,6 +669,7 @@ if (opt.interactive && !dry) {
   // this process already printed (the file list's warnings, the option warnings) is not repeated.
   const errors = plan.stderr.split('\n').filter(l => l.startsWith('semgrep: ') && !l.startsWith('semgrep: warning: ') && !warned.includes(l));
   const shown = [...plan.stdout.split('\n').filter(l => /^semgrep: (file |dry run: )/.test(l)), ...errors].map(safe);
+  warned.push(...errors); // its scope lines among them: not printed again after the answer
   if (!/^semgrep: dry run: 0 requests/.test(shown.findLast(l => l.startsWith('semgrep: dry run: ')))) {
     writeSync(tty, `${shown.join('\n')}\nSearch, sending the above? [y/N] `);
     const buf = Buffer.alloc(256);
@@ -834,6 +729,19 @@ const waiters = [];
 const acquire = () => (running++ < Number(opt.j) ? Promise.resolve() : new Promise(r => waiters.push(r)));
 const release = () => (running--, waiters.shift()?.());
 const pooled = async fn => { await acquire(); try { return await fn(); } finally { release(); } };
+
+// The scope questions go out only now, after -i's answer, and only when there is something to narrow.
+if (narrowable) CANDIDATES.push(...gitCandidates(found.filter(f => !named(f))));
+if (narrowable) await Promise.all(expr.flatMap(term => scoped(term).map(lit =>
+  pooled(() => post({ meaning: lit.text }, scopeQuestions(lit.text), `[scope] "${cut(lit.text, 40)}"`)).then(a => scopesOf(a).forEach(sc => addScope(term, sc))))));
+// A file no term admits is not read. Each scope is reported when it can narrow something (not with named files only),
+// with -q silent, and not again after -i showed it.
+const targets = found.filter(f => expr.some(term => admitted(term, f)));
+if (!opt.quiet && narrowable) {
+  const lines = [...new Set(expr.flat().filter(lit => lit.kind === 's').map(lit => `semgrep: scope: ${safe(lit.label)} (from ${lit.words.map(w => `"${safe(w)}"`).join(', ')})`))];
+  if (lines.length) lines.push(`semgrep: scope: ${targets.length} of ${found.length} files`);
+  for (const m of lines) if (!warned.includes(m)) { console.error(m); warned.push(m); }
+}
 
 // --sentence: the unit is a sentence. Lines are joined as wrapped prose, except where a newline cannot be inside
 // a sentence: at a blank line, next to structure characters (JSON, code), or before a list item, heading, quote or
