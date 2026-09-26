@@ -941,8 +941,8 @@ if (summarizer && !dry && matched) {
   // spawn, not spawnSync: the spinner's timer runs only while the event loop does. Its output erases the spinner.
   spin.set(`summarizing with ${opt.summarize}`);
   const child = spawn(summarizer[0], summarizer.slice(1), { stdio: ['pipe', 'pipe', 'pipe'] });
-  child.stdout.on('data', d => { spin.stop(); process.stdout.write(d); });
-  child.stderr.on('data', d => { spin.stop(); process.stderr.write(d); });
+  // pipe() keeps backpressure; the once() listener, registered first, erases the spinner before the first chunk lands.
+  for (const [from, to] of [[child.stdout, process.stdout], [child.stderr, process.stderr]]) { from.once('data', spin.stop); from.pipe(to, { end: false }); }
   child.stdin.on('error', () => {}); // EPIPE: the TOOL exited without reading it all; its exit status says what happened
   child.stdin.end(piped.join(''));
   const [status, signal] = await new Promise(r => child.on('error', e => die(`--summarize=${opt.summarize}: ${e.message}`, false)).on('close', (c, sg) => r([c, sg])));
