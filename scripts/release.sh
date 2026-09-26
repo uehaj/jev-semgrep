@@ -9,6 +9,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 bump=${1:?usage: release.sh patch|minor|major|x.y.z|next|x.y.z-next.N}
+[ "$bump" != next ] || case $(node -p "require('./package.json').version") in *-*) ;; *) echo "release: 'next' bumps an existing prerelease; the first one needs x.y.z-next.N (e.g. 0.5.0-next.0)" >&2; exit 1 ;; esac
 
 [ "$(git branch --show-current)" = main ] || { echo "release: run this on the main branch" >&2; exit 1; }
 [ -z "$(git status --porcelain)" ] || { echo "release: working tree has uncommitted changes" >&2; exit 1; }
