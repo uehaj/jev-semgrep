@@ -6,11 +6,11 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
-- Auto-scope (#43): with `-r` and `git semgrep`, a meaning that names a language or format ("in Python",
-  "Python で", "YAML files") searches only those files, and one that says when the code changed ("changed
-  yesterday", "先週追加した") only files modified since then. Only wording that makes it a necessary condition
-  counts. Per term, reported on stderr as `semgrep: scope: …`, silent with `-q`; named files are never narrowed.
-  `--no-scope` turns it off.
+- Auto-scope (#43): with `-r` and `git semgrep`, each meaning first asks Jev, in one small request, whether it
+  restricts its matches to a language or format (26 of them) or to what changed within a span (the last minute
+  … this fiscal year, 14 of them); a yes at 0.7 or more searches only those files. Per term, reported on stderr as
+  `semgrep: scope: …` with Jev's answer, silent with `-q`, asked only after `-i`'s answer; named files are never
+  narrowed. `--no-scope` turns it off.
 
 ## [0.4.0] - 2026-09-26
 

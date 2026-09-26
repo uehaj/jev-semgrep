@@ -167,7 +167,7 @@ to the narrowest:
 - **Which files.** `-r` skips `.git`, `node_modules`, binary files, likely secrets and what git ignores;
   [`git semgrep`](#as-a-git-subcommand-git-semgrep) searches tracked files only. `--include` / `--exclude`
   (file-name globs) and `--changed-within` (`30m`, `7d`, `today`, `this-week`, a date) narrow them further.
-  A meaning that names a language or a time of change narrows them by itself: see
+  A meaning that restricts itself to a language or a time of change narrows them by itself: see
   [Scope from the meaning](#scope-from-the-meaning).
 - **Which lines.** A [regex term](#regex-terms) is matched locally, and only the lines it holds for are asked
   its AND term's meanings. Blank lines are never sent.
@@ -385,30 +385,34 @@ matching lines per file instead.
 
 ### Scope from the meaning
 
-A meaning that names a language or format, or says when the code changed, can only match in such files. With
-`-r` and `git semgrep` those are the only files searched; the rest is never read or sent. Each scope is reported
-on stderr, so a wrong one is visible:
+A meaning that restricts its matches to some kind of file can only match in such files. With `-r` and
+`git semgrep`, each meaning first asks Jev, in one small request, a yes / no per candidate, and a yes at 0.7 or
+more narrows the files before anything else is sent. The rest is never read or sent. Each scope is reported on
+stderr with Jev's answer, so a wrong one is visible:
 
 ```sh
 $ semgrep -r -e 'Python でリトライ処理を書いている箇所' .
-semgrep: scope: *.py *.pyi *.pyw (from "Python")
+semgrep: scope: *.py *.pyi *.pyw (from "Python files: 0.94")
 semgrep: scope: 12 of 340 files
-$ semgrep -r -e 'auth code changed yesterday' src/
-semgrep: scope: modified since 2026-09-25 00:00 (from "yesterday")
+$ semgrep -r -e '昨日変えた箇所で認証を扱っている' src/
+semgrep: scope: modified since 2026-09-25 00:00 (from "what was changed yesterday: 0.91")
 semgrep: scope: 3 of 120 files
 ```
 
-- **Language or format**: "in Python", "Python code", "Python で", "Go 言語のコード", ".py ファイル", "YAML files",
-  "Rust or Kotlin implementations". Not "Python のような書き方", "port this to Go", "a Go-style error" or
-  "not in Python": those say nothing about the file. SQL, HTML, CSS, JSON and XML often sit inside other code, so
-  only "SQL files" / "SQL ファイル" scopes them, not "SQL のクエリ".
-- **Time of change**: a date or span next to a verb of change: "changed yesterday", "last week's commits",
-  "added since Sep 20", "昨日変えた", "ここ 3 日で修正した". A file changed then was modified at or after that time;
-  the modification time cannot say more, since a later change moves it. A date the line talks about ("the Sep
-  20 release", "logs from yesterday"), "before" / "until" and vague words ("recently", 「最近」) give no scope.
-- **Per term.** `-e A -e B` still searches B in the files A's scope leaves out; within an AND term the scopes
-  intersect. Negated meanings (`-v`, `!`) give none. The meaning is sent unchanged.
-- Files named on the command line and stdin are never narrowed, as with `--include`. `--no-scope` turns it off.
+- **Language or format**: 26 candidates (Python, JavaScript, TypeScript, Go, Rust, Java, Kotlin, Ruby, PHP, C, C++,
+  C#, Swift, Scala, R, shell script, SQL, HTML, CSS, Markdown, YAML, JSON, TOML, XML, Dockerfile, Makefile), with
+  GitHub Linguist's extensions and file names. Several yes answers are alternatives ("JavaScript か TypeScript").
+- **Time of change**: 14 spans: the last minute, the last hour, today, yesterday, the last 1 / 2 / 3 / 7 / 30 days,
+  this month, last week, last month, the last year, this fiscal year (from April 1). The narrowest span answered
+  yes is taken, by its start only: a file changed yesterday may have been modified again today.
+- Jev reads the whole meaning, in any language: "案A、B、Cで比較" is not about C files, and a date quoted in a
+  comment is not when the file changed. Nothing is extracted from the text; the candidates are fixed.
+- **Per term.** `-e A -e B` still searches B in the files A's scope leaves out; within an AND term, and across
+  categories ("Python のテストコード"), the scopes intersect. Negated meanings (`-v`, `!`) are not asked. The
+  meaning is sent unchanged.
+- The question costs one small request per meaning, sent only when `-r` / `git semgrep` found something to
+  narrow, and after `-i`'s answer. `--dry-run` shows it as `[scope]`. Files named on the command line and stdin are
+  never narrowed, as with `--include`. `--no-scope` turns it off.
 
 ### As a git subcommand (`git semgrep`)
 

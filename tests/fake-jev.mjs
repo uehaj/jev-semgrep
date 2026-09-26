@@ -1,5 +1,7 @@
 // A stand-in for Jev, for tests/offline.sh. A line scores 0.05 unless it contains the meaning verbatim; then it
 // scores 0.9, or N when the line carries "@N" (e.g. "a cat @0.4"). "@drop" answers without a noul;
+// A scope question ("Does the meaning "M" restrict its matches to …?") scores 0.9 when M carries "@s:KEY" for that
+// question's key (e.g. "@s:l_python", "@s:t_yesterday"), else 0.05.
 // "@err" in any line fails the request with a 400 and a long body holding an escape sequence. Each request takes 30ms, so -j shows up.
 // GET returns {"count", "asked", "max", "auth", "model"}: judging requests and questions so far, most requests in flight at once, the last
 // authorization header and model; GET /reset also zeroes them. Prints the port it listens on.
@@ -27,6 +29,8 @@ const server = createServer(async (req, res) => {
     return res.end('bad\x1b[31m request ' + 'x'.repeat(1000));
   }
   for (const [k, { instructions }] of Object.entries(questions)) {
+    const t = instructions.match(/^Does the meaning "(.*)" restrict its matches to /s);
+    if (t) { answers[k] = { noul: new RegExp(`@s:${k}(?!\\w)`).test(t[1]) ? 0.9 : 0.05 }; continue; }
     const m = instructions.match(/^Does line (L\d+) match the meaning: "(.*)"\?$/s);
     const line = m ? state[m[1]] : '';
     if (String(line).includes('@drop')) { answers[k] = {}; continue; } // an answer without noul
