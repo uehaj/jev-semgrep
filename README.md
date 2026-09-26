@@ -167,6 +167,8 @@ to the narrowest:
 - **Which files.** `-r` skips `.git`, `node_modules`, binary files, likely secrets and what git ignores;
   [`git semgrep`](#as-a-git-subcommand-git-semgrep) searches tracked files only. `--include` / `--exclude`
   (file-name globs) and `--changed-within` (`30m`, `7d`, `today`, `this-week`, a date) narrow them further.
+  A meaning that restricts itself to a language or a time of change narrows them by itself: see
+  [Scope from the meaning](#scope-from-the-meaning).
 - **Which lines.** A [regex term](#regex-terms) is matched locally, and only the lines it holds for are asked
   its AND term's meanings. Blank lines are never sent.
 - **How many times.** [`--dedup`](#one-line-per-template---dedup) judges one line per template: lines that
@@ -383,6 +385,50 @@ so is a directory that git ignores, when you name it (`semgrep -r -e ... dist`).
 matching file once, in the order matches are found, and works with or without `-r`. `-c` prints the number of
 matching lines per file instead.
 
+### Scope from the meaning
+
+A meaning that restricts its matches to some kind of file can only match in such files. With `-r` and
+`git semgrep`, each meaning first asks Jev, in one small request, a yes / no per candidate, and a yes at 0.6 or
+more narrows the files before anything else is sent. The rest is never read or sent. Each scope is reported on
+stderr with Jev's answer, so a wrong one is visible:
+
+```sh
+$ semgrep -r -e 'Python でリトライ処理を書いている箇所' .
+semgrep: scope: *.py *.pyi *.pyw (from "Python files: 0.94")
+semgrep: scope: 12 of 340 files
+$ semgrep -r -e '昨日変えた箇所で認証を扱っている' src/
+semgrep: scope: modified since 2026-09-25 00:00 (from "what was changed yesterday: 0.91")
+semgrep: scope: 3 of 120 files
+```
+
+- **Language or format**: 26 candidates (Python, JavaScript, TypeScript, Go, Rust, Java, Kotlin, Ruby, PHP, C, C++,
+  C#, Swift, Scala, R, shell script, SQL, HTML, CSS, Markdown, YAML, JSON, TOML, XML, Dockerfile, Makefile), with
+  GitHub Linguist's extensions and file names. Several yes answers are alternatives ("JavaScript か TypeScript").
+- **Time of change**: 14 spans: the last minute, the last hour, today, yesterday, the last 1 / 2 / 3 / 7 / 30 days,
+  this month, last week, last month, the last year, this fiscal year (from April 1). The narrowest span answered
+  yes is taken, by its start only: a file changed yesterday may have been modified again today.
+- **Place**: test code (`tests/ test/ __tests__/ spec/ e2e/`, `test_*.py *_test.* *.test.* *.spec.* *Test.java
+  *_spec.rb`, and every `*.rs`: Rust keeps unit tests inside the file), database migrations (`*migrat*`, Flyway's
+  `V1__*.sql`), the README, the changelog (`CHANGELOG* CHANGES* HISTORY* NEWS*`), documentation (`*.md *.rst *.adoc
+  *.txt`, `docs/`), source code (whatever is not documentation, so languages missing from the dictionary still
+  count) and logs (`*.log *.log.N *.out *.err`, `logs/`), by the path conventions of JS, Python, Go, Java, Ruby, Rust
+  and PHP. Several places are alternatives ("README か CHANGELOG に").
+- **git**: in a repository, a time goes by commits: a committed file needs a commit at or after the start (the
+  committer date; a checkout sets every mtime to now), an uncommitted one its mtime. States: uncommitted (worktree
+  and index against HEAD, and untracked files), staged, untracked, this branch (since it left `origin/HEAD`, `main`
+  or `master`), not pushed (`@{upstream}..HEAD`, else commits on no remote branch), and mine (`user.email`'s
+  commits and the uncommitted files). Authors: the 30 with the most commits (`git shortlog`), each a candidate by
+  name and e-mail; a yes narrows to every file a commit of theirs touched. Outside a repository none of these is
+  asked, and a time goes by the mtime.
+- Jev reads the whole meaning, in any language: "案A、B、Cで比較" is not about C files, and a date quoted in a
+  comment is not when the file changed. Nothing is extracted from the text; the candidates are fixed.
+- **Per term.** `-e A -e B` still searches B in the files A's scope leaves out; within an AND term, and across
+  categories ("Python のテストコード"), the scopes intersect. Negated meanings (`-v`, `!`) are not asked. The
+  meaning is sent unchanged.
+- The question costs one small request per meaning, sent only when `-r` / `git semgrep` found something to
+  narrow, and after `-i`'s answer. `--dry-run` shows it as `[scope]`. As with `--include`, with `-r` a file named on
+  the command line and stdin are never narrowed, and `git semgrep`'s pathspecs are narrowed like the rest. `--no-auto-scope` turns it off (`--auto-scope` turns it back on).
+
 ### As a git subcommand (`git semgrep`)
 
 `npm install -g` also installs `git-semgrep`, so git runs it as `git semgrep`. Like `git grep`, it searches only
@@ -518,6 +564,26 @@ a meaning that keeps those kinds apart.
 The request's other lines are each line's context (#9), and `--dedup` changes them, so a line near the
 threshold can be judged differently than in a full pass.
 
+### A summary instead of the lines (`--summarize`)
+
+When many lines match, what you want is often the gist: what they say about the meaning you searched for.
+`--summarize` pipes what semgrep would print to `claude -p --model haiku` (no tools, no settings, no CLAUDE.md),
+asks it to summarize the lines as they bear on the meanings, and prints its answer instead of the lines.
+
+```sh
+$ semgrep -r -n --summarize -e "the API key is read from a file" .
+The key is read in semgrep.mjs:19 from ~/.config/semgrep/.env, never from ./.env (semgrep.mjs:16), ...
+```
+
+The expensive model reads only what Jev kept. Asking why `./.env` is no longer read of this repository's
+`git log` (168 commits), Claude's input fell from 22,059 tokens to 1,356, the total cost with Jev's from
+$0.094 to $0.013, with the same answer (#69). It pays when the answer sits in a few lines.
+
+- The matching lines leave the machine a second time, to Anthropic.
+- `-n`, `-A/-B/-C`, `-p` and file names go in as they would print; colors never do. No match runs nothing (exit 1).
+- `SEMGREP_SUMMARIZER` picks the TOOL of a bare `--summarize` (only `claude` so far), `SEMGREP_SUMMARIZER_MODEL` its model.
+- `-q`, `-l` and `-c` print no lines, so they cannot be combined with it.
+
 ## Use it from Claude Code
 
 There is a Claude Code skill that runs semgrep for you: describe what you are looking for in plain words
@@ -576,6 +642,8 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                (with -r a file named on the command line is always searched; git semgrep's pathspecs are filtered)
   --changed-within=WHEN  with -r and git semgrep, only files modified within 30m / 2h / 7d / 2w, since a date
                or date-time, today, this-week or this-month
+  --no-auto-scope  do not narrow those files by what a meaning says about them (see Scope from the meaning);
+               --auto-scope turns it back on
   -l           print only the names of files with a match, not the lines
   -H, --with-filename  prefix file names even for a single file; --no-filename never prefixes them
   -A NUM       print NUM lines of trailing context after each match (context lines use - as separator)

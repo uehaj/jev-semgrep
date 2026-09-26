@@ -155,7 +155,8 @@ Jev に送る行が増えるほど、費用も時間もかかります。いち�
 - **どのファイルを探すか。** `-r` は `.git`、`node_modules`、バイナリ、秘密情報らしいファイル、git が無視する
   ものを飛ばします。[`git semgrep`](#git-のサブコマンドとして-git-semgrep) は追跡しているファイルだけを探します。
   `--include` / `--exclude`（ファイル名のグロブ）と `--changed-within`（`30m`、`7d`、`today`、`this-week`、日付）で
-  さらに絞れます。
+  さらに絞れます。言語や変更時期を指定する意味は、それだけでファイルを絞ります
+  ([意味からの絞り込み](#意味からの絞り込み))。
 - **どの行を送るか。** [正規表現項](#正規表現項)はローカルで判定し、当たった行だけが同じ AND 項の意味を
   尋ねられます。空行は送りません。
 - **何回判定するか。** [`--dedup`](#テンプレートごとに-1-行だけ判定する---dedup) は、ID・数値・時刻・パスだけが
@@ -371,6 +372,49 @@ git リポジトリの中では、git が無視するもの（`.gitignore`、`.g
 ディレクトリも、名前を指定すれば検索します（`semgrep -r -e ... dist`）。
 `-l` は一致したファイルを見つかった順に 1 回ずつ表示し、`-r` の有無にかかわらず使えます。`-c` は行の代わりにファイルごとの一致行数を出します。
 
+### 意味からの絞り込み
+
+一致を特定の種類のファイルに限定している意味は、そういうファイルの中でしか当たりません。`-r` と
+`git semgrep` では、意味ごとにまず Jev へ小さなリクエストを 1 つ送り、候補ごとに yes / no を聞きます。0.6 以上で
+yes なら、ほかを送る前にファイルを絞ります。残りは読まず、送りもしません。絞り込みは Jev の答えとともに stderr
+に出るので、誤りに気づけます。
+
+```sh
+$ semgrep -r -e 'Python でリトライ処理を書いている箇所' .
+semgrep: scope: *.py *.pyi *.pyw (from "Python files: 0.94")
+semgrep: scope: 12 of 340 files
+$ semgrep -r -e '昨日変えた箇所で認証を扱っている' src/
+semgrep: scope: modified since 2026-09-25 00:00 (from "what was changed yesterday: 0.91")
+semgrep: scope: 3 of 120 files
+```
+
+- **言語・形式**: 26 の候補 (Python、JavaScript、TypeScript、Go、Rust、Java、Kotlin、Ruby、PHP、C、C++、C#、Swift、
+  Scala、R、シェルスクリプト、SQL、HTML、CSS、Markdown、YAML、JSON、TOML、XML、Dockerfile、Makefile)。拡張子と
+  ファイル名は GitHub Linguist による。複数に yes ならどれか (「JavaScript か TypeScript」)。
+- **変更時期**: 14 の区間。1 分以内、1 時間以内、今日、昨日、1・2・3・7・30 日以内、今月、先週、先月、この 1 年、
+  今年度 (4 月 1 日から)。yes のうちいちばん狭い区間を、その始まりだけで使います (昨日変えたファイルを今日また
+  変えることがあるため)。
+- **置き場所**: テストコード (`tests/ test/ __tests__/ spec/ e2e/`、`test_*.py *_test.* *.test.* *.spec.* *Test.java
+  *_spec.rb`、それに `*.rs` すべて。Rust は単体テストを同じファイルに書くため)、DB マイグレーション (`*migrat*`、
+  Flyway の `V1__*.sql`)、README、CHANGELOG (`CHANGELOG* CHANGES* HISTORY* NEWS*`)、文書 (`*.md *.rst *.adoc *.txt`、
+  `docs/`)、ソースコード (文書以外すべて。辞書に無い言語も含む)、ログ (`*.log *.log.N *.out *.err`、`logs/`)。
+  JS・Python・Go・Java・Ruby・Rust・PHP のパスの慣習で判定します。複数ならどれか (「README か CHANGELOG に」)。
+- **git**: リポジトリの中では、時期をコミットで見ます。コミット済みのファイルは始まり以降のコミットがあるもの
+  (コミッター日時。checkout は mtime をすべて今にしてしまうため)、未コミットのファイルは mtime。状態は、未コミット
+  (作業ツリーとインデックスの HEAD との差分と未追跡のファイル)、ステージ、未追跡、このブランチ (`origin/HEAD`・
+  `main`・`master` から分かれた点から)、未プッシュ (`@{upstream}..HEAD`、無ければどのリモートにも無いコミット)、
+  自分が書いた (`user.email` のコミットと未コミットのファイル)。作者は、コミットの多い 30 人 (`git shortlog`) を
+  名前とメールで候補にし、yes ならその人のコミットが触れたファイルに絞ります。リポジトリの外ではどれも聞かず、
+  時期は mtime で見ます。
+- Jev は意味全体を、どの言語でも読みます。「案A、B、Cで比較」は C のファイルの話にならず、コメントに引用された
+  日付はファイルを変えた日になりません。文面から何かを取り出すことはせず、候補は固定です。
+- **項ごとに効く。** `-e A -e B` は A の絞り込みで除いたファイルでも B を探します。同じ AND 項の中と、カテゴリを
+  またぐとき (「Python のテストコード」) は絞り込みが重なります。否定した意味 (`-v`、`!`) は聞きません。意味の
+  文面はそのまま送ります。
+- 問い合わせは意味 1 つにつき小さなリクエスト 1 つで、`-r` / `git semgrep` で絞れるファイルが見つかったとき
+  だけ、`-i` の答えの後に送ります。`--dry-run` では `[scope]` と表示します。`--include` と同じく、`-r` では
+  コマンドラインで指定したファイルと stdin は絞らず、`git semgrep` の pathspec は他と同じく絞ります。`--no-auto-scope` で止められます (`--auto-scope` で戻せます)。
+
 ### git のサブコマンドとして (`git semgrep`)
 
 `npm install -g` すると `git-semgrep` も入るので、`git semgrep` で呼べます。`git grep` と同じく git が追跡している
@@ -503,6 +547,26 @@ Jev に聞き、その種類はまとめません（上の 2 リクエストの�
 同じリクエストの他の行は各行の文脈になり（#9）、`--dedup` はそれを変えます。そのため閾値に近い行は、
 全行を送ったときと判定が変わることがあります。
 
+### 行の代わりに要約を出す (`--summarize`)
+
+一致した行が多いとき、欲しいのはたいてい要旨、つまりそれらの行が探した意味について何を言っているかです。
+`--summarize` は semgrep が出力するはずの内容を `claude -p --model haiku`（ツールなし・設定なし・CLAUDE.md なし）に渡し、
+意味に照らして要約させ、行の代わりにその答えを表示します。
+
+```sh
+$ semgrep -r -n --summarize -e "API キーをファイルから読んでいる" .
+キーは semgrep.mjs:19 で ~/.config/semgrep/.env から読み、./.env は読みません (semgrep.mjs:16)。...
+```
+
+高いモデルは Jev が残した分しか読みません。このリポジトリの `git log`（168 コミット）に「なぜ `./.env` を読まなくなったか」
+を尋ねた例では、Claude の入力が 22,059 トークンから 1,356 に、Jev を含む総額が $0.094 から $0.013 に下がり、答えは同じでした（#69）。
+答えが少数の行にあるときに効きます。
+
+- 一致した行はもう一度マシンの外へ、Anthropic に送られます。
+- `-n`・`-A/-B/-C`・`-p`・ファイル名は表示どおりに渡し、色は付けません。一致がなければ何も渡しません（終了コード 1）。
+- `SEMGREP_SUMMARIZER` は値を付けない `--summarize` の TOOL を（今は `claude` だけ）、`SEMGREP_SUMMARIZER_MODEL` はそのモデルを決めます。
+- `-q`・`-l`・`-c` は行を出さないので、一緒には使えません。
+
 ## Claude Code から使う
 
 semgrep を代わりに走らせてくれる Claude Code のスキルがあります。探したいものを言葉で書くと、式を組み立てて
@@ -561,6 +625,7 @@ usage: semgrep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [
                (-r ではコマンドラインで指定したファイルは必ず探す。git semgrep の pathspec は絞り込む)
   --changed-within=WHEN  -r と git semgrep で、30m / 2h / 7d / 2w 以内、日付か日時以降、today / this-week /
                this-month に更新したファイルだけを探す
+  --no-auto-scope  意味の文面からファイルを絞り込まない (意味からの絞り込みを参照)。--auto-scope で戻す
   -l           一致した行ではなくファイル名だけを表示
   -H, --with-filename  1 ファイルでもファイル名を付ける。--no-filename は常に付けない
   -A NUM       一致行の後ろ NUM 行も表示 (grep と同じ。文脈行の区切りは - )
