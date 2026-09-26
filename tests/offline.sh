@@ -480,9 +480,18 @@ rm -f "$tmp/sum.in"; code 1 "--summarize, no match" -- $S --summarize -e zebra "
 [ ! -e "$tmp/sum.in" ] || fail "--summarize runs the summarizer with no match"
 code 2 "--summarize, summarizer fails" -- env SUM_EXIT=3 $S --summarize -e cat "$F"
 code 2 "--summarize, an unreadable file" -- $S --summarize -e cat "$F" "$tmp/none"
+# --summarize-format (#122): each format asks for itself, plain when none is given; the sentence follows the fixed part
+$S --summarize -e cat "$F" >/dev/null; tail -1 "$tmp/sum.argv" | grep -q 'Cite file:line when the lines carry them\. Answer in plain text: no Markdown' || fail "--summarize asks for plain by default: $(tail -1 "$tmp/sum.argv")"
+$S --summarize --summarize-format=markdown -e cat "$F" >/dev/null; tail -1 "$tmp/sum.argv" | grep -q 'them\. Answer in Markdown\.$' || fail "--summarize-format=markdown: $(tail -1 "$tmp/sum.argv")"
+$S --summarize --summarize-format=html -e cat "$F" >/dev/null; tail -1 "$tmp/sum.argv" | grep -q 'them\. Answer with one complete HTML document and nothing outside it\.$' || fail "--summarize-format=html: $(tail -1 "$tmp/sum.argv")"
+eq "$($E PATH=$tmp/bin:$PATH SUM=$tmp/sum SYS1GREP_OPTS=--summarize-format=html SYS1GREP_URL=$base/v1 node ../sys1grep.mjs --summarize -e cat "$F" && grep -c 'HTML document' "$tmp/sum.argv")" "SUMMARY
+1" "--summarize-format in SYS1GREP_OPTS"
+eq "$($E PATH=$tmp/bin:$PATH SYS1GREP_OPTS=--summarize-format=html SYS1GREP_URL=$base/v1 node ../sys1grep.mjs -c -e cat "$F")" "2" "--summarize-format in SYS1GREP_OPTS, no --summarize: ignored"
 reset
 for o in -q -l -c; do code 2 "--summarize with $o" -- $S --summarize $o -e cat "$F"; done
 code 2 "--summarize=unknown" -- $S --summarize=nope -e cat "$F"
+code 2 "--summarize-format=unknown" -- $S --summarize --summarize-format=rtf -e cat "$F"
+code 2 "--summarize-format without --summarize" -- $S --summarize-format=markdown -e cat "$F"
 code 2 "SYS1GREP_SUMMARIZER=unknown" -- env SYS1GREP_SUMMARIZER=nope $S --summarize -e cat "$F"
 code 2 "--summarize, claude not on PATH" -- $E PATH=/usr/bin:/bin SYS1GREP_URL=$base/v1 "$(command -v node)" ../sys1grep.mjs --summarize -e cat "$F"
 code 2 "--summarize in SYS1GREP_OPTS" -- $E PATH=$tmp/bin:$PATH SYS1GREP_OPTS=--summarize SYS1GREP_URL=$base/v1 node ../sys1grep.mjs -e cat "$F"
@@ -528,7 +537,7 @@ case $out in *'summarizingwithclaude'*'033[KSUMMARY'*) ;; *) fail "spinner while
 # --help: exit 0, Japanese by locale, lists the options
 code 0 "--help" -- $E LANG=C node ../sys1grep.mjs --help
 eq "$($E LANG=C node ../sys1grep.mjs -h | head -1 | cut -c1-15)" "usage: sys1grep" "-h"
-for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename' '--summarize'; do
+for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename' '--summarize' '--summarize-format'; do
   $E LANG=C node ../sys1grep.mjs --help | grep -q -- "$o" || fail "--help lacks $o"
 done
 $E LANG=C node ../sys1grep.mjs --help | grep -q 'grep by meaning' || fail "--help in English"
