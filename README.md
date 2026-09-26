@@ -181,13 +181,28 @@ to the narrowest:
   its AND term's meanings. Blank lines are never sent.
 - **How many times.** [`--dedup`](#one-line-per-template---dedup) judges one line per template: lines that
   differ only in ids, numbers, times or paths share one answer.
-- **Check before paying.** `--dry-run` sends nothing and prints the files, how many lines each would send and
-  every request with its questions. Its last line estimates the input tokens and, for TypeSafe itself, the price
-  (`~3178 input tokens, ~$0.000133`; within about 10%). `-i` shows the same totals on the terminal and sends only
-  after `y`.
+- **Check before paying.** `--dry-run` sends nothing and prints the settings the search would run with, the
+  files, how many lines each would send and every request with its questions. Its last line estimates the input
+  tokens and, for TypeSafe itself, the price (`~3178 input tokens, ~$0.000133`; within about 10%). `-i` shows the
+  same totals on the terminal and sends only after `y`.
 
 ```sh
 $ sys1grep --dry-run -r --include='*.log' --changed-within=today -e '/ERROR|FATAL/' -a 'a customer is affected' logs/
+```
+
+`--verbose` (or `--dry-run`) also shows *where* a setting that was not typed on the command line came from
+(`SYS1GREP_OPTS`, an environment variable, `~/.config/sys1grep/.env`, or a preset's default), so a result that
+surprises you can be traced back to its source. The key's value never appears, only which option or variable
+supplied it:
+
+```sh
+$ SYS1GREP_OPTS='--level strict' sys1grep --verbose -e "the API key is read from a file" .
+sys1grep: endpoint api.typesafe.ai/v1/systemone (default), model jev-latest (default)
+sys1grep: key: SYS1GREP_API_KEY (~/.config/sys1grep/.env)
+sys1grep: SYS1GREP_OPTS: --level strict
+sys1grep: options: --level strict (SYS1GREP_OPTS) = -t 0.7 -T 0.3, --chunk 30, -j 8, scope on
+sys1grep: file ./a.py: 120 lines, 120 to send
+…
 ```
 
 ## Install
@@ -674,7 +689,8 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
   --sentence[=HOW] judge each sentence instead of each line; HOW is jev (default) or rules (see "One sentence at a time" above)
   -o           with --sentence, print only the matching sentences
   -p           print each meaning's probability at the end of the line
-  --dry-run    send nothing; print the endpoint, each file searched and each request with its questions
+  --dry-run    send nothing; print the settings the search would run with (and their source, when not the
+               command line), each file searched and each request with its questions
   --verbose    print the same to stderr while searching
   -i, --interactive  show what --dry-run would send, and search only after y on the terminal
   --dedup      judge one line per template and reuse its answer for the rest (see "One line per template" above)
