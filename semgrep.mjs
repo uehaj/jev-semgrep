@@ -556,8 +556,10 @@ function roleScope(text) {
 // in local time to [from, to). A file changed in it was modified at or after from; the mtime cannot say more, since
 // a later change moves it. "Before" / "until" and vague words (最近, recently) give no scope.
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+// Whole words only ("separator" is not September); longest first, so "sept" is not read as "sep" + "t".
+const MONTH_NAMES = 'january|february|march|april|june|july|august|september|sept|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
 const NUMS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
-const UNIT_MS = { 分: 6e4, minute: 6e4, 時間: 36e5, hour: 36e5, 日: 864e5, day: 864e5, 週: 6048e5, 週間: 6048e5, week: 6048e5, か月: 2592e6, month: 2592e6 };
+const UNIT_MS = { 分: 6e4, minute: 6e4, 時間: 36e5, hour: 36e5, 日: 864e5, day: 864e5, 週: 6048e5, 週間: 6048e5, week: 6048e5, か月: 26784e5, month: 26784e5 };
 const TIME_WORDS = [ // [pattern, (match, midnight today) -> [from, to]]; the first pattern that matches wins
   [/一昨日|おととい|the day before yesterday/i, (m, d) => [d - 2 * 864e5, d - 864e5]],
   [/昨日|きのう|yesterday/i, (m, d) => [d - 864e5, d]],
@@ -570,10 +572,12 @@ const TIME_WORDS = [ // [pattern, (match, midnight today) -> [from, to]]; the fi
   [/(去年|昨年|今年|last year|this year)/i, (m, d) => { const y = new Date(d).getFullYear() - (/今|this/i.test(m[1]) ? 0 : 1); return [new Date(y, 0, 1).getTime(), new Date(y + 1, 0, 1).getTime()]; }],
   [/(?:ここ|過去|直近)\s*(\d+)\s*(分|時間|日|週間?|か月|ヶ月|カ月|ヵ月)|(\d+)\s*(分|時間|日|週間?|か月|ヶ月|カ月|ヵ月)\s*(?:以内|の間)|(?:last|past|within)\s+(?:the\s+)?(\d+|an?|one|two|three|four|five|six|seven|eight|nine|ten)\s+(minute|hour|day|week|month)s?/i,
     m => { const n = m[1] ?? m[3] ?? m[5], u = (m[2] ?? m[4] ?? m[6]).replace(/[ヶカヵ]月/, 'か月').toLowerCase(); return [Date.now() - (NUMS[n.toLowerCase()] ?? +n) * UNIT_MS[u], Infinity]; }],
-  [/(\d+)\s*日前|(\d+|an?|one|two|three|four|five|six|seven|eight|nine|ten)\s+days?\s+ago/i, (m, d) => { const n = m[1] ?? m[2]; return [d - (NUMS[n.toLowerCase()] ?? +n) * 864e5, Infinity]; }],
+  [/(\d+)\s*日前(?!後)|(\d+|an?|one|two|three|four|five|six|seven|eight|nine|ten)\s+days?\s+ago/i, (m, d) => { const n = m[1] ?? m[2]; return [d - (NUMS[n.toLowerCase()] ?? +n) * 864e5, Infinity]; }],
   // A date, or a month; with 以降 / から / since / after it opens to now. Without a year it is the latest one not in the future.
-  [new RegExp(String.raw`(?:(?:since|after|from)\s+)?(?:(\d{4})[-/](\d{1,2})(?:[-/](\d{1,2}))?(?![-/\d])|(?:(\d{4})\s*年\s*)?(\d{1,2})\s*月(?:\s*(\d{1,2})\s*日)?|(?:in\s+)?\b(${MONTHS.join('|')})[a-z]*\.?(?:\s+(\d{1,2})(?:st|nd|rd|th)?\b)?(?:,?\s+(\d{4}))?)(\s*(?:以降|から|より後))?`, 'i'),
+  [new RegExp(String.raw`(?:(?:since|after|from)\s+)?(?:(\d{4})[-/](\d{1,2})(?:[-/](\d{1,2}))?(?![-/\d])|(?:(\d{4})\s*年\s*)?(\d{1,2})\s*月(?:\s*(\d{1,2})\s*日)?|(?:(?:in|during)\s+)?\b(${MONTH_NAMES})\.?(?![a-z])(?:\s+(\d{1,2})(?:st|nd|rd|th)?\b)?(?:,?\s+(\d{4}))?)(\s*(?:以降|から|より後))?`, 'i'),
     (m, d) => {
+      // A month name alone needs in / since / ...: "may" is also a verb, "march" and "mar" too
+      if (m[7] && !m[8] && !m[9] && !/^(since|after|from|in|during)\s/i.test(m[0])) return null;
       const y = +(m[1] ?? m[4] ?? m[9] ?? 0), mo = +(m[2] ?? m[5] ?? MONTHS.indexOf(m[7]?.slice(0, 3).toLowerCase()) + 1) - 1, day = +(m[3] ?? m[6] ?? m[8] ?? 0);
       const at = yy => day ? [new Date(yy, mo, day).getTime(), new Date(yy, mo, day + 1).getTime()] : [new Date(yy, mo, 1).getTime(), new Date(yy, mo + 1, 1).getTime()];
       let r = at(y || new Date(d).getFullYear());
@@ -593,7 +597,8 @@ function timeScope(text) {
     const near = new RegExp(`^[^、。,.!?]{0,8}?${CHANGE_JA}`).test(after) || new RegExp(`^(?:'s)?\\s+(?:changes|commits|edits)\\b`, 'i').test(after)
       || new RegExp(`${CHANGE_EN}(?:\\s+\\S+){0,3}?\\s+$`, 'i').test(before);
     if (!near) return null;
-    const [from] = span(m, new Date().setHours(0, 0, 0, 0));
+    const [from] = span(m, new Date().setHours(0, 0, 0, 0)) ?? [];
+    if (from === undefined) return null;
     const fmt = ms => new Date(ms - new Date(ms).getTimezoneOffset() * 6e4).toISOString().slice(0, 16).replace('T', ' ');
     return { label: `modified since ${fmt(from)}`, words: [t], test: (f, st) => st.mtimeMs >= from };
   }
