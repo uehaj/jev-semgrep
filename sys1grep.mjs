@@ -886,7 +886,7 @@ const MAX_UNIT_CHARS = opt.z ? 8000 : 2000;
 // and files that usually hold secrets (.env*, credential files, keys, .ssh/.aws/.gnupg/.kube/.docker). A file named
 // explicitly is still sent. Case-insensitive: macOS file systems are, so .ENV is .env there.
 const SKIP_DIRS = ['.git', 'node_modules', '.ssh', '.aws', '.gnupg', '.kube', '.docker'];
-const SKIP_FILE = /^\.env|^\.(netrc|npmrc|pypirc|pgpass|git-credentials)$|\.(pem|key|p12|pfx|jks|keystore)$|^id_(rsa|dsa|ecdsa|ed25519)/i;
+const SKIP_FILE = /^\.env|^\.(netrc|npmrc|pypirc|pgpass|git-credentials)(\.gz)?$|\.(pem|key|p12|pfx|jks|keystore)(\.gz)?$|^id_(rsa|dsa|ecdsa|ed25519)/i; // .gz too: it is read decompressed (#68)
 let hadError = false;
 const warned = []; // what warn printed, so -i does not repeat it from its dry run
 const warn = (file, e) => { const m = `sys1grep: ${safe(file)}: ${safe(e.message)}`; warned.push(m); console.error(m); hadError = true; };

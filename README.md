@@ -403,7 +403,8 @@ you mean to scan. Inside a git repository, `-r` also skips what git ignores (`.g
 global excludes file), so build output and local files stay home; a tracked file is searched even if it matches.
 A file named `*.gz` (a rotated log: `app.log.1.gz`) is read decompressed, as `zgrep` does, and printed by its
 name on disk (`app.log.1.gz:12:...`); `--include='*.gz'` picks those, the binary sniff sees the decompressed
-bytes, and a corrupt `.gz` is an unreadable file (exit 2). Only gzip, only by the name.
+bytes, a gzipped secret (`private.key.gz`) is skipped like the plain one, and a corrupt `.gz` is an unreadable file.
+Only gzip, only by the name.
 A file named explicitly on the command line is always searched, even if it matches the skip list or is ignored;
 so is a directory that git ignores, when you name it (`sys1grep -r -e ... dist`). `-l` prints each
 matching file once, in the order matches are found, and works with or without `-r`. `-c` prints the number of

@@ -250,6 +250,8 @@ eq "$($J -n -e cat "$tmp/gz/a.log.1.gz" | nums)" "1 4 " "a .gz is searched decom
 eq "$($J -H -c -e cat "$tmp/gz/a.log.1.gz")" "$tmp/gz/a.log.1.gz:2" "-c counts the decompressed lines under the .gz name"
 eq "$($J -rl -e cat --include='*.gz' "$tmp/gz")" "$tmp/gz/a.log.1.gz" "--include sees the .gz name"
 eq "$($J -rl -e cat --include='*.log' "$tmp/gz")" "" "--include='*.log' does not match a.log.1.gz"
+gzip -c "$F" >"$tmp/gz/private.key.gz"; gzip -c "$F" >"$tmp/gz/.netrc.gz"
+eq "$($J -rl -e cat "$tmp/gz")" "$tmp/gz/a.log.1.gz" "-r still skips a gzipped secret (private.key.gz, .netrc.gz)"
 reset; eq "$($J -e cat "$tmp/gz/bin.gz" 2>&1)" "sys1grep: $tmp/gz/bin.gz: binary file skipped" "a gzipped binary is skipped"
 eq "$(stat count)" "0" "nothing is sent from a gzipped binary"
 code 2 "a corrupt .gz" -- $J -e cat "$tmp/bad.gz"
