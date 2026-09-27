@@ -172,7 +172,7 @@ $ ./sys1grep -o -n -e '/[A-Z]+-\d+/' -a 'the ticket is still open' notes.txt   #
 Every line sent to Jev costs money and time, so the cheapest line is the one never sent. From the widest cut
 to the narrowest:
 
-- **Which files.** `-r` skips `.git`, `node_modules`, binary files, likely secrets and what git ignores (`.gz` is read decompressed);
+- **Which files.** `-r` skips `.git`, `node_modules`, binary files, likely secrets and what git ignores;
   [`git sys1grep`](#as-a-git-subcommand-git-sys1grep) searches tracked files only. `--include` / `--exclude`
   (file-name globs) and `--changed-within` (`30m`, `7d`, `today`, `this-week`, a date) narrow them further.
   A meaning that restricts itself to a language or a time of change narrows them by itself: see
