@@ -491,7 +491,10 @@ eq "$($E PATH=$tmp/bin:$PATH SUM=$tmp/sum SYS1GREP_OPTS=--summarize-format=html 
 eq "$($E PATH=$tmp/bin:$PATH SYS1GREP_OPTS=--summarize-format=html SYS1GREP_URL=$base/v1 node ../sys1grep.mjs -c -e cat "$F")" "2" "--summarize-format in SYS1GREP_OPTS, no --summarize: ignored"
 reset
 for o in -q -l -c; do code 2 "--summarize with $o" -- $S --summarize $o -e cat "$F"; done
-for v in nope constructor toString __proto__; do code 2 "--summarize=$v" -- $S --summarize=$v -e cat "$F"; done
+for v in nope constructor toString __proto__; do # the message too: an inherited name used to fail later, also with exit 2
+  code 2 "--summarize=$v" -- $S --summarize=$v -e cat "$F"
+  $S --summarize=$v -e cat "$F" 2>&1 | grep -q '^sys1grep: --summarize must be one of' || fail "--summarize=$v: $($S --summarize=$v -e cat "$F" 2>&1 | head -1)"
+done
 for f in rtf constructor toString __proto__; do code 2 "--summarize-format=$f" -- $S --summarize --summarize-format=$f -e cat "$F"; done
 code 2 "--summarize-format without --summarize" -- $S --summarize-format=markdown -e cat "$F"
 code 2 "SYS1GREP_SUMMARIZER=unknown" -- env SYS1GREP_SUMMARIZER=nope $S --summarize -e cat "$F"
