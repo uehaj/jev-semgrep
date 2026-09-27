@@ -494,7 +494,7 @@ eq "$(gn -e 'cat @s:l_python' b.js)" "" "-g: no language in the note when FILE p
 code 2 "-g with -r" -- sh -c "cd '$L' && $JI -g -r -e cat"
 # item 2 (owner 2026-09-27): -g's commits stay out of --max-filesize (each is already bounded by -M at send time),
 # so a tiny --max-filesize still searches every commit, none skipped.
-eq "$(gl --max-filesize 1 -e cat)" "newpy newjs oldpy " "-g: a tiny --max-filesize still searches every commit"
+eq "$(gl --max-filesize 1 -e cat)" "newpy newjs midn yday oldpy " "-g: a tiny --max-filesize still searches every commit"
 eq "$(cd "$L" && $JI -g --max-filesize 1 -e cat 2>&1 >/dev/null | grep -c 'skipped, .* is over --max-filesize' || true)" "0" "-g: no commit is reported skipped"
 eq "$(gs g_branch)" "dirty.txt feat.txt staged.txt untr.txt " "git scope: this branch"
 eq "$(gs g_unpushed)" "dirty.txt feat.txt new.txt old.txt " "git scope: unpushed, no remote"
