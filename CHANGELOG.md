@@ -18,7 +18,10 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   `-i` already asks unconditionally and earlier, so this does not ask again; `--dry-run` and `-i` show the same
   verdict. `-M`/`--max-columns` (default 2000, 8000 with `-z`) is unchanged from before this PR: it bounds only
   what is sent, truncating a unit to its first NUM characters; the unit is still searched and judged on that
-  truncated text.
+  truncated text. Standard input is sized once it is read (it is already read whole into memory), and skipped
+  the same way as a file (`sys1grep: -: skipped, 190 KB is over --max-filesize=10K`), nothing from it sent.
+  `-g`'s commits stay out of `--max-filesize` (each is already bounded by `-M` at send time). `-q` combined with
+  `--max-cost` and no terminal is unchanged: still an exit-2 stop (scripts pass `-y`).
 - `--verbose` / `--dry-run` print the settings the search ran with, before the per-file lines: the endpoint and
   model, the key (the variable or option name only, never its value), `SYS1GREP_OPTS` (when set), the effective
   thresholds / `--chunk` / `-j` / `--sentence` / `--dedup` / `-z` / scope on-or-off / `--include` / `--exclude` /

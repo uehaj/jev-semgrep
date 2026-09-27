@@ -187,9 +187,11 @@ to the narrowest:
   tokens and, for TypeSafe itself, the price (`~3178 input tokens, ~$0.000133`; within about 10%). `-i` shows the
   same totals on the terminal and sends only after `y`.
   Before the bulk of requests, every target is sized (`--max-filesize`, default 10M); one over it is skipped
-  outright, like `rg`'s own `--max-filesize`, named on stderr (`-y` does not affect it). The input about to be
-  sent is priced too (`--max-cost`, default 1 USD); over it, one question asks to continue on the terminal, `-y`
-  answers it yes, and without a terminal it is exit 2.
+  outright, like `rg`'s own `--max-filesize`, named on stderr (`-y` does not affect it). stdin is sized once it
+  is read (it is already in memory), and skipped the same way if it is over; `-g`'s commits stay out of this,
+  since each is already bounded by `-M` when it is sent. The input about to be sent is priced too (`--max-cost`,
+  default 1 USD); over it, one question asks to continue on the terminal, `-y` answers it yes, and without a
+  terminal it is exit 2 (this applies with `-q` too — scripts pass `-y`).
 
 ```sh
 $ sys1grep --dry-run -r --include='*.log' --changed-within=today -e '/ERROR|FATAL/' -a 'a customer is affected' logs/
@@ -733,10 +735,11 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
   -M NUM, --max-columns=NUM  send at most the first NUM characters of a line (or record, with -z); still
                searched and judged, just not past that cutoff (default 2000, 8000 with -z)
   --max-filesize=SIZE  size every target first (K/M/G, default 10M); over it, skip it outright, like rg's own
-               --max-filesize (-y does not affect it)
+               --max-filesize (-y does not affect it). stdin is sized once read, and skipped the same way if
+               it is over; -g's commits stay out of this (each is already bounded by -M when sent)
   --max-cost=USD  price the input about to be sent; over it (default 1), ask to continue on the terminal; -y
-               answers yes without asking; no terminal and the limit exceeded is exit 2 (-i already asks
-               unconditionally and earlier, so this does not ask again)
+               answers yes without asking; no terminal and the limit exceeded is exit 2, unchanged by -q
+               (scripts pass -y); -i already asks unconditionally and earlier, so this does not ask again
   --dedup      judge one line per template and reuse its answer for the rest (see "One line per template" above)
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are

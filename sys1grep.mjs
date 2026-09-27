@@ -233,11 +233,13 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                (8000 with -z)
   --max-filesize=SIZE  before any file is read, every target is sized (K/M/G suffix, default 10M); one
                over this is skipped outright and named on stderr, like rg's own --max-filesize. -y does
-               not affect it (a named file over the limit is skipped too)
+               not affect it (a named file over the limit is skipped too). stdin is sized once it is
+               read, and skipped the same way if it is over. -g's commits stay out of this: each is
+               already bounded by -M when sent
   --max-cost=USD  the input tokens about to be sent are estimated and priced; over this (default 1) the
                run asks to continue, on the terminal. No terminal and the limit exceeded is exit 2,
-               naming the option that would let it through. -i already asks unconditionally and earlier,
-               so this does not ask again
+               naming the option that would let it through; -q does not change this (scripts pass -y).
+               -i already asks unconditionally and earlier, so this does not ask again
   -y, --yes    answer that question yes without asking (SYS1GREP_OPTS='--max-cost ... -y' for scripts)
   --dedup      judge one line per template instead of every line. Lines that differ only in ids, hashes,
                numbers, dates and times, paths and URLs share a template; one of them is sent and its answer
@@ -396,9 +398,12 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                される (NUM より先にある一致だけは見つからない)。既定 2000 (-z なら 8000)
   --max-filesize=SIZE  ファイルを読む前に、検索対象を 1 つずつ計測する
                (K/M/G の接尾辞、既定 10M)。これを超えるものは rg の --max-filesize と同じく無条件に飛ばし、
-               stderr に名前を出す。-y は効かない (明示的に指定したファイルでも超えていれば飛ばす)
+               stderr に名前を出す。-y は効かない (明示的に指定したファイルでも超えていれば飛ばす)。
+               標準入力は読んでから計測し、超えていれば同じく飛ばす。-g のコミットはここに含まれない
+               (送るときに -M ですでに上限がある)
   --max-cost=USD  送る予定の入力トークンを見積もって値段を出す。これ (既定 1) を超えたら端末で続けるか
                聞く。端末が無く上限を超えていれば終了コード 2 で、どのオプションを緩めれば通るかを言う。
+               -q でも変わらない (スクリプトからは -y)。
                -i は無条件かつこれより前に聞くので、二重には聞かない
   -y, --yes    その質問に yes と答えて聞かない (スクリプトからは SYS1GREP_OPTS='--max-cost ... -y')
   --dedup      全行ではなくテンプレートごとに 1 行だけ判定する。ID・ハッシュ・数値・日付と時刻・パス・
@@ -1214,12 +1219,13 @@ const spansOf = new Map(); // file -> spans of each sentence (--sentence only)
 const allLines = [], unitCount = new Map();
 const read = new Map(); // file -> units as read (lines, or records with -z)
 for (const file of targets) {
-  // #58 / #125 review: every target is sized before it is read (git log's own commits, opt.gitlog, have none);
-  // one over --max-filesize is skipped outright, like rg, and named on stderr even with -q's own file (unlike the
-  // binary-file message below, which only speaks up for a file named on the command line). -y does not affect it.
-  if (file !== '-' && file !== GITLOG) {
-    let size;
-    try { size = statSync(file).size; } catch { size = null; }
+  // #58 / #125 review: every target is sized before it is read (git log's own commits, opt.gitlog, have none,
+  // and stay out of --max-filesize: each is already bounded by -M at send time). stdin is read whole already
+  // (see stdinBuf above), so it is sized from that buffer instead of stat'd. One over --max-filesize is skipped
+  // outright, like rg, and named on stderr even with -q's own file (unlike the binary-file message below, which
+  // only speaks up for a file named on the command line). -y does not affect it.
+  if (file !== GITLOG) {
+    const size = file === '-' ? (stdinBuf?.length ?? null) : (() => { try { return statSync(file).size; } catch { return null; } })();
     if (size != null && size > MAX_FILESIZE) {
       console.error(`sys1grep: ${safe(file)}: skipped, ${fmtSize(size)} is over --max-filesize=${opt['max-filesize'] ?? '10M'}`);
       continue;

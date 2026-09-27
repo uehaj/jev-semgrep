@@ -407,6 +407,10 @@ gn() { (cd "$L" && $JI -g --verbose "$@" 2>&1 >/dev/null) | grep '^sys1grep:   n
 eq "$(gn -e 'cat @s:t_today @s:l_python')" "sys1grep:   note: every record here is from Python files, what was changed today." "-g: the note names the scopes git log took"
 eq "$(gn -e 'cat @s:l_python' b.js)" "" "-g: no language in the note when FILE pathspecs replaced it"
 code 2 "-g with -r" -- sh -c "cd '$L' && $JI -g -r -e cat"
+# item 2 (owner 2026-09-27): -g's commits stay out of --max-filesize (each is already bounded by -M at send time),
+# so a tiny --max-filesize still searches every commit, none skipped.
+eq "$(gl --max-filesize 1 -e cat)" "newpy newjs oldpy " "-g: a tiny --max-filesize still searches every commit"
+eq "$(cd "$L" && $JI -g --max-filesize 1 -e cat 2>&1 >/dev/null | grep -c 'skipped, .* is over --max-filesize' || true)" "0" "-g: no commit is reported skipped"
 eq "$(gs g_branch)" "dirty.txt feat.txt staged.txt untr.txt " "git scope: this branch"
 eq "$(gs g_unpushed)" "dirty.txt feat.txt new.txt old.txt " "git scope: unpushed, no remote"
 eq "$(cd "$G" && $GS -l -e 'cat @s:g_staged' 2>/dev/null | tr '\n' ' ')" "staged.txt " "git scope: git sys1grep"
@@ -553,6 +557,12 @@ eq "$(stat count)" "0" "nothing is sent for a skipped file"
 $J --max-filesize 10K -e cat "$tmp/huge.txt" </dev/null 2>&1 >/dev/null | grep -q -- "$tmp/huge.txt: skipped, .* is over --max-filesize=10K" || fail "the message names the file, the size and the option"
 reset; code 1 "-y does not un-skip an oversized file" -- $J -y --max-filesize 10K -e cat "$tmp/huge.txt" </dev/null
 code 2 "--max-filesize, not a size" -- $J --max-filesize nope -e cat "$F"
+# item 1 (owner 2026-09-27): stdin is sized after it is read (it is already in memory), and skipped the same way
+# as a file, named `-` on stderr, nothing from it sent.
+reset; code 1 "oversized stdin is skipped: no match" -- sh -c "$J --max-filesize 10K -e cat < '$tmp/huge.txt'"
+eq "$(stat count)" "0" "nothing is sent from a skipped stdin"
+sh -c "$J --max-filesize 10K -e cat < '$tmp/huge.txt'" 2>&1 >/dev/null | grep -q -- "^sys1grep: -: skipped, .* is over --max-filesize=10K" || fail "the message names stdin as -, the size and the option"
+reset; eq "$(sh -c "$J -n -e cat < '$F'" | nums)" "1 4 " "stdin under --max-filesize is still searched"
 # --max-cost 0: any estimated price is over it, so even ordinary input asks; --max-filesize's own skip above never
 # asks, so a run now shows at most this one question (item 8, now moot: see the PR body)
 reset; code 2 "--max-cost 0, no terminal" -- sh -c "$J --max-cost 0 -e cat '$F' </dev/null"
