@@ -912,13 +912,15 @@ const scopeQuestions = text => Object.fromEntries(CANDIDATES.map(c => [c.key, { 
 const SCOPE_AT = 0.6; // a candidate counts at this or more (see the top of auto-scope)
 // Jev's answers -> one scope per category that got a yes: { label, words, names, cs, test } (names: for --verbose;
 // cs: its candidates, for the judging requests' note and -g's git log arguments)
-// Of the time spans answered yes, the one with the latest start; but a span with an end beats a rolling one that
-// starts inside it (yesterday over "the last 24 hours": Jev says yes to both for 昨日, and the rolling start moves with
-// the clock, #120). Of several such, again the latest start.
+// Of the time spans answered yes, the one with the latest start; but a span with an end beats a rolling one of about
+// the same length that starts inside it (yesterday over "the last 24 hours": Jev says yes to both for 昨日, and the
+// rolling start moves with the clock, #120). Not a much longer one: last month over "the last 7 days" would stretch
+// the search. Of several such, again the latest start.
 function pickTime(cs) {
-  const narrowest = cs.reduce((a, b) => (b.from > a.from ? b : a));
-  const around = cs.filter(c => c.to && c.from <= narrowest.from && narrowest.from < c.to);
-  return around.length ? around.reduce((a, b) => (b.from > a.from ? b : a)) : narrowest;
+  const latest = xs => xs.reduce((a, b) => (b.from > a.from ? b : a)), len = c => (c.to ?? NOW) - c.from;
+  const narrowest = latest(cs);
+  const around = cs.filter(c => c.to && c.from <= narrowest.from && narrowest.from < c.to && len(c) < 1.25 * len(narrowest));
+  return around.length ? latest(around) : narrowest;
 }
 function scopesOf(answers) {
   const yes = CANDIDATES.filter(c => answers[c.key].noul >= SCOPE_AT), out = [];

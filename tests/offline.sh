@@ -433,7 +433,7 @@ eq "$(grep -c shortlog "$tmp/git.log" || true)" "0" "auto-scope: no git for nega
 : >"$tmp/git.log"; PATH="$tmp/gitwrap:$PATH" $JI -r -c -e cat "$G" >/dev/null
 [ "$(grep -c shortlog "$tmp/git.log")" -ge 1 ] || fail "auto-scope: git asked when a meaning can scope"
 # -g: git log's commits, one record each; auto-scope becomes git log arguments. Every commit carries every meaning.
-L="$tmp/gitlog"; mkdir -p "$L"; LM=$(printf '%s\n' 'cat @s:t_today' 'cat @s:l_python' 'cat @s:a_a_x' 'cat @s:g_mine' 'cat @s:t_today @s:l_python' 'cat @s:t_yesterday' 'cat @s:t_yesterday @s:t_day1' 'cat @s:t_yesterday @s:t_day7' 'cat @s:t_today @s:t_yesterday' 'cat @s:t_day1')
+L="$tmp/gitlog"; mkdir -p "$L"; LM=$(printf '%s\n' 'cat @s:t_today' 'cat @s:l_python' 'cat @s:a_a_x' 'cat @s:g_mine' 'cat @s:t_today @s:l_python' 'cat @s:t_yesterday' 'cat @s:t_yesterday @s:t_day1' 'cat @s:t_yesterday @s:t_day7' 'cat @s:t_today @s:t_yesterday' 'cat @s:t_day1' 'cat @s:t_lastmonth @s:t_day7')
 (cd "$L" && git init -q -b main && git config user.email b@x && git config user.name Bob && git config core.hooksPath /dev/null \
   && echo 1 >a.py && git add a.py && GIT_AUTHOR_DATE=2020-01-01T00:00 GIT_COMMITTER_DATE=2020-01-01T00:00 git commit -q --author='Alice <a@x>' -m oldpy -m "$LM" \
   && Y=$(node -e 'const d=new Date();d.setDate(d.getDate()-1);d.setHours(12,0,0,0);console.log(d.toISOString())') \
@@ -448,6 +448,9 @@ eq "$(gl -e 'cat @s:t_yesterday')" "yday " "-g: yesterday becomes --since and --
 eq "$(gl -e 'cat @s:t_yesterday @s:t_day1')" "yday " "-g: yesterday over the last 24 hours"
 eq "$(gl -e 'cat @s:t_yesterday @s:t_day7')" "yday " "-g: yesterday is the narrowest"
 eq "$(gl -e 'cat @s:t_today @s:t_yesterday')" "newpy newjs " "-g: today is narrower than yesterday"
+# a span with an end wins only over a rolling one of about the same length: in the first week of a month, last month
+# contains "the last 7 days"' start, and must still lose to it (on later days it does not contain it, and loses anyway)
+(cd "$L" && $JI -g -e 'cat @s:t_lastmonth @s:t_day7' 2>&1 >/dev/null) | grep -q -- '--until' && fail "-g: last month over the last 7 days"
 (cd "$L" && $JI -g -e 'cat @s:t_yesterday' 2>&1 >/dev/null) | grep -qE "^sys1grep: git log .*--since=[0-9T:.-]+Z --until=[0-9T:.-]+Z " || fail "-g: --until on stderr"
 (cd "$L" && $JI -g -e 'cat @s:t_day1' 2>&1 >/dev/null) | grep -q -- '--until' && fail "-g: a rolling span has no --until"
 eq "$($JI -r -l -e 'cat @s:t_yesterday' "$S" 2>&1 >/dev/null | grep -c 'since .* (from "what was changed yesterday: 0.90")')" "1" "files: a span's end means nothing (a later change moves the mtime)"
