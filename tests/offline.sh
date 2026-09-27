@@ -525,61 +525,62 @@ node -e "for (let i = 0; i < 3000; i++) console.log('cat ' + [...String(i % 300)
 $S --summarize --dedup --chunk 100 -e cat "$tmp/bigdd.txt" 2>&1 >/dev/null | grep -q '^sys1grep: --summarize: 3000 matching lines as 300 representatives ([0-9]* KB) are more than the 200 KB to summarize; narrow the expression$' || fail "--summarize --dedup over 200 KB: $($S --summarize --dedup --chunk 100 -e cat "$tmp/bigdd.txt" 2>&1 >/dev/null)"
 $S --summarize --dry-run -e cat "$F" | grep -q '^sys1grep: summarize: .* (stops over 200 KB)$' || fail "--dry-run shows the limit"
 
-# #58: an overlong unit is skipped outright, not truncated: it is never sent and cannot match. One stderr line per
-# file counts them, not with -q. -M / --max-columns raises (or lowers) the limit; default 2000 (8000 with -z)
-printf 'cat\n' >"$tmp/long.txt"; node -e "console.log('cat ' + 'x'.repeat(2000))" >>"$tmp/long.txt"
-reset; eq "$($J -n -e cat "$tmp/long.txt" | nums)" "1 " "an overlong line is skipped, cannot match"
-eq "$(stat asked)" "1" "the overlong line asks nothing"
-$J -n -e cat "$tmp/long.txt" 2>&1 >/dev/null | grep -qF "$tmp/long.txt: 1 line longer than 2000 characters skipped" || fail "the skip is counted on stderr"
-[ -z "$($J -q -n -e cat "$tmp/long.txt" 2>&1 >/dev/null)" ] || fail "-q: the skip count is silent"
-eq "$($J -n -M 3000 -e cat "$tmp/long.txt" | nums)" "1 2 " "-M raises the limit"
+# #58 / #125 review (item 9, owner 2026-09-27): -M/--max-columns bounds only what is *sent*, as before this PR: a
+# unit past it is truncated to the first NUM characters, still searched and judged on that truncated text, not
+# skipped. A meaning inside the truncated part still matches; one whose only occurrence is past the cutoff does
+# not, until -M is raised. Default 2000 (8000 with -z)
+printf 'cat\n' >"$tmp/long.txt"; node -e "console.log('dog ' + 'x'.repeat(2000) + ' cat')" >>"$tmp/long.txt"
+reset; eq "$($J -n -e cat "$tmp/long.txt" | nums)" "1 " "cat past the default -M cutoff is not found there"
+eq "$(stat asked)" "2" "the overlong line is judged too (on its truncated text), not skipped"
+reset; eq "$($J -n -e dog "$tmp/long.txt" | nums)" "2 " "dog inside the truncated part still matches"
+reset; eq "$($J -n -M 4000 -e cat "$tmp/long.txt" | nums)" "1 2 " "-M raises the limit: cat past the old cutoff is now found"
 code 2 "-M 0" -- $J -M 0 -e cat "$F"
 code 2 "-M not a number" -- $J -M abc -e cat "$F"
 
-# #58: every target is sized before the bulk of requests, and the estimated cost is checked too; one question
-# covers both, from a terminal; -y answers yes without asking; no terminal and a limit exceeded is exit 2
+# #58 / #125 review (item 2, owner 2026-09-27): an oversized target is skipped outright, like rg's own
+# --max-filesize, not asked about: named on stderr, `-y` does not affect it, and a file named explicitly on the
+# command line is skipped too (item 3, unchanged). No terminal is needed for this, unlike --max-cost below.
 node -e "for (let i = 0; i < 20000; i++) console.log('cat ' + i)" >"$tmp/huge.txt"
-reset; code 2 "--max-filesize exceeded, no terminal" -- sh -c "$J --max-filesize 10K -e cat '$tmp/huge.txt' </dev/null"
-eq "$(stat count)" "0" "a refused run (no terminal) sends nothing"
-$J --max-filesize 10K -e cat "$tmp/huge.txt" </dev/null 2>&1 >/dev/null | grep -q -- '--max-filesize 10K' || fail "the message names --max-filesize"
-reset; eq "$($J -y -c --max-filesize 10K -e cat "$tmp/huge.txt" </dev/null)" "20000" "-y answers yes, no asking"
-reset; out=$(asking "$J --max-filesize 10K -c -e cat '$tmp/huge.txt'" n)
-eq "$(stat count)" "0" "refused on a pty: nothing sent"
-echo "$out" | grep -q 'large files:.*--max-filesize 10K' || fail "the pty question names the large file: $out"
-echo "$out" | grep -q 'rc=1' || fail "refused: exit 1: $out"
-reset; out=$(asking "$J --max-filesize 10K -c -e cat '$tmp/huge.txt'" y)
-echo "$out" | grep -q '^20000' || fail "answered y: searched: $out"
+reset; code 1 "an oversized file is skipped: no terminal needed, no match" -- $J --max-filesize 10K -e cat "$tmp/huge.txt" </dev/null
+eq "$(stat count)" "0" "nothing is sent for a skipped file"
+$J --max-filesize 10K -e cat "$tmp/huge.txt" </dev/null 2>&1 >/dev/null | grep -q -- "$tmp/huge.txt: skipped, .* is over --max-filesize=10K" || fail "the message names the file, the size and the option"
+reset; code 1 "-y does not un-skip an oversized file" -- $J -y --max-filesize 10K -e cat "$tmp/huge.txt" </dev/null
 code 2 "--max-filesize, not a size" -- $J --max-filesize nope -e cat "$F"
-# --max-cost 0: any estimated price is over it, so even ordinary input asks
+# --max-cost 0: any estimated price is over it, so even ordinary input asks; --max-filesize's own skip above never
+# asks, so a run now shows at most this one question (item 8, now moot: see the PR body)
 reset; code 2 "--max-cost 0, no terminal" -- sh -c "$J --max-cost 0 -e cat '$F' </dev/null"
-$J --max-cost 0 -e cat "$F" </dev/null 2>&1 >/dev/null | grep -q -- 'input tokens.*--max-cost 0' || fail "the message names --max-cost"
+out=$($J --max-cost 0 -e cat "$F" </dev/null 2>&1 >/dev/null) || true
+echo "$out" | grep -q -- 'input tokens.*--max-cost 0' || fail "the message names --max-cost: $out"
+# item 4 (owner 2026-09-27): --max-cost keeps pricing at TypeSafe's list price even for a custom endpoint (every
+# offline test's own SYS1GREP_URL counts as one), and now says so in the question
+echo "$out" | grep -q "at TypeSafe's list price (SYS1GREP_URL is another endpoint)" || fail "the question says it priced at TypeSafe's list price for the custom endpoint: $out"
 reset; eq "$($J -y --max-cost 0 -n -e cat "$F" | nums)" "1 4 " "-y bypasses --max-cost too"
 # -i already asks unconditionally, before anything is sent: the guard above does not ask a second time
 reset; out=$(asking "$JI -i --max-cost 0 -l -e cat '$P/a.md'" y)
 eq "$(printf '%s\n' "$out" | grep -c '\[y/N\]')" "1" "-i and the cost guard together: one question, not two"
-# --dry-run and -i show the same verdict the guard would ask about, so both stay consistent with it
-$J --dry-run --max-filesize 10K -e cat "$tmp/huge.txt" | grep -q 'large files:.*--max-filesize 10K.*would ask' || fail "--dry-run shows the size guard's verdict"
+# --dry-run and -i show the same verdict the cost guard would ask about; the size guard no longer asks, so it has
+# nothing left to show in this line (the skip above already told the real story, per file)
+out=$($J --dry-run --max-filesize 10K -e cat "$tmp/huge.txt" 2>&1)
+case "$out" in *'large files:'*) fail "--dry-run no longer shows a size-guard verdict: $out" ;; esac
+echo "$out" | grep -q -- "$tmp/huge.txt: skipped, .* is over --max-filesize=10K" || fail "--dry-run still shows the file being skipped, like a real run: $out"
 $J --dry-run --max-cost 0 -e cat "$F" | grep -q 'over --max-cost 0, would ask' || fail "--dry-run shows the cost guard's verdict"
 # -M and --max-filesize/--max-cost/-y all take effect from SYS1GREP_OPTS too, not just the command line
 reset; eq "$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS='--max-columns 3000' node ../sys1grep.mjs -n -e cat "$tmp/long.txt" | nums)" "1 2 " "--max-columns in SYS1GREP_OPTS"
-reset; eq "$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS='--max-filesize 10K --max-cost 0 -y' node ../sys1grep.mjs -c -e cat "$tmp/huge.txt" </dev/null)" "20000" "--max-filesize, --max-cost and -y in SYS1GREP_OPTS take effect"
+reset; code 1 "--max-filesize, --max-cost and -y in SYS1GREP_OPTS take effect" -- $E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS='--max-filesize 10K --max-cost 0 -y' node ../sys1grep.mjs -e cat "$tmp/huge.txt" </dev/null
 
-# #58 review (blocker): --sentence=jev's judgeBreaks used to send real line content over the network before the
-# size guard ever ran (it was combined with the cost guard, gated on there being judging chunks left after
-# --sentence's own break-judging requests already went out). The size guard now fires off the file stat alone,
-# before any line of the file is read, so a decline must reach the fake with zero requests.
+# #58 review (blocker) / #125 review (item 2): --sentence=jev's judgeBreaks must never read an oversized file's
+# content; since the file is now skipped before it is ever opened, this holds regardless of ordering
 node -e "for (let i = 0; i < 50; i++) console.log('これはとても長い日本語の文章であり改行があいまいです' + i)" >"$tmp/cjk.txt"
-reset; asking "$J --sentence --max-filesize 1K -e cat '$tmp/cjk.txt'" n >/dev/null
-eq "$(stat count)" "0" "--sentence=jev: judgeBreaks sends nothing before a declined size guard"
-reset; asking "$J --sentence --max-filesize 1K -e cat '$tmp/cjk.txt'" y >/dev/null
-[ "$(stat count)" -gt 0 ] || fail "--sentence=jev: judgeBreaks runs once the size guard is answered yes"
+reset; $J --sentence --max-filesize 1K -e cat "$tmp/cjk.txt" >/dev/null 2>&1 || true
+eq "$(stat count)" "0" "an oversized file is skipped before --sentence=jev's judgeBreaks ever reads it"
+$J --sentence --max-filesize 1K -e cat "$tmp/cjk.txt" 2>&1 >/dev/null | grep -q -- "$tmp/cjk.txt: skipped, .* is over --max-filesize=1K" || fail "the skip message names the CJK file too"
 
-# #58 review: a decline used to always say "nothing sent", even when auto-scope's own setup request (meaning
-# text only, no file content) had already gone out for real before the size guard could ask
+# an oversized file under -r / auto-scope: the scope-narrowing request (meaning text only) still goes out, but the
+# file's own content is skipped, not read
 mkdir -p "$tmp/scopebig"; cp "$tmp/huge.txt" "$tmp/scopebig/huge.txt"
-reset; out=$(asking "$J -r --max-filesize 10K -e cat '$tmp/scopebig'" n)
-eq "$(stat count)" "1" "auto-scope's own request went out before the size guard declined"
-echo "$out" | grep -q 'stopped; 1 setup request already sent' || fail "the decline names what already went out: $out"
+reset; out=$($J -r --max-filesize 10K -e cat "$tmp/scopebig" 2>&1 >/dev/null) || true
+eq "$(stat count)" "1" "auto-scope's own request still goes out; the file's content does not"
+echo "$out" | grep -q -- "huge.txt: skipped, .* is over --max-filesize=10K" || fail "the skip message, under -r: $out"
 
 # #58 review (minor): the byte-rate estimate assumed English's ~4 chars/token; CJK content runs closer to 1
 # token/char, so a Japanese-heavy request should price higher than an ASCII one of the same body size, not the same
@@ -741,26 +742,25 @@ echo "$out" | grep -qx 'sys1grep: options: --level normal = -t 0.5 -T 0.5, --chu
 out=$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS='-M 3000 --max-filesize 5M --max-cost 2 -y' node ../sys1grep.mjs --dry-run -e cat "$F")
 echo "$out" | grep -qF -- '-M 3000 (SYS1GREP_OPTS), --max-filesize 5M (SYS1GREP_OPTS), --max-cost 2 (SYS1GREP_OPTS), -y (SYS1GREP_OPTS)' || fail "options: #58's limits from SYS1GREP_OPTS: $out"
 $J --dry-run -z -e cat "$F" | grep -q '^sys1grep: options: .*, -M 8000, ' || fail "options: -M's default with -z"
-# -i's preview passes #58's lines: the options line with the limits, the skip count, and the guard's verdict
-reset; out=$(asking "$JI -i --max-cost 0 -l -e cat '$tmp/long.txt'" n)
+# -i's preview passes #58's lines: the options line with the limits, and the cost guard's verdict (the size guard
+# no longer has one to show: an oversized file is skipped, not asked about, before -i's own preview even runs)
+reset; out=$(asking "$JI -i --max-cost 0 -l -e cat '$F'" n)
 eq "$(stat count)" "0" "-i with the guard's verdict, n: nothing sent"
 echo "$out" | grep -q '^sys1grep: options: .*--max-cost 0' || fail "-i shows the limits in the options line: $out"
 echo "$out" | grep -q 'over --max-cost 0, would ask' || fail "-i shows the cost guard's verdict: $out"
-echo "$out" | grep -q 'long.txt: 1 line longer than 2000 characters skipped' || fail "-i shows the -M skip count: $out"
-reset; out=$(asking "$JI -i -l -e cat '$tmp/long.txt'" y)
-eq "$(printf '%s\n' "$out" | grep -c 'longer than 2000 characters skipped')" "1" "-i, y: the skip count shows once, not again after the answer"
-reset; out=$(asking "$JI -i --max-filesize 10K -l -e cat '$tmp/huge.txt'" n)
-echo "$out" | grep -q 'large files:.*huge.txt.*would ask' || fail "-i shows the size guard's verdict: $out"
-# #58's size guard and --summarize's 200 KB limit (#98) are separate: the guard asks before Jev, the limit stops the
-# summarizer after it; -y passes the one and not the other, and a declined guard never reaches the summarizer
-reset; code 2 "size guard first, no terminal, with --summarize=URL" -- sh -c "$O --summarize='$base/v1' --max-filesize 100K -e '/cat/' '$tmp/big.txt' </dev/null"
-eq "$(stat chat)" "null" "a refused size guard never reaches the HTTP summarizer"
-$O --summarize="$base/v1" --max-filesize 100K -e '/cat/' "$tmp/big.txt" </dev/null 2>&1 >/dev/null | grep -q -- '--max-filesize 100K' || fail "the size guard's message, not the summarizer's"
-reset; code 2 "-y passes the size guard, the 200 KB limit still stops --summarize=URL" -- $O -y --summarize="$base/v1" --max-filesize 100K -e '/cat/' "$tmp/big.txt"
-eq "$(stat chat)" "null" "over 200 KB: nothing POSTed to the HTTP summarizer"
-$O -y --summarize="$base/v1" --max-filesize 100K -e '/cat/' "$tmp/big.txt" 2>&1 >/dev/null | grep -q 'more than the 200 KB to summarize' || fail "-y: the summarizer's own limit message"
-out=$($O --dry-run --summarize="$base/v1" --max-filesize 100K -e '/cat/' "$tmp/big.txt")
-echo "$out" | grep -q '(stops over 200 KB)$' && echo "$out" | grep -q 'large files:.*would ask' || fail "--dry-run shows both the size guard and the summarizer's limit: $out"
+reset; out=$(onpty "$JI -i --max-filesize 10K -l -e cat '$tmp/huge.txt'; echo rc=\$?")
+echo "$out" | grep -q -- "$tmp/huge.txt: skipped, .* is over --max-filesize=10K" || fail "-i shows the file being skipped, not a guard question: $out"
+case "$out" in *'[y/N]'*) fail "-i asks nothing more once the only target is skipped: $out" ;; esac
+echo "$out" | grep -q 'rc=1' || fail "-i on a skipped-only run: exit 1 (no match), not asked: $out"
+# #125 review (item 2): an oversized file is skipped before it ever reaches Jev or the summarizer; nothing matched,
+# so the summarizer (#98's own 200 KB limit included) is never invoked either, no terminal needed, -y unaffected
+reset; code 1 "an oversized file with --summarize: no match, no terminal needed" -- sh -c "$O --summarize='$base/v1' --max-filesize 100K -e '/cat/' '$tmp/big.txt' </dev/null"
+eq "$(stat chat)" "null" "a skipped file never reaches the HTTP summarizer"
+$O --summarize="$base/v1" --max-filesize 100K -e '/cat/' "$tmp/big.txt" </dev/null 2>&1 >/dev/null | grep -q -- "$tmp/big.txt: skipped, .* is over --max-filesize=100K" || fail "the skip message, not the summarizer's own limit"
+reset; code 1 "-y does not un-skip it either" -- $O -y --summarize="$base/v1" --max-filesize 100K -e '/cat/' "$tmp/big.txt"
+eq "$(stat chat)" "null" "still nothing POSTed to the HTTP summarizer"
+out=$($O --dry-run --summarize="$base/v1" --max-filesize 100K -e '/cat/' "$tmp/big.txt" 2>&1)
+echo "$out" | grep -q -- "$tmp/big.txt: skipped, .* is over --max-filesize=100K" || fail "--dry-run shows the file being skipped: $out"
 reset
 
 # the spinner (#89): on a terminal, one line on stderr while waiting, erased before the output; never when not a terminal

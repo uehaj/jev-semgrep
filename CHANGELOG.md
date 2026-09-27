@@ -6,16 +6,19 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
-- Guards against generated and oversized input (#58). `-r` and `git sys1grep` now also skip generated files
-  (`*.map`, `*.min.js`, `*.min.css`, `package-lock.json` and other lock files), named explicitly still searched.
-  A unit longer than `-M`/`--max-columns` (default 2000, 8000 with `-z`) is skipped outright, not truncated: it
-  is never sent and cannot match, and one stderr line per file counts how many were skipped (not with `-q`).
-  Every target is sized (`--max-filesize`, K/M/G, default 10M) before anything is read, and asks to continue,
-  from a terminal, if any target is over it. Separately, the input about to be sent (including the setup
-  requests above, if any ran) is priced (`--max-cost`, default 1 USD) and asks too if it is over; both can fire
-  in the same run, as two questions. `-y`/`--yes` answers either yes without asking, and without a terminal a
-  limit exceeded is exit 2. `-i` already asks unconditionally and earlier, so neither asks again; `--dry-run`
-  and `-i` show the same verdict.
+- Guards against generated and oversized input (#58, with the owner's decisions on #125's review applied). `-r`
+  and `git sys1grep` now also skip generated files (`*.map`, `*.min.js`, `*.min.css`, `package-lock.json` and other
+  lock files), named explicitly still searched. Every target is sized (`--max-filesize`, K/M/G, default 10M)
+  before anything is read; one over it is skipped outright, like `rg`'s own `--max-filesize`
+  (`sys1grep: big.log: skipped, 25 MB is over --max-filesize=10M`), named on stderr, and `-y` does not affect it
+  (a named file over the limit is skipped too). Separately, the input about to be sent (including the setup
+  requests above, if any ran) is priced (`--max-cost`, default 1 USD) and asks to continue on the terminal if it
+  is over; a custom `SYS1GREP_URL` is still priced at TypeSafe's list price, and the question says so.
+  `-y`/`--yes` answers that question yes without asking, and without a terminal a limit exceeded is exit 2.
+  `-i` already asks unconditionally and earlier, so this does not ask again; `--dry-run` and `-i` show the same
+  verdict. `-M`/`--max-columns` (default 2000, 8000 with `-z`) is unchanged from before this PR: it bounds only
+  what is sent, truncating a unit to its first NUM characters; the unit is still searched and judged on that
+  truncated text.
 - `--verbose` / `--dry-run` print the settings the search ran with, before the per-file lines: the endpoint and
   model, the key (the variable or option name only, never its value), `SYS1GREP_OPTS` (when set), the effective
   thresholds / `--chunk` / `-j` / `--sentence` / `--dedup` / `-z` / scope on-or-off / `--include` / `--exclude` /
@@ -79,10 +82,6 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   candidates too. One git process per repository and question.
 
 ### Changed
-- A unit over `-M`/`--max-columns` used to still be sent, truncated to the limit, so a match depending on text
-  past the cutoff (anywhere past character 2000 by default) could still be found. It is now skipped outright and
-  cannot match at all (see above): existing long-line or long-commit-message searches that relied on the
-  truncated tail may now miss lines they used to find; raise `-M`/`--max-columns` if that happens.
 - `--sentence` colors the matching sentence bold yellow instead of bold red, so a regex match inside it stands out.
 
 ### Renamed

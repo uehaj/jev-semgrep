@@ -224,17 +224,17 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
   --verbose    print the same to stderr while searching, and the summary line even when not a terminal
   -i, --interactive  first show what --dry-run would send (files, lines, requests) and ask on the
                terminal; search only on y. Nothing is sent before the answer; no terminal is an error
-  -M NUM, --max-columns=NUM  a line (or record, with -z) longer than NUM characters is skipped: it is
-               never sent and cannot match. Default 2000 (8000 with -z). One line per file on stderr
-               counts how many were skipped, not with -q
+  -M NUM, --max-columns=NUM  send at most the first NUM characters of a line (or record, with -z); it
+               is still searched and judged, but a match past NUM cannot be found there. Default 2000
+               (8000 with -z)
   --max-filesize=SIZE  before any file is read, every target is sized (K/M/G suffix, default 10M); one
-               over this is listed and the run asks to continue, before --max-cost's own question below
-  --max-cost=USD  the input tokens about to be sent are estimated and priced (including --max-filesize's
-               own question above, if it asked); over this (default 1) the run asks to continue too, as a
-               second question when both apply. No terminal and a limit exceeded is exit 2, naming the
-               option that would let it through. -i already asks unconditionally and earlier, so neither
-               asks again
-  -y, --yes    answer both questions yes without asking (SYS1GREP_OPTS='--max-filesize ... -y' for scripts)
+               over this is skipped outright and named on stderr, like rg's own --max-filesize. -y does
+               not affect it (a named file over the limit is skipped too)
+  --max-cost=USD  the input tokens about to be sent are estimated and priced; over this (default 1) the
+               run asks to continue, on the terminal. No terminal and the limit exceeded is exit 2,
+               naming the option that would let it through. -i already asks unconditionally and earlier,
+               so this does not ask again
+  -y, --yes    answer that question yes without asking (SYS1GREP_OPTS='--max-cost ... -y' for scripts)
   --dedup      judge one line per template instead of every line. Lines that differ only in ids, hashes,
                numbers, dates and times, paths and URLs share a template; one of them is sent and its answer
                is reused for the rest. Which of those may be folded depends on the meaning: a number decides
@@ -388,16 +388,15 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
   --verbose    同じ表示を検索しながら stderr に出す。端末でなくても最後の集計行を出す
   -i, --interactive  まず --dry-run と同じ内容 (ファイル・行数・リクエスト数) を見せて端末で聞き、
                y のときだけ検索する。答えるまで何も送らない。端末が無ければエラー
-  -M NUM, --max-columns=NUM  NUM 文字を超える行 (-z ならレコード) は送らず飛ばす。それだけでは
-               当たらなくなる。既定 2000 (-z なら 8000)。飛ばした数をファイルごとに stderr へ 1 行、
-               -q では出さない
+  -M NUM, --max-columns=NUM  行 (-z ならレコード) の先頭 NUM 文字までを送る。それでも検索・判定は
+               される (NUM より先にある一致だけは見つからない)。既定 2000 (-z なら 8000)
   --max-filesize=SIZE  ファイルを読む前に、検索対象を 1 つずつ計測する
-               (K/M/G の接尾辞、既定 10M)。これを超えるものがあれば一覧を出し、続けるか聞く (--max-cost の質問より先)
-  --max-cost=USD  送る予定の入力トークンを見積もって値段を出す (--max-filesize の質問がもう出ていれば、その分も込みで)。
-               これ (既定 1) を超えたら続けるか聞く。両方に該当すれば二問になる。端末が無く、いずれかの
-               上限を超えていれば終了コード 2 で、どのオプションを緩めれば通るかを言う。-i は無条件かつ
-               これより前に聞くので、どちらも二重には聞かない
-  -y, --yes    どちらの質問にも yes と答えて聞かない (スクリプトからは SYS1GREP_OPTS='--max-filesize ... -y')
+               (K/M/G の接尾辞、既定 10M)。これを超えるものは rg の --max-filesize と同じく無条件に飛ばし、
+               stderr に名前を出す。-y は効かない (明示的に指定したファイルでも超えていれば飛ばす)
+  --max-cost=USD  送る予定の入力トークンを見積もって値段を出す。これ (既定 1) を超えたら端末で続けるか
+               聞く。端末が無く上限を超えていれば終了コード 2 で、どのオプションを緩めれば通るかを言う。
+               -i は無条件かつこれより前に聞くので、二重には聞かない
+  -y, --yes    その質問に yes と答えて聞かない (スクリプトからは SYS1GREP_OPTS='--max-cost ... -y')
   --dedup      全行ではなくテンプレートごとに 1 行だけ判定する。ID・ハッシュ・数値・日付と時刻・パス・
                URL だけが違う行は同じテンプレートとみなし、代表 1 行を送ってその答えを残りにも使う。
                どれをまとめてよいかは意味による。「ディスク使用率が 90% を超えている」なら数値が、
@@ -554,7 +553,8 @@ if (chunkLines < 1) die('--chunk must be at least 1');
 if (tPos < 0 || tPos > 1 || tNeg < 0 || tNeg > 1) die('-t / -T must be between 0 and 1');
 if (Number(opt.j) < 1) die('-j must be at least 1');
 if (opt['max-columns'] !== undefined && Number(opt['max-columns']) < 1) die('-M must be at least 1');
-// #58: guards against generated and oversized input, before anything is sent (see "large files"/"input tokens" below).
+// #58: guards against generated and oversized input, before anything is sent (see the file-size skip and
+// "input tokens" question below; #125 review picked how each one behaves).
 // --max-filesize: K/M/G, 1024-based, as rg reads it. --max-cost: USD; -y answers its question yes without asking.
 const parseSize = (s, label) => {
   const m = /^(\d+)([kmg]?)$/i.exec(s);
@@ -1092,30 +1092,26 @@ if (!opt.quiet && narrowable) {
   if (lines.length && opt.verbose && !dry && out.length) lines.push(`sys1grep:   left out: ${out.slice(0, 10).map(safe).join(' ')}${out.length > 10 ? ` … (+${out.length - 10} more)` : ''}`);
   for (const m of lines) if (!warned.includes(m)) { console.error(m); warned.push(m); }
 }
-// #58: every target is sized before anything is sent (git log's own commits, opt.gitlog, have no file to size).
-// A file named on the command line is sized too: it was named on purpose, but a giant one is still a giant one.
-const oversized = opt.gitlog ? [] : targets.filter(f => f !== '-')
-  .map(f => { try { return { file: f, size: statSync(f).size }; } catch { return null; } }).filter(x => x && x.size > MAX_FILESIZE);
-// One question, on /dev/tty; -y answers it yes without asking; no terminal is exit 2. Shared by the size guard
-// right below and the cost guard further down (#58 review: the two used to share one prompt after chunking, which
-// let --sentence=jev's judgeBreaks() send real file content before ever asking; the size guard now fires first,
-// straight off the file stat, before any line of a target is read).
+// #58 review (owner, 2026-09-27): an oversized file is skipped outright, like rg's own --max-filesize, not asked
+// about; -y does not affect it. A file named on the command line is sized too (#3): it was named on purpose, but
+// a giant one is still a giant one, and is skipped the same way. git log's own commits (opt.gitlog) have no file
+// to size. The skip is reported per file where it happens, in the reading loop below.
+// One question, on /dev/tty; -y answers it yes without asking; no terminal is exit 2. Used by the cost guard
+// further down only (the size guard above no longer asks, so this cannot be asked twice in the same run).
 function askToContinue(msg) {
   if (!warned.includes(msg)) { console.error(msg); warned.push(msg); }
   let tty;
   try { tty = openSync('/dev/tty', 'r+'); }
-  catch { die('large input needs a terminal to confirm on (-y, or a higher --max-filesize / --max-cost, lets it through)'); }
+  catch { die('large input needs a terminal to confirm on (-y, or a higher --max-cost, lets it through)'); }
   writeSync(tty, 'sys1grep: continue? [y/N] ');
   const buf = Buffer.alloc(256);
   if (!/^\s*y(es)?\s*$/i.test(buf.toString('utf8', 0, readSync(tty, buf)))) {
     // #58 review: auto-scope (and, with --sentence=jev, judgeBreaks) can have sent real requests already by the
-    // time either guard asks, so "nothing sent" would be false; say what already went out instead.
+    // time the guard asks, so "nothing sent" would be false; say what already went out instead.
     console.error(sentRequests ? `sys1grep: stopped; ${sentRequests} setup request${sentRequests === 1 ? '' : 's'} already sent` : 'sys1grep: nothing sent');
     process.exit(1);
   }
 }
-if (oversized.length && !dry && !opt.interactive && !opt.yes)
-  askToContinue(`sys1grep: large files: ${oversized.map(o => `${safe(o.file)} (${fmtSize(o.size)})`).join(', ')}  (--max-filesize ${opt['max-filesize'] ?? '10M'})`);
 // -g: git log over the commits the scopes of the one term admit. Within the term the scopes are ANDed: the latest
 // time, and the ranges together; languages and authors are each ORed (git's pathspecs and --author are).
 // ponytail: two meanings each naming a language OR them; AND them if that ever matters.
@@ -1213,6 +1209,17 @@ const spansOf = new Map(); // file -> spans of each sentence (--sentence only)
 const allLines = [], unitCount = new Map();
 const read = new Map(); // file -> units as read (lines, or records with -z)
 for (const file of targets) {
+  // #58 / #125 review: every target is sized before it is read (git log's own commits, opt.gitlog, have none);
+  // one over --max-filesize is skipped outright, like rg, and named on stderr even with -q's own file (unlike the
+  // binary-file message below, which only speaks up for a file named on the command line). -y does not affect it.
+  if (file !== '-' && file !== GITLOG) {
+    let size;
+    try { size = statSync(file).size; } catch { size = null; }
+    if (size != null && size > MAX_FILESIZE) {
+      console.error(`sys1grep: ${safe(file)}: skipped, ${fmtSize(size)} is over --max-filesize=${opt['max-filesize'] ?? '10M'}`);
+      continue;
+    }
+  }
   let buf;
   try { buf = file === '-' ? stdinBuf : file === GITLOG ? gitlogBuf : readFileSync(file); } catch (e) { warn(file, e); continue; }
   // UTF-16 with a BOM is text though every ASCII character carries a NUL, so it skips the binary sniff.
@@ -1250,17 +1257,13 @@ for (const [file, src] of read) {
     units = sentences.map(u => u.text);
   }
   unitCount.set(file, units.length);
-  let overlong = 0;
+  // #125 review (item 9): -M/--max-columns bounds only what is sent (see requestOf() and judgeBreaks() below,
+  // both .slice(0, MAX_UNIT_CHARS)); a unit past it is still searched and judged on its truncated text, not
+  // dropped, so a very long line or commit body can still match, just not past character MAX_UNIT_CHARS.
   units.forEach((text, i) => {
-    if (text.length > MAX_UNIT_CHARS) { overlong++; return; } // #58: too long to send, so it cannot match
     const u = { file, no: i + 1, text };
     if (expr.some(term => regexPart(term, u).ok)) allLines.push(u);
   });
-  if (overlong) {
-    const word = unitName.slice(0, -1);
-    const m = `sys1grep: ${safe(file)}: ${overlong} ${word}${overlong === 1 ? '' : 's'} longer than ${MAX_UNIT_CHARS} characters skipped`;
-    if (!opt.quiet && !warned.includes(m)) { console.error(m); warned.push(m); }
-  }
 }
 // Local regex evaluation + prefilter: a term is only asked its meanings for a unit once every regex
 // literal in the term already holds; captures from the term's own non-negated regexes are then expanded
@@ -1409,14 +1412,14 @@ async function evaluate(chunk) {
   const answers = await post(state, questions, `[judge] ${a.file}:${a.no}-${a.file === b.file ? '' : `${b.file}:`}${b.no}, ${chunk.length} ${unitName}`);
   chunk.forEach((l, i) => [...asksByUnit.get(l).keys()].forEach((text, k) => asksByUnit.get(l).set(text, answers[`${id(i)}_${k}`].noul)));
 }
-// #58: the cost of what is actually about to be sent (after the regex prefilter, --dedup grouping and the
-// overlong skip above), PLUS the setup requests already sent for real above (auto-scope, --dedup, and
-// --sentence=jev's judgeBreaks(), tallied in sentBytes/sentRequests as they went out, #58 review: they used to
-// be missing from this estimate entirely). Not gated on chunks.length (#58 review: an empty chunk set used to
-// skip this whole check, silently, even when the setup requests above already cost something).
+// #58: the cost of what is actually about to be sent (after the regex prefilter and --dedup grouping above),
+// PLUS the setup requests already sent for real above (auto-scope, --dedup, and --sentence=jev's judgeBreaks(),
+// tallied in sentBytes/sentRequests as they went out, #58 review: they used to be missing from this estimate
+// entirely). Not gated on chunks.length (#58 review: an empty chunk set used to skip this whole check, silently,
+// even when the setup requests above already cost something).
 // -i already asked earlier, unconditionally and before anything at all is sent, which covers this; -y answers
-// this question yes without asking (it does not also answer -i's). The size guard above already asked about
-// oversized files, so this is cost only.
+// this question yes without asking (it does not also answer -i's). An oversized file was skipped outright
+// above, not asked about, so this is the only question a run can show.
 if (!dry && !opt.interactive && !opt.yes) {
   const bits = chunks.reduce((t, c) => {
     const body = JSON.stringify({ model, ...requestOf(c) });
@@ -1425,8 +1428,10 @@ if (!dry && !opt.interactive && !opt.yes) {
   const estTokens = estimateTokens(sentRequests + chunks.length, bits.bytes, bits.cjk);
   // Unlike --dry-run's own display, --max-cost is checked at TypeSafe's list price even for a custom endpoint
   // (OpenRouter, a local server): a wrong number the guard can act on beats none it cannot (#58's open question).
+  // #125 review (item 4): say so in the question itself, so a custom endpoint's own price is never mistaken for it.
   const estPrice = (estTokens * 0.042) / 1e6;
-  if (estPrice > MAX_COST) askToContinue(`sys1grep: about ${estTokens.toLocaleString('en-US')} input tokens, ~$${estPrice.toFixed(2)}  (--max-cost ${MAX_COST})`);
+  const at = customUrl ? " at TypeSafe's list price (SYS1GREP_URL is another endpoint)" : '';
+  if (estPrice > MAX_COST) askToContinue(`sys1grep: about ${estTokens.toLocaleString('en-US')} input tokens, ~$${estPrice.toFixed(2)}${at}  (--max-cost ${MAX_COST})`);
 }
 const isHit = l => expr.some(term => termHolds(term, l));
 // -q: a failed request is reported and the rest still run, since a later match means exit 0 (grep -q).
@@ -1616,9 +1621,9 @@ if (summarizer && !dry && matched && pipedBytes > SUMMARY_MAX) {
 if (dry) {
   const assumed = [opt.dedup && '--dedup', opt.sentence === 'jev' && '--sentence'].filter(Boolean);
   const tokens = estimateTokens(traced, tracedBytes, tracedCjkBytes), price = customUrl ? '' : `, ~$${(tokens * 0.042 / 1e6).toFixed(6)}`;
-  // #58: --dry-run and -i show the same guard a real run would ask about, so both stay consistent with it.
-  const guard = oversized.length ? `; large files: ${oversized.map(o => `${safe(o.file)} (${fmtSize(o.size)})`).join(', ')} (--max-filesize ${opt['max-filesize'] ?? '10M'}) would ask`
-    : (tokens * 0.042) / 1e6 > MAX_COST ? `; over --max-cost ${MAX_COST}, would ask` : '';
+  // #125 review: the size guard is gone (an oversized file is skipped outright above, not asked about); --dry-run
+  // and -i show only the cost guard's verdict here, consistent with what a real run would ask.
+  const guard = (tokens * 0.042) / 1e6 > MAX_COST ? `; over --max-cost ${MAX_COST}, would ask` : '';
   trace(`dry run: ${traced} request${traced === 1 ? '' : 's'}, ${sent.length} of ${totalUnits} ${unitName} to send, ${tracedQuestions} questions, ${tracedChars} chars, ~${tokens} input tokens${price}; nothing sent${assumed.length ? ` (${assumed.join(' and ')} questions assumed no)` : ''}${guard}`);
 } else if ((process.stderr.isTTY || opt.verbose) && !opt.quiet) {
   // The API's own usage.cost when reported (OpenRouter does); else an estimate at Jev's list price, only for TypeSafe itself.

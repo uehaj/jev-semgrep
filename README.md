@@ -178,17 +178,18 @@ to the narrowest:
   `this-week`, a date) narrow them further. A meaning that restricts itself to a language or a time of change
   narrows them by itself: see [Scope from the meaning](#scope-from-the-meaning).
 - **Which lines.** A [regex term](#regex-terms) is matched locally, and only the lines it holds for are asked
-  its AND term's meanings. Blank lines are never sent. A line longer than `-M`/`--max-columns` (default 2000,
-  8000 with `-z`) is skipped outright: it is never sent and cannot match.
+  its AND term's meanings. Blank lines are never sent. Only the first `-M`/`--max-columns` characters of a line
+  (default 2000, 8000 with `-z`) are sent: it is still searched and judged, just not past that cutoff.
 - **How many times.** [`--dedup`](#one-line-per-template---dedup) judges one line per template: lines that
   differ only in ids, numbers, times or paths share one answer.
 - **Check before paying.** `--dry-run` sends nothing and prints the settings the search would run with, the
   files, how many lines each would send and every request with its questions. Its last line estimates the input
   tokens and, for TypeSafe itself, the price (`~3178 input tokens, ~$0.000133`; within about 10%). `-i` shows the
   same totals on the terminal and sends only after `y`.
-  Before the bulk of requests, every target is sized (`--max-filesize`, default 10M) and the input
-  about to be sent is priced (`--max-cost`, default 1 USD); over either, one question asks to continue on the
-  terminal, `-y` answers it yes, and without a terminal it is exit 2.
+  Before the bulk of requests, every target is sized (`--max-filesize`, default 10M); one over it is skipped
+  outright, like `rg`'s own `--max-filesize`, named on stderr (`-y` does not affect it). The input about to be
+  sent is priced too (`--max-cost`, default 1 USD); over it, one question asks to continue on the terminal, `-y`
+  answers it yes, and without a terminal it is exit 2.
 
 ```sh
 $ sys1grep --dry-run -r --include='*.log' --changed-within=today -e '/ERROR|FATAL/' -a 'a customer is affected' logs/
@@ -729,12 +730,13 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
                command line), each file searched and each request with its questions
   --verbose    print the same to stderr while searching
   -i, --interactive  show what --dry-run would send, and search only after y on the terminal
-  -M NUM, --max-columns=NUM  skip a line (or record, with -z) over NUM characters: never sent, cannot match
-               (default 2000, 8000 with -z)
-  --max-filesize=SIZE  size every target first (K/M/G, default 10M); over it, ask to continue (see below)
-  --max-cost=USD  price the input about to be sent; over it (default 1), ask to continue, same question as
-               --max-filesize; -y answers yes without asking; no terminal and a limit exceeded is exit 2
-               (-i already asks unconditionally and earlier, so it is not asked twice)
+  -M NUM, --max-columns=NUM  send at most the first NUM characters of a line (or record, with -z); still
+               searched and judged, just not past that cutoff (default 2000, 8000 with -z)
+  --max-filesize=SIZE  size every target first (K/M/G, default 10M); over it, skip it outright, like rg's own
+               --max-filesize (-y does not affect it)
+  --max-cost=USD  price the input about to be sent; over it (default 1), ask to continue on the terminal; -y
+               answers yes without asking; no terminal and the limit exceeded is exit 2 (-i already asks
+               unconditionally and earlier, so this does not ask again)
   --dedup      judge one line per template and reuse its answer for the rest (see "One line per template" above)
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are
