@@ -181,13 +181,28 @@ to the narrowest:
   its AND term's meanings. Blank lines are never sent.
 - **How many times.** [`--dedup`](#one-line-per-template---dedup) judges one line per template: lines that
   differ only in ids, numbers, times or paths share one answer.
-- **Check before paying.** `--dry-run` sends nothing and prints the files, how many lines each would send and
-  every request with its questions. Its last line estimates the input tokens and, for TypeSafe itself, the price
-  (`~3178 input tokens, ~$0.000133`; within about 10%). `-i` shows the same totals on the terminal and sends only
-  after `y`.
+- **Check before paying.** `--dry-run` sends nothing and prints the settings the search would run with, the
+  files, how many lines each would send and every request with its questions. Its last line estimates the input
+  tokens and, for TypeSafe itself, the price (`~3178 input tokens, ~$0.000133`; within about 10%). `-i` shows the
+  same totals on the terminal and sends only after `y`.
 
 ```sh
 $ sys1grep --dry-run -r --include='*.log' --changed-within=today -e '/ERROR|FATAL/' -a 'a customer is affected' logs/
+```
+
+`--verbose` (or `--dry-run`) also shows *where* a setting that was not typed on the command line came from
+(`SYS1GREP_OPTS`, an environment variable, `~/.config/sys1grep/.env`, or a preset's default), so a result that
+surprises you can be traced back to its source. The key's value never appears, only which option or variable
+supplied it:
+
+```sh
+$ SYS1GREP_OPTS='--level strict' sys1grep --verbose -e "the API key is read from a file" .
+sys1grep: endpoint api.typesafe.ai/v1/systemone (default), model jev-latest (default)
+sys1grep: key: SYS1GREP_API_KEY (~/.config/sys1grep/.env)
+sys1grep: SYS1GREP_OPTS: --level strict
+sys1grep: options: --level strict (SYS1GREP_OPTS) = -t 0.7 -T 0.3, --chunk 30, -j 8, scope on
+sys1grep: file ./a.py: 120 lines, 120 to send
+…
 ```
 
 ## Install
@@ -608,14 +623,39 @@ The expensive model reads only what Jev kept. Asking why `./.env` is no longer r
 `git log` (168 commits), Claude's input fell from 22,059 tokens to 1,356, the total cost with Jev's from
 $0.094 to $0.013, with the same answer (#69). It pays when the answer sits in a few lines.
 
-- The matching lines leave the machine a second time, to Anthropic.
+- The matching lines leave the machine a second time, to Anthropic (or whatever TOOL talks to).
 - `-n`, `-A/-B/-C`, `-p` and file names go in as they would print; colors never do. No match runs nothing (exit 1).
-- `SYS1GREP_SUMMARIZER` picks the TOOL of a bare `--summarize` (only `claude` so far), `SYS1GREP_SUMMARIZER_MODEL` its model.
+- `SYS1GREP_SUMMARIZER` picks the TOOL of a bare `--summarize`, `SYS1GREP_SUMMARIZER_MODEL` its model.
 - `-q`, `-l` and `-c` print no lines, so they cannot be combined with it.
 - With `--dedup`, the TOOL gets what Jev got: each template's representative once, marked `(×N like it)`,
   not every line its answer was reused for.
 - More than 200 KB (about 50k tokens) is not sent at all: exit 2, with the size, before the TOOL is paid.
   It is never cut short, since a summary of the first part would read as a summary of all of it.
+
+`--summarize-prompt=TEXT` adds your own instruction after the fixed one (how long, what to focus on):
+
+```sh
+$ sys1grep -r -n --summarize --summarize-prompt="3 lines or fewer, just which file to fix" \
+    -e "the API key is read from a file" .
+```
+
+It needs `--summarize`; empty TEXT is the same as leaving it out.
+
+Other TOOLs:
+
+```sh
+$ sys1grep --summarize=llm -e "..." FILE            # Simon Willison's llm, tools off (no -T given)
+$ sys1grep --summarize=pi -e "..." FILE             # pi --print --no-tools --no-session ...
+$ SYS1GREP_SUMMARIZER_MODEL=qwen3.5:9b sys1grep --summarize=ollama -e "..." FILE
+$ SYS1GREP_SUMMARIZER_MODEL=some-id sys1grep --summarize=lmstudio -e "..." FILE   # model id from GET /v1/models
+$ SYS1GREP_SUMMARIZER_MODEL=some-id sys1grep --summarize=http://localhost:8080/v1 -e "..." FILE  # llama.cpp, vLLM, LocalAI, a gateway
+```
+
+`ollama` and `lmstudio` talk to a local OpenAI-compatible server (`POST /v1/chat/completions`) by `fetch`, no
+CLI: the matching lines never leave the machine a second time. A plain `http(s)://` URL is any other
+OpenAI-compatible server. All three need `SYS1GREP_SUMMARIZER_MODEL`: none has a default model.
+`SYS1GREP_SUMMARIZER_API_KEY` goes as `Authorization: Bearer` to a URL TOOL only (never `SYS1GREP_API_KEY`,
+which is Jev's). `OLLAMA_HOST` moves ollama's host, as it does for the `ollama` CLI itself.
 
 ## Use it from Claude Code
 
@@ -697,7 +737,8 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
   --sentence[=HOW] judge each sentence instead of each line; HOW is jev (default) or rules (see "One sentence at a time" above)
   -o           with --sentence, print only the matching sentences
   -p           print each meaning's probability at the end of the line
-  --dry-run    send nothing; print the endpoint, each file searched and each request with its questions
+  --dry-run    send nothing; print the settings the search would run with (and their source, when not the
+               command line), each file searched and each request with its questions
   --verbose    print the same to stderr while searching
   -i, --interactive  show what --dry-run would send, and search only after y on the terminal
   --dedup      judge one line per template and reuse its answer for the rest (see "One line per template" above)
