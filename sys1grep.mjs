@@ -11,7 +11,9 @@ import { dirname, resolve } from 'node:path';
 import { format, parseArgs } from 'node:util';
 
 // Node 20 colors console.error red on a terminal (22 does not): stderr gets exactly what sys1grep writes.
+// A write error (EPIPE: the reader quit) is dropped, as console.error drops it, so it never turns into exit 2.
 console.error = (...a) => process.stderr.write(`${format(...a)}\n`);
+process.stderr.on('error', () => {});
 // Errors are one line plus exit code 2, like grep. No stack traces.
 const die = (msg, hint = true) => { console.error(`sys1grep: ${msg}${hint ? "\nTry 'sys1grep --help' for more information." : ''}`); process.exit(2); };
 process.on('uncaughtException', e => die(e.message));

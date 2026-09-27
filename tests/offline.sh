@@ -140,6 +140,8 @@ eq "$($J --verbose -e cat "$F" 2>&1 >/dev/null | grep -c '^sys1grep: request 1 \
 # The summary line says what its numbers are (#91); its total counts every line read, also those a regex left out (#79)
 eq "$($J --verbose -e cat "$F" 2>&1 >/dev/null | tail -1)" "2 of 8 lines matched; 7 sent to Jev in 1 request, 1 input token" "summary line"
 eq "$($J --verbose -e /cat/ "$F" 2>&1 >/dev/null | tail -1)" "2 of 8 lines matched; nothing sent" "summary line, regex only"
+# stderr whose reader quit: what cannot be said is dropped (as console.error drops it) and the exit status stands
+( $J --verbose -e /cat/ "$F" 2>&1 >/dev/null && r=0 || r=$?; echo $r >"$tmp/rc" ) | true; eq "$(cat "$tmp/rc")" "0" "--verbose with stderr closed"
 eq "$($J --verbose -e /dog/ -a cat "$F" 2>&1 >/dev/null | tail -1)" "1 of 8 lines matched; 2 sent to Jev in 1 request, 1 input token" "summary line counts the lines a regex left out"
 $J --verbose --dedup -e cat "$F" 2>&1 >/dev/null | tail -1 | grep -Eq '^2 of 8 lines matched; [0-9]+ sent to Jev \([0-9]+ folded by --dedup, ~-?[0-9]+ input tokens saved, -?[0-9]+%\) in 2 requests, 2 input tokens$' || fail "summary line with --dedup"
 $J --dry-run -e /dog/ -a cat "$F" | tail -1 | grep -q ', 2 of 8 lines to send,' || fail "--dry-run counts the lines a regex left out"
