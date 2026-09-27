@@ -515,7 +515,7 @@ if (opt.sentence === 'jev' && !hasMeanings) opt.sentence = 'rules';
 if (hasMeanings && !credential && !customUrl) die('SYS1GREP_API_KEY is not set. Export it or put it in ~/.config/sys1grep/.env');
 
 const levels = { loose: [0.3, 0.7], normal: [0.5, 0.5], strict: [0.7, 0.3] };
-const level = levels[opt.level];
+const level = Object.hasOwn(levels, opt.level) && levels[opt.level];
 if (!level) die(`--level must be one of ${Object.keys(levels).join(', ')}`);
 const tPos = opt.t === undefined ? level[0] : Number(opt.t);
 const tNeg = opt.T === undefined ? level[1] : Number(opt.T);
@@ -574,8 +574,9 @@ if (opt.summarize === undefined && onCliAlone) die(`--${onCliAlone.name} needs -
 let summarizer = null; // [command, ...args] (spawn a CLI) or { url, model, prompt } (fetch an OpenAI-compatible server)
 if (opt.summarize !== undefined) {
   const isUrl = /^https?:\/\//.test(opt.summarize);
-  const tool = SUMMARIZERS[opt.summarize];
-  if (!tool && !HTTP_BASES[opt.summarize] && !isUrl)
+  // Object.hasOwn: a name every object inherits (constructor, toString) is not a TOOL
+  const tool = Object.hasOwn(SUMMARIZERS, opt.summarize) && SUMMARIZERS[opt.summarize];
+  if (!tool && !Object.hasOwn(HTTP_BASES, opt.summarize) && !isUrl)
     die(`--summarize must be one of ${[...Object.keys(SUMMARIZERS), ...Object.keys(HTTP_BASES)].join(', ')}, or an http(s):// URL`);
   const other = [['quiet', '-q'], ['l', '-l'], ['c', '-c']].find(([k]) => opt[k]);
   if (other) die(`--summarize and ${other[1]} cannot be combined: ${other[1]} prints no lines to summarize`);

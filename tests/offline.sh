@@ -81,6 +81,8 @@ eq "$($J -n --level strict -e fish "$F" | nums)" "" "strict: 0.6 is below 0.7"
 eq "$($J -n -v fish "$F" | cut -d: -f1 | grep -cx 6 || true)" "0" "normal: not fish needs below 0.5"
 eq "$($J -n --level loose -v fish "$F" | cut -d: -f1 | grep -cx 6 || true)" "1" "loose: not fish needs below 0.7"
 eq "$($J -n --level strict -v bird "$F" | cut -d: -f1 | grep -cx 5 || true)" "0" "strict: not bird needs below 0.3"
+# a name every object inherits is not a value: --level, --summarize and --summarize-format look theirs up by name
+for v in nope constructor toString __proto__; do code 2 "--level=$v" -- $J --level=$v -e cat "$F"; done
 eq "$($J -n --level strict -t 0.5 -e fish "$F" | nums)" "6 " "-t overrides --level"
 eq "$($J -n -T 0.7 -v fish "$F" | cut -d: -f1 | grep -cx 6 || true)" "1" "-T overrides --level"
 eq "$($J -n -t 0.7 -T 0.3 -e bird -e '!bird' "$F" | cut -d: -f1 | grep -cx 5 || true)" "0" "0.4 is neither bird nor not bird"
@@ -489,8 +491,11 @@ eq "$($E PATH=$tmp/bin:$PATH SUM=$tmp/sum SYS1GREP_OPTS=--summarize-format=html 
 eq "$($E PATH=$tmp/bin:$PATH SYS1GREP_OPTS=--summarize-format=html SYS1GREP_URL=$base/v1 node ../sys1grep.mjs -c -e cat "$F")" "2" "--summarize-format in SYS1GREP_OPTS, no --summarize: ignored"
 reset
 for o in -q -l -c; do code 2 "--summarize with $o" -- $S --summarize $o -e cat "$F"; done
-code 2 "--summarize=unknown" -- $S --summarize=nope -e cat "$F"
-for f in rtf constructor; do code 2 "--summarize-format=$f" -- $S --summarize --summarize-format=$f -e cat "$F"; done
+for v in nope constructor toString __proto__; do # the message too: an inherited name used to fail later, also with exit 2
+  code 2 "--summarize=$v" -- $S --summarize=$v -e cat "$F"
+  $S --summarize=$v -e cat "$F" 2>&1 | grep -q '^sys1grep: --summarize must be one of' || fail "--summarize=$v: $($S --summarize=$v -e cat "$F" 2>&1 | head -1)"
+done
+for f in rtf constructor toString __proto__; do code 2 "--summarize-format=$f" -- $S --summarize --summarize-format=$f -e cat "$F"; done
 code 2 "--summarize-format without --summarize" -- $S --summarize-format=markdown -e cat "$F"
 code 2 "SYS1GREP_SUMMARIZER=unknown" -- env SYS1GREP_SUMMARIZER=nope $S --summarize -e cat "$F"
 code 2 "--summarize, claude not on PATH" -- $E PATH=/usr/bin:/bin SYS1GREP_URL=$base/v1 "$(command -v node)" ../sys1grep.mjs --summarize -e cat "$F"
