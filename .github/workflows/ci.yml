@@ -1,0 +1,56 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline:
+    name: offline (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20.16', '22', '24'] # 20.16: engines' floor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm run test:offline
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # What npm would publish: exactly package.json's files, plus what npm always adds.
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: |
+          npm pack --dry-run --json | node -e '
+            const got = JSON.parse(require("fs").readFileSync(0))[0].files.map(f => f.path).sort();
+            const want = [...require("./package.json").files, "package.json", "LICENSE"].sort();
+            if (JSON.stringify(got) !== JSON.stringify(want)) {
+              console.error(`npm pack: got\n  ${got.join("\n  ")}\nwant\n  ${want.join("\n  ")}`);
+              process.exit(1);
+            }
+            console.log(got.join("\n"));'
