@@ -576,7 +576,8 @@ if (asGit && files.length) {
     try { execFileSync('git', ['rev-parse', '--verify', '-q', '--end-of-options', `${arg}^{tree}`], { stdio: 'ignore' }); }
     catch { isRev = false; }
     const isPath = existsSync(arg);
-    if (isRev === isPath) die(`ambiguous argument '${arg}': unknown revision or path not in the working tree`, false);
+    if (isRev && isPath) die(`ambiguous argument '${arg}': both revision and filename; use -- to separate`, false);
+    if (!isRev && !isPath) die(`ambiguous argument '${arg}': unknown revision or path not in the working tree`, false);
     if (isRev) trees.push(arg); else { sawPath = true; kept.push(arg); }
   }
   pathspecs = [...kept, ...files.slice(before.length)];
@@ -999,18 +1000,22 @@ function cachedEntries() {
   return entries;
 }
 // <tree>: the blobs of a revision's tree (mode 100644 / 100755 only), named <tree>:path, the tree as typed.
-// ls-tree's own <pathspec> is a literal/prefix match, not the glob git ls-files and git grep give a pathspec
-// (#50: needs the owner's OK) -- close enough for a bare path or a directory, not for a glob like '*.py'.
+// git ls-tree's own <pathspec> is a literal/prefix match only, unlike the glob git ls-files and git grep give
+// a pathspec, so this diffs the tree against the empty tree instead: git diff-tree runs every pathspec
+// through the normal pathspec engine (globs included), one extra git call per tree.
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 function treeEntries(tree) {
   let out;
-  try { out = execFileSync('git', ['ls-tree', '-r', '-z', tree, '--', ...pathspecs], { encoding: 'utf8', maxBuffer: Infinity }); }
-  catch (e) { if (e.status == null) die(`git ls-tree: ${e.message}`); process.exit(2); }
+  try { out = execFileSync('git', ['diff-tree', '-r', '-z', EMPTY_TREE, tree, '--', ...pathspecs], { encoding: 'utf8', maxBuffer: Infinity }); }
+  catch (e) { if (e.status == null) die(`git diff-tree: ${e.message}`); process.exit(2); }
   const entries = [];
-  for (const line of out.split('\0')) {
-    const m = /^(\d+) (\w+) ([0-9a-f]+)\t([\s\S]*)$/.exec(line);
+  const parts = out.split('\0');
+  for (let i = 0; i + 1 < parts.length; i += 2) {
+    const m = /^:\d+ (\d+) [0-9a-f]+ ([0-9a-f]+) \w+$/.exec(parts[i]);
     if (!m) continue;
-    const [, mode, type, object, path] = m;
-    if (type !== 'blob' || (mode !== '100644' && mode !== '100755') || skipPath(path) || !nameOk(path)) continue;
+    const [, mode, object] = m;
+    const path = parts[i + 1];
+    if ((mode !== '100644' && mode !== '100755') || skipPath(path) || !nameOk(path)) continue;
     entries.push({ label: `${tree}:${path}`, object });
   }
   return entries;

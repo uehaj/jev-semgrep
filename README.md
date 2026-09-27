@@ -482,8 +482,8 @@ v0.3.1:src/job.py:40:    retry(job)
 A `<tree>` (a branch, tag, commit or `@{u}`) is any argument before `--` that resolves as a revision; several may
 be given, searched in the order given, each line prefixed with the name as typed (`@{u}:path`, not the branch it
 resolves to). `--changed-within` needs the working tree: a blob (`--cached`, a `<tree>`) has no mtime of its own.
-A `<tree>`'s own pathspec is a literal or directory-prefix match (`git ls-tree`'s own rule), not the glob
-`--include` / a plain pathspec elsewhere in sys1grep gives; `--include` / `--exclude` (by name) still work.
+A `<tree>`'s own pathspec takes a glob too, same as elsewhere in sys1grep (`git diff-tree` against the empty
+tree, not `git ls-tree`'s own literal/directory-prefix match); `--include` / `--exclude` (by name) still work.
 **An old `<tree>` can hold a secret an ordinary file once carried and was later removed from**: the skip list
 drops files by name only, not by what changed since.
 

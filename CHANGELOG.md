@@ -13,7 +13,11 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   tree instead, several may be given, each line prefixed `<tree>:` with the name as typed. Only one of the
   three at a time. A blob shared by several trees is judged once, without needing `--dedup`. Auto-scope does
   not narrow a blob (index or tree) target, and `--changed-within` is an error with `--cached` or a `<tree>`:
-  a blob has no mtime of its own.
+  a blob has no mtime of its own. A `<tree>`'s own pathspec takes a glob too, same as elsewhere in sys1grep
+  (`git diff-tree` against the empty tree, not `git ls-tree`'s own literal/directory-prefix match). An
+  argument before `--` that is both a tree and a path is `ambiguous argument '…': both revision and filename;
+  use -- to separate`; one that is neither is `ambiguous argument '…': unknown revision or path not in the
+  working tree` — the two messages `git` itself gives.
   `--verbose` / `--dry-run` (and `-i`'s preview) list `--cached`, `--untracked` or the `<tree>`s among the options,
   and a `--cached` file line reads `file PATH (index): ...`; `--summarize` pipes the `<tree>:` prefixes, and its
   prompt says what `REV:path` is (or that the files are the index copy).

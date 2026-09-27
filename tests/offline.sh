@@ -293,6 +293,10 @@ reset
 eq "$(cd "$G" && $GS --chunk 1 -n -e cat v1 v2 -- base.txt | tr '\n' ' ')" "v1:base.txt:1:cat v2:base.txt:1:cat " "#50: a blob shared by two trees prints under each tree's prefix"
 eq "$(stat count)" "1" "#50: ...but is judged once (one request for the shared blob)"
 eq "$(cd "$G" && $GS -c -e cat v1 -- base.txt)" "v1:base.txt:1" "#50: a <tree>: -c is prefixed too"
+out=$(cd "$G" && $GS --dry-run -e cat v1 -- '*.txt')
+echo "$out" | grep -qF 'sys1grep: file v1:base.txt: ' || fail "#50 (owner decision 1): a <tree>'s glob pathspec reaches base.txt: $out"
+echo "$out" | grep -qF 'sys1grep: file v1:neko.txt: ' || fail "#50 (owner decision 1): a <tree>'s glob pathspec reaches neko.txt: $out"
+echo "$out" | grep -qF 'sys1grep: file v1:removed.txt: ' || fail "#50 (owner decision 1): a <tree>'s glob pathspec reaches removed.txt: $out"
 reset
 eq "$(cd "$G" && $GS --chunk 1 --sentence -c -e '猫がいる' v1 v2 -- neko.txt | tr '\n' ' ')" "v1:neko.txt:2 v2:neko.txt:2 " "#50: --sentence=jev on a blob shared by two trees"
 eq "$(stat count)" "2" "#50: ...also asks its break-judging once, not once per tree (one break request, one match request)"
@@ -315,7 +319,9 @@ code 2 "#50: --untracked with a <tree>" -- sh -c "cd '$G' && $GS --untracked -e 
 code 2 "#50: --changed-within needs the working tree" -- sh -c "cd '$G' && $GS --cached --changed-within=7d -e cat"
 (cd "$G" && git tag base.txt) # a tag with the same name as a tracked path: ambiguous without --
 code 2 "#50: an argument that is both a path and a revision is ambiguous" -- sh -c "cd '$G' && $GS -e cat base.txt"
+eq "$(cd "$G" && $GS -e cat base.txt 2>&1 >/dev/null | head -1)" "sys1grep: ambiguous argument 'base.txt': both revision and filename; use -- to separate" "#50 (owner decision 4): both a tree and a path names both, as git does"
 code 2 "#50: a nonexistent path without -- is now an error (git sys1grep, behaviour change)" -- sh -c "cd '$G' && $GS -e cat nosuchpath"
+eq "$(cd "$G" && $GS -e cat nosuchpath 2>&1 >/dev/null | head -1)" "sys1grep: ambiguous argument 'nosuchpath': unknown revision or path not in the working tree" "#50 (owner decision 4): neither a tree nor a path, as git does"
 (cd "$G" && git tag -d base.txt >/dev/null)
 GC="$tmp/g50-clone"
 (git clone -q "$G" "$GC" && cd "$GC" && git config user.email t@t && git config user.name t)
