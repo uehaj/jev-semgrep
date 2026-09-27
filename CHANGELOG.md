@@ -56,6 +56,8 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 - `--summarize=pi` runs `pi --print --no-tools --no-session --no-context-files --no-extensions --no-skills
   --no-prompt-templates --thinking off --system-prompt PROMPT` (`--model` too, with `SYS1GREP_SUMMARIZER_MODEL`)
   (#78). `codex`, `opencode` and `fm` stayed out: research on #78.
+- `--summarize-format=plain|markdown|html` asks for the answer's format, plain (no Markdown) by default (#122). The
+  format sentence goes before `--summarize-prompt`'s TEXT, so TEXT can still override it.
 - On a terminal, a one-line spinner on stderr while sys1grep waits for Jev (`12 of 149 requests`) or the summarizer,
   drawn after 300 ms and erased before any output (#89). Not with `-q`, `--dry-run`, `--verbose` or `TERM=dumb`,
   and never when stderr is not a terminal, so scripts see exactly what they saw before.
