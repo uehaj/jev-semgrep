@@ -6,6 +6,12 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
+- `--verbose` / `--dry-run` print the settings the search ran with, before the per-file lines: the endpoint and
+  model, the key (the variable or option name only, never its value), `SYS1GREP_OPTS` (when set), the effective
+  thresholds / `--chunk` / `-j` / `--sentence` / `--dedup` / `-z` / scope on-or-off / `--include` / `--exclude` /
+  `--changed-within`, and, with `--summarize`, its TOOL and model. Each is marked with its source when it did not
+  come from the command line: `(default)`, `(SYS1GREP_OPTS)`, `(ENV_NAME)`, or `(ENV_NAME, ~/.config/sys1grep/.env)`.
+  `-i`'s preview shows the same lines (#90).
 - `-g` / `--gitlog` searches the commits of `git log` instead of files, one record each (`%h %ad %s`, then the
   body). With one term, auto-scope turns into git log's arguments: a time into `--since`, a language into
   pathspecs, an author or "mine" into `--author`, this branch or not pushed into a range, so
