@@ -499,7 +499,7 @@ const FORMATS = {
   markdown: 'Answer in Markdown.',
   html: 'Answer with one complete HTML document and nothing outside it.',
 };
-if (!FORMATS[opt['summarize-format']]) die(`--summarize-format must be one of ${Object.keys(FORMATS).join(', ')}`);
+if (!Object.hasOwn(FORMATS, opt['summarize-format'])) die(`--summarize-format must be one of ${Object.keys(FORMATS).join(', ')}`);
 // From SYS1GREP_OPTS it is a standing preference, so -l / -c still work with it set; on the command line it asks for a summary.
 if (opt.summarize === undefined && tokens.some(k => k.name === 'summarize-format' && k.index >= defaults.length)) die('--summarize-format needs --summarize');
 let summarizer = null; // [command, ...args]

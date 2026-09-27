@@ -490,7 +490,7 @@ eq "$($E PATH=$tmp/bin:$PATH SYS1GREP_OPTS=--summarize-format=html SYS1GREP_URL=
 reset
 for o in -q -l -c; do code 2 "--summarize with $o" -- $S --summarize $o -e cat "$F"; done
 code 2 "--summarize=unknown" -- $S --summarize=nope -e cat "$F"
-code 2 "--summarize-format=unknown" -- $S --summarize --summarize-format=rtf -e cat "$F"
+for f in rtf constructor; do code 2 "--summarize-format=$f" -- $S --summarize --summarize-format=$f -e cat "$F"; done
 code 2 "--summarize-format without --summarize" -- $S --summarize-format=markdown -e cat "$F"
 code 2 "SYS1GREP_SUMMARIZER=unknown" -- env SYS1GREP_SUMMARIZER=nope $S --summarize -e cat "$F"
 code 2 "--summarize, claude not on PATH" -- $E PATH=/usr/bin:/bin SYS1GREP_URL=$base/v1 "$(command -v node)" ../sys1grep.mjs --summarize -e cat "$F"
