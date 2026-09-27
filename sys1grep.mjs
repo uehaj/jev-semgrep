@@ -192,7 +192,8 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                git sys1grep's pathspecs are narrowed like the rest (as with --include)
   --auto-scope turn it back on after --no-auto-scope in SYS1GREP_OPTS
   -g, --gitlog search the commits of git log, one record each (hash, date, subject, body), instead of
-               files. With one term, auto-scope becomes git log's arguments: a time --since, a language
+               files. With one term, auto-scope becomes git log's arguments: a time --since (and --until
+               when the span has an end: yesterday, last week, last month), a language
                pathspecs, an author or mine --author, this branch or not pushed a range; the command goes
                to stderr. FILE arguments are pathspecs. Not with -r or git sys1grep
                  sys1grep -g -e 'a performance fix to the .mjs files today'
@@ -357,7 +358,8 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                絞らない。git sys1grep の pathspec は他と同じく絞る (--include と同じ)
   --auto-scope SYS1GREP_OPTS の --no-auto-scope を打ち消して、絞り込みを有効に戻す
   -g, --gitlog ファイルではなく git log のコミットを、1 コミット 1 レコード (ハッシュ、日付、件名、本文) で探す。
-               項が 1 つなら絞り込みを git log の引数にする: 時期は --since、言語は pathspec、作者と自分は
+               項が 1 つなら絞り込みを git log の引数にする: 時期は --since (昨日・先週・先月のように終わりが
+               ある時期は --until も)、言語は pathspec、作者と自分は
                --author、このブランチと未プッシュは範囲。そのコマンドを stderr に出す。FILE は pathspec。
                -r と git sys1grep とは併用できない
                  sys1grep -g -Q '今日、.mjsにおこなった性能向上の修正'
@@ -806,29 +808,30 @@ const PLACES = [ // [key, what the question names, path pattern, what the report
   ['log', 'log files', /\.(?:log|out|err)(?:\.\d+)?$|(?:^|\/)(?:logs?|var\/log)\//i, 'log files: *.log *.log.N *.out *.err logs/ log/'],
 ];
 for (const [key, what, path, label] of PLACES) CANDIDATES.push({ key: `r_${key}`, cat: 'place', what, label, test: f => path.test(f) });
-// Time: fixed spans, by their start only: a later change moves the mtime, so a file changed yesterday may have been
-// modified today. The narrowest span answered yes is taken.
+// Time: fixed spans. For files by their start only: a later change moves the mtime, so a file changed yesterday may
+// have been modified today. A span with an end (yesterday, last week, last month) keeps it for -g's --until (#120).
+// The narrowest span answered yes is taken (pickTime).
 // ponytail: a yes to too narrow a span loses matches; the report shows the span and Jev's answer.
 const NOW = Date.now(), TODAY = new Date().setHours(0, 0, 0, 0);
-const TIME_SPANS = [ // [key, the span in the question, its start]
+const TIME_SPANS = [ // [key, the span in the question, its start, its end if it has one]
   ['min1', 'within the last minute', NOW - 6e4],
   ['hour1', 'within the last hour', NOW - 36e5],
   ['today', 'today', TODAY],
-  ['yesterday', 'yesterday', new Date(TODAY).setDate(new Date(TODAY).getDate() - 1)],
+  ['yesterday', 'yesterday', new Date(TODAY).setDate(new Date(TODAY).getDate() - 1), TODAY],
   ['day1', 'within the last day (24 hours)', NOW - 864e5],
   ['day2', 'within the last 2 days', NOW - 2 * 864e5],
   ['day3', 'within the last 3 days', NOW - 3 * 864e5],
   ['day7', 'within the last 7 days', NOW - 7 * 864e5],
   ['day30', 'within the last 30 days', NOW - 30 * 864e5],
   ['month', 'this calendar month', new Date(TODAY).setDate(1)],
-  ['lastweek', 'last week (the calendar week before this one, weeks starting on Monday)', (t => t.setDate(t.getDate() - (t.getDay() + 6) % 7 - 7))(new Date(TODAY))],
-  ['lastmonth', 'last calendar month', (t => new Date(t.getFullYear(), t.getMonth() - 1, 1).getTime())(new Date(TODAY))],
+  ['lastweek', 'last week (the calendar week before this one, weeks starting on Monday)', (t => t.setDate(t.getDate() - (t.getDay() + 6) % 7 - 7))(new Date(TODAY)), (t => t.setDate(t.getDate() - (t.getDay() + 6) % 7))(new Date(TODAY))],
+  ['lastmonth', 'last calendar month', (t => new Date(t.getFullYear(), t.getMonth() - 1, 1).getTime())(new Date(TODAY)), new Date(TODAY).setDate(1)],
   ['year', 'within the last year (365 days)', NOW - 365 * 864e5],
   ['fiscal', 'this fiscal year (from April 1)', (t => new Date(t.getFullYear() - (t.getMonth() < 3 ? 1 : 0), 3, 1).getTime())(new Date(TODAY))],
 ];
 const fmtTime = ms => new Date(ms - new Date(ms).getTimezoneOffset() * 6e4).toISOString().slice(0, 16).replace('T', ' ');
-for (const [key, span, from] of TIME_SPANS)
-  CANDIDATES.push({ key: `t_${key}`, cat: 'time', what: `what was changed ${span}`, from, label: `changed since ${fmtTime(from)} (git commits; the mtime for files git does not have committed)`, test: (f, st) => changedSince(from, f, st) });
+for (const [key, span, from, to] of TIME_SPANS)
+  CANDIDATES.push({ key: `t_${key}`, cat: 'time', what: `what was changed ${span}`, from, to, label: `changed since ${fmtTime(from)} (git commits; the mtime for files git does not have committed)`, test: (f, st) => changedSince(from, f, st) });
 // git (#46): inside a repository, git says which files changed since a time, who wrote them and what is uncommitted,
 // staged, untracked, changed on this branch or not pushed. One git process per repository and question, over the
 // whole tree: `git log -1 -- FILE` per file took 50 ms a file on a 6,400-file repository (5 minutes), `git log
@@ -909,11 +912,21 @@ const scopeQuestions = text => Object.fromEntries(CANDIDATES.map(c => [c.key, { 
 const SCOPE_AT = 0.6; // a candidate counts at this or more (see the top of auto-scope)
 // Jev's answers -> one scope per category that got a yes: { label, words, names, cs, test } (names: for --verbose;
 // cs: its candidates, for the judging requests' note and -g's git log arguments)
+// Of the time spans answered yes, the one with the latest start; but a span with an end beats a rolling one of about
+// the same length that starts inside it (yesterday over "the last 24 hours": Jev says yes to both for 昨日, and the
+// rolling start moves with the clock, #120). Not a much longer one: last month over "the last 7 days" would stretch
+// the search. Of several such, again the latest start.
+function pickTime(cs) {
+  const latest = xs => xs.reduce((a, b) => (b.from > a.from ? b : a)), len = c => (c.to ?? NOW) - c.from;
+  const narrowest = latest(cs);
+  const around = cs.filter(c => c.to && c.from <= narrowest.from && narrowest.from < c.to && len(c) < 1.25 * len(narrowest));
+  return around.length ? latest(around) : narrowest;
+}
 function scopesOf(answers) {
   const yes = CANDIDATES.filter(c => answers[c.key].noul >= SCOPE_AT), out = [];
   for (const cat of new Set(yes.map(c => c.cat))) {
     let cs = yes.filter(c => c.cat === cat);
-    if (cat === 'time') cs = [cs.reduce((a, b) => (b.from > a.from ? b : a))];
+    if (cat === 'time') cs = [pickTime(cs)];
     out.push({ label: [...new Set(cs.map(c => c.label))].join(' | '), words: cs.map(c => `${c.what}: ${answers[c.key].noul.toFixed(2)}`), names: cs.map(c => `${c.what} (${cut(c.label, 40)})`), cs, test: (f, st) => cs.some(c => c.test(f, st)) });
   }
   return out;
@@ -923,13 +936,13 @@ function scopesOf(answers) {
 function traceScope(text, answers, pool) {
   const listed = CANDIDATES.filter(c => answers[c.key].noul >= 0.2).sort((x, y) => answers[y.key].noul - answers[x.key].noul);
   const times = CANDIDATES.filter(c => c.cat === 'time' && answers[c.key].noul >= SCOPE_AT);
-  const narrowest = times.length ? times.reduce((a, b) => (b.from > a.from ? b : a)) : null;
+  const narrowest = times.length ? pickTime(times) : null;
   trace(`scope "${cut(text, 40)}":`);
   if (!listed.length) return trace('  (no candidate answered 0.2 or more)');
   const names = listed.map(c => `${c.what} (${cut(c.label, 40)})`), width = Math.max(...names.map(n => n.length));
   listed.forEach((c, i) => {
     const p = answers[c.key].noul, applied = p >= SCOPE_AT && (c.cat !== 'time' || c === narrowest);
-    const tail = applied ? `keeps ${pool.filter(f => c.test(f, statSync(f))).length} of ${pool.length} files` : p >= SCOPE_AT ? '(a narrower span applied)' : `(below ${SCOPE_AT}, not applied)`;
+    const tail = applied ? `keeps ${pool.filter(f => c.test(f, statSync(f))).length} of ${pool.length} files` : p >= SCOPE_AT ? '(another span applied)' : `(below ${SCOPE_AT}, not applied)`;
     trace(`  ${applied ? '✓' : '·'} ${names[i].padEnd(width)}  ${p.toFixed(2)}  ${tail}`);
   });
 }
@@ -1181,8 +1194,9 @@ if (!opt.quiet && narrowable) {
 // ponytail: two meanings each naming a language OR them; AND them if that ever matters.
 function gitlogArgs() {
   const cs = (expr.length === 1 ? expr[0] : []).filter(l => l.kind === 's').flatMap(l => l.cs), args = [], paths = [];
-  const since = Math.max(...cs.filter(c => c.cat === 'time').map(c => c.from));
+  const times = cs.filter(c => c.cat === 'time'), since = Math.max(...times.map(c => c.from)), until = Math.min(...times.filter(c => c.to).map(c => c.to));
   if (since > -Infinity) args.push(`--since=${new Date(since).toISOString()}`);
+  if (until < Infinity) args.push(`--until=${new Date(until - 1000).toISOString()}`); // git's --until is inclusive, to the second
   const who = c => (c.key === 'g_mine' ? gitOut('.', 'config', 'user.email') : c.email);
   for (const c of cs.filter(c => c.cat === 'author')) if (who(c)) args.push('-i', `--author=<${who(c).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}>`);
   if (cs.some(c => c.key === 'g_branch') && forkPoint('.')) args.push(`${forkPoint('.')}..HEAD`);
