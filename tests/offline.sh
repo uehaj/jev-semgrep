@@ -287,6 +287,58 @@ code 1 "git sys1grep: over 1 MiB of paths" -- sh -c "cd '$R' && $GS -e cat -- ma
 printf 'SYS1GREP_GIT=1\n' >"$tmp/plain/.env"
 eq "$(cd "$tmp/plain" && echo cat | $E SYS1GREP_URL=$base/v1 node "$SG" -e cat)" "cat" "SYS1GREP_GIT in .env"
 
+# #50: --cached (the index), --untracked (tracked plus untracked) and <tree>... (a revision's tree) choose
+# what git sys1grep searches instead of the working tree, as git grep has them.
+code 2 "#50: plain sys1grep --cached" -- $J --cached -e cat "$F"
+code 2 "#50: plain sys1grep --untracked" -- $J --untracked -e cat "$F"
+code 2 "#50: --cached in SYS1GREP_OPTS" -- $E SYS1GREP_OPTS=--cached SYS1GREP_URL=$base/v1 node ../sys1grep.mjs -e cat "$F"
+code 2 "#50: --untracked in SYS1GREP_OPTS" -- $E SYS1GREP_OPTS=--untracked SYS1GREP_URL=$base/v1 node ../sys1grep.mjs -e cat "$F"
+G="$tmp/g50"
+mkdir -p "$G"
+(cd "$G" && git init -q -b main && git config user.email t@t && git config user.name t)
+printf 'cat\n' >"$G/base.txt"; printf 'cat\n' >"$G/removed.txt"
+printf '猫がいる\n犬もいる\n' >"$G/neko.txt" # unpunctuated Japanese: --sentence=jev asks about the wrap between its lines
+(cd "$G" && git add base.txt removed.txt neko.txt && git commit -q -m v1 && git tag v1)
+(cd "$G" && git commit -q --allow-empty -m v2 && git tag v2) # base.txt's blob is unchanged: shared with v1
+reset
+eq "$(cd "$G" && $GS --chunk 1 -n -e cat v1 v2 -- base.txt | tr '\n' ' ')" "v1:base.txt:1:cat v2:base.txt:1:cat " "#50: a blob shared by two trees prints under each tree's prefix"
+eq "$(stat count)" "1" "#50: ...but is judged once (one request for the shared blob)"
+eq "$(cd "$G" && $GS -c -e cat v1 -- base.txt)" "v1:base.txt:1" "#50: a <tree>: -c is prefixed too"
+out=$(cd "$G" && $GS --dry-run -e cat v1 -- '*.txt')
+echo "$out" | grep -qF 'sys1grep: file v1:base.txt: ' || fail "#50 (owner decision 1): a <tree>'s glob pathspec reaches base.txt: $out"
+echo "$out" | grep -qF 'sys1grep: file v1:neko.txt: ' || fail "#50 (owner decision 1): a <tree>'s glob pathspec reaches neko.txt: $out"
+echo "$out" | grep -qF 'sys1grep: file v1:removed.txt: ' || fail "#50 (owner decision 1): a <tree>'s glob pathspec reaches removed.txt: $out"
+reset
+eq "$(cd "$G" && $GS --chunk 1 --sentence -c -e '猫がいる' v1 v2 -- neko.txt | tr '\n' ' ')" "v1:neko.txt:2 v2:neko.txt:2 " "#50: --sentence=jev on a blob shared by two trees"
+eq "$(stat count)" "2" "#50: ...also asks its break-judging once, not once per tree (one break request, one match request)"
+# a symlink and a submodule in a tree are left out, as in the working tree
+(cd "$G" && ln -s base.txt link.txt && git add link.txt && git update-index --add --cacheinfo 160000,"$(git rev-parse HEAD)",fakesub && git commit -q -m v3 && git tag v3)
+eq "$(cd "$G" && $GS -l -e cat v3 | tr '\n' ' ')" "v3:base.txt v3:removed.txt " "#50: a <tree>: a symlink and a submodule are left out"
+# diverge the working tree, the index and the untracked files from v3's committed state
+rm "$G/removed.txt" # gone from the working tree, still in the index
+printf 'cat wtree\n' >"$G/base.txt" # a working-tree change, not staged
+printf 'cat\n' >"$G/staged.txt"; (cd "$G" && git add staged.txt) # a staged change
+printf 'cat\n' >"$G/untracked.txt" # untracked
+printf 'cat\n' >"$G/ignored.txt"; echo ignored.txt >"$G/.gitignore"; (cd "$G" && git add .gitignore)
+eq "$(cd "$G" && $GS -l -e cat | tr '\n' ' ')" "base.txt staged.txt " "#50: the working tree: as edited; untracked and ignored files left out"
+eq "$(cd "$G" && $GS --cached -l -e cat | tr '\n' ' ')" "base.txt removed.txt staged.txt " "#50: --cached: the index, not the working tree's edit; a file gone from disk is still found"
+eq "$(cd "$G" && $GS --cached -n -e cat -- base.txt)" "base.txt:1:cat" "#50: --cached: content from the index, not the edited working tree; the name as in the working tree"
+eq "$(cd "$G" && $GS --untracked -l -e cat | tr '\n' ' ')" "base.txt staged.txt untracked.txt " "#50: --untracked: tracked (as edited) plus untracked, not ignored"
+code 2 "#50: --cached and --untracked together" -- sh -c "cd '$G' && $GS --cached --untracked -e cat"
+code 2 "#50: --cached with a <tree>" -- sh -c "cd '$G' && $GS --cached -e cat v1"
+code 2 "#50: --untracked with a <tree>" -- sh -c "cd '$G' && $GS --untracked -e cat v1"
+code 2 "#50: --changed-within needs the working tree" -- sh -c "cd '$G' && $GS --cached --changed-within=7d -e cat"
+(cd "$G" && git tag base.txt) # a tag with the same name as a tracked path: ambiguous without --
+code 2 "#50: an argument that is both a path and a revision is ambiguous" -- sh -c "cd '$G' && $GS -e cat base.txt"
+eq "$(cd "$G" && $GS -e cat base.txt 2>&1 >/dev/null | head -1)" "sys1grep: ambiguous argument 'base.txt': both revision and filename; use -- to separate" "#50 (owner decision 4): both a tree and a path names both, as git does"
+code 2 "#50: a nonexistent path without -- is now an error (git sys1grep, behaviour change)" -- sh -c "cd '$G' && $GS -e cat nosuchpath"
+eq "$(cd "$G" && $GS -e cat nosuchpath 2>&1 >/dev/null | head -1)" "sys1grep: ambiguous argument 'nosuchpath': unknown revision or path not in the working tree" "#50 (owner decision 4): neither a tree nor a path, as git does"
+(cd "$G" && git tag -d base.txt >/dev/null)
+GC="$tmp/g50-clone"
+(git clone -q "$G" "$GC" && cd "$GC" && git config user.email t@t && git config user.name t)
+printf 'cat local\n' >"$GC/base.txt"; (cd "$GC" && git commit -qam local) # a local, unpushed commit
+eq "$(cd "$GC" && $GS -n -e cat '@{u}' -- base.txt)" "@{u}:base.txt:1:cat" "#50: @{u}: the name as typed, the upstream's tree, not the local commit"
+
 # -r leaves out what git ignores; a file or directory named on the command line is searched even so
 I="$tmp/ign" JI="$E SYS1GREP_URL=$base/v1 node $SG"
 mkdir -p "$I/dist/sub" "$I/src/build"
@@ -778,6 +830,27 @@ reset; code 1 "-y does not un-skip it either" -- $O -y --summarize="$base/v1" --
 eq "$(stat chat)" "null" "still nothing POSTed to the HTTP summarizer"
 out=$($O --dry-run --summarize="$base/v1" --max-filesize 100K -e '/cat/' "$tmp/big.txt" 2>&1)
 echo "$out" | grep -q -- "$tmp/big.txt: skipped, .* is over --max-filesize=100K" || fail "--dry-run shows the file being skipped: $out"
+reset
+# #90 with #50: the settings name what git sys1grep searches instead of the working tree, the per-file lines name
+# the <tree>: / index copy, -i's preview shows both, and --summarize pipes the <tree>: prefixes
+GSM="$PWD/../git-sys1grep.mjs"
+out=$(cd "$tmp/g50" && $GS --dry-run -e cat v1 v2 -- base.txt)
+echo "$out" | grep -qx 'sys1grep: options: --level normal = -t 0.5 -T 0.5, --chunk 30, -j 8, scope on, -M 2000, --max-filesize 10M, --max-cost 1, <tree> v1 v2' || fail "#50/#90: options name the <tree>s: $out"
+echo "$out" | grep -qx 'sys1grep: file v2:base.txt: 1 lines, 1 to send' || fail "#50/#90: a file line names its <tree>: $out"
+out=$(cd "$tmp/g50" && $GS --dry-run --cached -e cat -- base.txt)
+echo "$out" | grep -q '^sys1grep: options: .*, scope on, .*--cached$' || fail "#50/#90: options name --cached: $out"
+echo "$out" | grep -qx 'sys1grep: file base.txt (index): 1 lines, 1 to send' || fail "#50/#90: --cached: a file line says it is the index copy: $out"
+out=$(cd "$tmp/g50" && $GS --dry-run --untracked -e cat -- untracked.txt)
+echo "$out" | grep -q '^sys1grep: options: .*, scope on, .*--untracked$' || fail "#50/#90: options name --untracked: $out"
+reset; out=$(asking "cd '$tmp/g50' && $GS -i -l -e cat v1 -- base.txt" n)
+echo "$out" | grep -q '^sys1grep: options: .*<tree> v1' || fail "#50/#90: -i shows the <tree> in options: $out"
+echo "$out" | grep -q '^sys1grep: file v1:base.txt: ' || fail "#50/#90: -i shows the <tree>'s file line: $out"
+eq "$(stat count)" "0" "#50/#90: -i, n with a <tree>: nothing sent"
+eq "$(cd "$tmp/g50" && $E PATH=$tmp/bin:$PATH SUM=$tmp/sum SYS1GREP_URL=$base/v1 node "$GSM" --summarize -n -e cat v1 v2 -- base.txt)" "SUMMARY" "#50: --summarize over <tree>s"
+eq "$(tr '\n' '|' <"$tmp/sum.in")" "v1:base.txt:1:cat|v2:base.txt:1:cat|" "#50: --summarize pipes the <tree>: prefixes"
+grep -qF 'A file named REV:path is path as of the git revision REV' "$tmp/sum.argv" || fail "#50: --summarize's prompt says what REV:path is"
+(cd "$tmp/g50" && $E PATH=$tmp/bin:$PATH SUM=$tmp/sum SYS1GREP_URL=$base/v1 node "$GSM" --summarize --cached -e cat -- base.txt >/dev/null)
+grep -qF 'as staged in the git index' "$tmp/sum.argv" || fail "#50: --summarize --cached: the prompt says the files are the index copy"
 reset
 
 # the spinner (#89): on a terminal, one line on stderr while waiting, erased before the output; never when not a terminal

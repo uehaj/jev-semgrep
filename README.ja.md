@@ -464,6 +464,26 @@ FILE を省くとカレントディレクトリ以下の追跡ファイルを全
 「いま変わった」扱いになります。
 ヘルプは `git sys1grep -h` です（`--help` は git が横取りして man ページを探しに行きます）。
 
+`--cached`、`--untracked`、`<tree>...` は作業ツリーの代わりに探す対象を選びます。`git grep` と同じで、
+3 つのうち同時に使えるのは 1 つだけです。
+
+```sh
+$ git sys1grep --cached -e "リトライしている"       # ステージ済み、未コミットの変更も含む
+$ git sys1grep --untracked -e "リトライしている"    # 追跡ファイルに加え未追跡ファイルも (.gitignore は効いたまま)
+$ git sys1grep -n -e "リトライしている" main v0.3.1 -- '*.py'
+main:src/job.py:42:    retry(job, times=3)
+v0.3.1:src/job.py:40:    retry(job)
+```
+
+`<tree>`（ブランチ・タグ・コミット・`@{u}`）は `--` の前に置いた、リビジョンとして解決できる引数です。複数指定でき、
+指定順に探し、各行には解決前の名前をそのまま付けます (`@{u}:path` であって、解決したブランチ名ではありません)。
+`--changed-within` は作業ツリーが要ります。blob（`--cached`、`<tree>`）には自分の mtime がないためです。
+`<tree>` 自身の pathspec も sys1grep の他の場所と同じくグロブが使えます（空の tree との `git diff-tree` を使い、
+`git ls-tree` 自身のリテラル・ディレクトリ前方一致のみのルールには従いません）。`--include` / `--exclude`
+（名前で絞る方）はそのまま使えます。
+**古い `<tree>` には、後で削除された秘密情報が普通のファイルとして残っていることがあります**。スキップ対象は
+名前で判定するだけで、変更履歴では判定しません。
+
 ### 「〜でない」行を全部
 
 ```sh
@@ -689,6 +709,10 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
                -t 0.6 -T 0.3 なら 0.3〜0.6 の曖昧な行はどちらにも当たらない
   -r           ディレクトリを再帰的に探す (FILE 省略時はカレント)。.git、node_modules、
                バイナリ、秘密情報らしいファイル、生成されたファイル、git が無視するものは飛ばす
+  --cached     git sys1grep 限定。作業ツリーではなくインデックスを探す (git grep --cached と同じ)
+  --untracked  git sys1grep 限定。追跡ファイルに加え未追跡ファイルも探す (.gitignore は効いたまま。git grep --untracked と同じ)
+  <tree>...    git sys1grep 限定。-- の前のブランチ・タグ・コミット・@{u} はそのリビジョンのツリーを探す
+               (git grep と同じ)。出力には <tree>: を付け、名前は解決前のまま表示する
   --include=GLOB, --exclude=GLOB  -r と git sys1grep で、名前が GLOB に合うファイルだけ (または合わないものだけ) を探す
                (-r ではコマンドラインで指定したファイルは必ず探す。git sys1grep の pathspec は絞り込む)
   --changed-within=WHEN  -r と git sys1grep で、30m / 2h / 7d / 2w 以内、日付か日時以降、today / this-week /
