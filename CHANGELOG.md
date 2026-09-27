@@ -52,6 +52,10 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   `sys1grep -g -Q '今日、.mjsにおこなった性能向上の修正'` runs `git log --since=<today> -- '*.mjs' …` and judges
   those commits. The command is printed on stderr. FILE arguments are pathspecs and are never narrowed. Places
   and uncommitted / staged / untracked are not asked. Not with `-r` or `git sys1grep`.
+  A span with an end (yesterday, last week, last month) also gets `--until`, and wins over the rolling span of
+  about the same length Jev says yes to as well (yesterday over the last 24 hours, whose start moves with the
+  clock), so `昨日のバグ修正` judges yesterday's commits only (#120). Files are still narrowed by a span's start
+  alone: a later change moves the mtime.
 - Auto-scope's note (#111): each judging request tells Jev which scopes all its lines got through, in one
   `note` in its state (`note: every line here is from what was changed yesterday, .mjs files.`), named as the
   scope question named them, or a language by the extension the meaning wrote. A line cannot show when it

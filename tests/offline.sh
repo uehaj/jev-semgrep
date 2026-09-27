@@ -410,7 +410,7 @@ echo "$V" | grep -q '^sys1grep: scope "cat @s:l_python' || fail "--verbose: a he
 echo "$V" | grep -qE '^sys1grep:   ✓ Python files \(\*\.py \*\.pyi \*\.pyw\) +0\.90  keeps 3 of 4 files$' || fail "--verbose: an applied candidate and its count: $V"
 echo "$V" | grep -qE '^sys1grep:   · test code \(.*\) +0\.40  \(below 0\.6, not applied\)$' || fail "--verbose: a candidate below 0.6: $V"
 echo "$V" | grep -qE '^sys1grep:   ✓ what was changed yesterday .*keeps [0-9]+ of 4 files$' || fail "--verbose: the narrowest span applied: $V"
-echo "$V" | grep -qE '^sys1grep:   · what was changed within the last 30 days .*\(a narrower span applied\)$' || fail "--verbose: a wider span not applied: $V"
+echo "$V" | grep -qE '^sys1grep:   · what was changed within the last 30 days .*\(another span applied\)$' || fail "--verbose: a wider span not applied: $V"
 eq "$($JI -r -l --dry-run --verbose -e 'cat @s:l_python' "$S" 2>&1 | grep -c '^sys1grep:   [✓·]' || true)" "0" "--verbose: no candidate lines with --dry-run"
 # --verbose (#104): the scopes a matching file got through, once per file; the files left out, 10 by name
 V=$($JI -r -n --verbose -e 'cat @s:l_python' "$S" "$S/b.js" 2>&1 >/dev/null || true)
@@ -454,19 +454,38 @@ eq "$(grep -c shortlog "$tmp/git.log" || true)" "0" "auto-scope: no git for nega
 : >"$tmp/git.log"; PATH="$tmp/gitwrap:$PATH" $JI -r -c -e cat "$G" >/dev/null
 [ "$(grep -c shortlog "$tmp/git.log")" -ge 1 ] || fail "auto-scope: git asked when a meaning can scope"
 # -g: git log's commits, one record each; auto-scope becomes git log arguments. Every commit carries every meaning.
-L="$tmp/gitlog"; mkdir -p "$L"; LM=$(printf '%s\n' 'cat @s:t_today' 'cat @s:l_python' 'cat @s:a_a_x' 'cat @s:g_mine' 'cat @s:t_today @s:l_python')
+L="$tmp/gitlog"; mkdir -p "$L"; LM=$(printf '%s\n' 'cat @s:t_today' 'cat @s:l_python' 'cat @s:a_a_x' 'cat @s:g_mine' 'cat @s:t_today @s:l_python' 'cat @s:t_yesterday' 'cat @s:t_yesterday @s:t_day1' 'cat @s:t_yesterday @s:t_day7' 'cat @s:t_today @s:t_yesterday' 'cat @s:t_day1' 'cat @s:t_lastmonth @s:t_day7' 'cat @s:t_lastmonth @s:t_day30')
 (cd "$L" && git init -q -b main && git config user.email b@x && git config user.name Bob && git config core.hooksPath /dev/null \
   && echo 1 >a.py && git add a.py && GIT_AUTHOR_DATE=2020-01-01T00:00 GIT_COMMITTER_DATE=2020-01-01T00:00 git commit -q --author='Alice <a@x>' -m oldpy -m "$LM" \
+  && Y=$(node -e 'const d=new Date();d.setDate(d.getDate()-1);d.setHours(12,0,0,0);console.log(d.toISOString())') \
+  && echo 4 >d.py && git add d.py && GIT_AUTHOR_DATE=$Y GIT_COMMITTER_DATE=$Y git commit -q -m yday -m "$LM" \
+  && M=$(node -e 'const d=new Date();d.setHours(0,0,0,0);console.log(d.toISOString())') \
+  && echo 5 >e.txt && git add e.txt && GIT_AUTHOR_DATE=$M GIT_COMMITTER_DATE=$M git commit -q -m midn -m "$LM" \
   && echo 2 >b.js && git add b.js && git commit -q -m newjs -m "$LM" && echo 3 >c.py && git add c.py && git commit -q -m newpy -m "$LM")
 gl() { (cd "$L" && $JI -g "$@" 2>/dev/null) | grep -aoE '^[0-9a-f]{7,} [0-9-]{10} [a-z]+' | awk '{print $3}' | tr '\n' ' '; }
-eq "$(gl -e cat)" "newpy newjs oldpy " "-g: a record per commit, newest first"
-eq "$(gl -e 'cat @s:t_today')" "newpy newjs " "-g: a time becomes --since"
-eq "$(gl -e 'cat @s:l_python')" "newpy oldpy " "-g: a language becomes pathspecs"
+eq "$(gl -e cat)" "newpy newjs midn yday oldpy " "-g: a record per commit, newest first"
+eq "$(gl -e 'cat @s:t_today')" "newpy newjs midn " "-g: a time becomes --since"
+# #120: a span with an end (yesterday, last week, last month) gets --until; a calendar span wins over the rolling one
+# of about the same length that Jev also says yes to (yesterday over the last 24 hours)
+eq "$(gl -e 'cat @s:t_yesterday')" "yday " "-g: yesterday becomes --since and --until (git's --until is inclusive: today 00:00:00 is out)"
+eq "$(gl -e 'cat @s:t_yesterday @s:t_day1')" "yday " "-g: yesterday over the last 24 hours"
+eq "$(gl -e 'cat @s:t_yesterday @s:t_day7')" "yday " "-g: yesterday is the narrowest"
+eq "$(gl -e 'cat @s:t_today @s:t_yesterday')" "newpy newjs midn " "-g: today is narrower than yesterday"
+# a span with an end wins only over a rolling one of about the same length: last month over the last 30 days (their
+# starts are days apart), never over the last 7 days. The second bites in the first week of a month, when last month
+# contains the 7 days' start; later it does not, and the 7 days win anyway.
+glc() { (cd "$L" && $JI -g "$@" 2>&1 >/dev/null) | grep '^sys1grep: git log ' || fail "-g $*: no git log line"; }
+glc -e 'cat @s:t_lastmonth @s:t_day30' | grep -q -- '--until=' || fail "-g: last month over the last 30 days"
+glc -e 'cat @s:t_lastmonth @s:t_day7' | grep -qE -- '--since=[0-9T:.-]+Z --$' || fail "-g: the last 7 days over last month: $(glc -e 'cat @s:t_lastmonth @s:t_day7')"
+(cd "$L" && $JI -g -e 'cat @s:t_yesterday' 2>&1 >/dev/null) | grep -qE "^sys1grep: git log .*--since=[0-9T:.-]+Z --until=[0-9T:.-]+Z " || fail "-g: --until on stderr"
+(cd "$L" && $JI -g -e 'cat @s:t_day1' 2>&1 >/dev/null) | grep -q -- '--until' && fail "-g: a rolling span has no --until"
+eq "$($JI -r -l -e 'cat @s:t_yesterday' "$S" 2>&1 >/dev/null | grep -c 'since .* (from "what was changed yesterday: 0.90")')" "1" "files: a span's end means nothing (a later change moves the mtime)"
+eq "$(gl -e 'cat @s:l_python')" "newpy yday oldpy " "-g: a language becomes pathspecs"
 eq "$(gl -e 'cat @s:a_a_x')" "oldpy " "-g: an author becomes --author"
-eq "$(gl -e 'cat @s:g_mine')" "newpy newjs " "-g: mine becomes --author with user.email"
+eq "$(gl -e 'cat @s:g_mine')" "newpy newjs midn yday " "-g: mine becomes --author with user.email"
 eq "$(gl -e 'cat @s:t_today @s:l_python')" "newpy " "-g: scopes of one meaning together"
 eq "$(gl -e 'cat @s:l_python' b.js)" "newjs " "-g: FILE is a pathspec, never narrowed"
-eq "$(gl --no-auto-scope -e 'cat @s:t_today')" "newpy newjs oldpy " "-g: --no-auto-scope"
+eq "$(gl --no-auto-scope -e 'cat @s:t_today')" "newpy newjs midn yday oldpy " "-g: --no-auto-scope"
 eq "$(cd "$L" && $JI -g --dry-run -e 'cat @s:l_python' -e dog | grep -c '\[scope\]' || true)" "0" "-g: no scope question with two terms"
 (cd "$L" && $JI -g -e 'cat @s:t_today @s:l_python' 2>&1 >/dev/null) | grep -qE "^sys1grep: git log .*--since=[0-9T:.-]+Z -- ':\(glob\)\*\*/\*\.py'" || fail "-g: the git log command on stderr"
 gn() { (cd "$L" && $JI -g --verbose "$@" 2>&1 >/dev/null) | grep '^sys1grep:   note: ' | sort -u; }
