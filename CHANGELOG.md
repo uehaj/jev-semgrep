@@ -10,10 +10,18 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   (`*.map`, `*.min.js`, `*.min.css`, `package-lock.json` and other lock files), named explicitly still searched.
   A unit longer than `-M`/`--max-columns` (default 2000, 8000 with `-z`) is skipped outright, not truncated: it
   is never sent and cannot match, and one stderr line per file counts how many were skipped (not with `-q`).
-  Before the bulk of judging requests, every target is sized (`--max-filesize`, K/M/G, default 10M) and the
-  input about to be sent is priced (`--max-cost`, default 1 USD); over either, one question asks to continue,
-  from a terminal; `-y`/`--yes` answers it yes without asking, and without a terminal it is exit 2. `-i` already
-  asks unconditionally and earlier, so it is not asked twice; `--dry-run` and `-i` show the same verdict.
+  Every target is sized (`--max-filesize`, K/M/G, default 10M) before anything is read, and asks to continue,
+  from a terminal, if any target is over it. Separately, the input about to be sent (including the setup
+  requests above, if any ran) is priced (`--max-cost`, default 1 USD) and asks too if it is over; both can fire
+  in the same run, as two questions. `-y`/`--yes` answers either yes without asking, and without a terminal a
+  limit exceeded is exit 2. `-i` already asks unconditionally and earlier, so neither asks again; `--dry-run`
+  and `-i` show the same verdict.
+
+### Changed
+- A unit over `-M`/`--max-columns` used to still be sent, truncated to the limit, so a match depending on text
+  past the cutoff (anywhere past character 2000 by default) could still be found. It is now skipped outright and
+  cannot match at all (see above): existing long-line or long-commit-message searches that relied on the
+  truncated tail may now miss lines they used to find; raise `-M`/`--max-columns` if that happens.
 - `-g` / `--gitlog` searches the commits of `git log` instead of files, one record each (`%h %ad %s`, then the
   body). With one term, auto-scope turns into git log's arguments: a time into `--since`, a language into
   pathspecs, an author or "mine" into `--author`, this branch or not pushed into a range, so

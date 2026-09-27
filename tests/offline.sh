@@ -551,6 +551,34 @@ eq "$(printf '%s\n' "$out" | grep -c '\[y/N\]')" "1" "-i and the cost guard toge
 # --dry-run and -i show the same verdict the guard would ask about, so both stay consistent with it
 $J --dry-run --max-filesize 10K -e cat "$tmp/huge.txt" | grep -q 'large files:.*--max-filesize 10K.*would ask' || fail "--dry-run shows the size guard's verdict"
 $J --dry-run --max-cost 0 -e cat "$F" | grep -q 'over --max-cost 0, would ask' || fail "--dry-run shows the cost guard's verdict"
+# -M and --max-filesize/--max-cost/-y all take effect from SYS1GREP_OPTS too, not just the command line
+reset; eq "$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS='--max-columns 3000' node ../sys1grep.mjs -n -e cat "$tmp/long.txt" | nums)" "1 2 " "--max-columns in SYS1GREP_OPTS"
+reset; eq "$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS='--max-filesize 10K --max-cost 0 -y' node ../sys1grep.mjs -c -e cat "$tmp/huge.txt" </dev/null)" "20000" "--max-filesize, --max-cost and -y in SYS1GREP_OPTS take effect"
+
+# #58 review (blocker): --sentence=jev's judgeBreaks used to send real line content over the network before the
+# size guard ever ran (it was combined with the cost guard, gated on there being judging chunks left after
+# --sentence's own break-judging requests already went out). The size guard now fires off the file stat alone,
+# before any line of the file is read, so a decline must reach the fake with zero requests.
+node -e "for (let i = 0; i < 50; i++) console.log('これはとても長い日本語の文章であり改行があいまいです' + i)" >"$tmp/cjk.txt"
+reset; asking "$J --sentence --max-filesize 1K -e cat '$tmp/cjk.txt'" n >/dev/null
+eq "$(stat count)" "0" "--sentence=jev: judgeBreaks sends nothing before a declined size guard"
+reset; asking "$J --sentence --max-filesize 1K -e cat '$tmp/cjk.txt'" y >/dev/null
+[ "$(stat count)" -gt 0 ] || fail "--sentence=jev: judgeBreaks runs once the size guard is answered yes"
+
+# #58 review: a decline used to always say "nothing sent", even when auto-scope's own setup request (meaning
+# text only, no file content) had already gone out for real before the size guard could ask
+mkdir -p "$tmp/scopebig"; cp "$tmp/huge.txt" "$tmp/scopebig/huge.txt"
+reset; out=$(asking "$J -r --max-filesize 10K -e cat '$tmp/scopebig'" n)
+eq "$(stat count)" "1" "auto-scope's own request went out before the size guard declined"
+echo "$out" | grep -q 'stopped; 1 setup request already sent' || fail "the decline names what already went out: $out"
+
+# #58 review (minor): the byte-rate estimate assumed English's ~4 chars/token; CJK content runs closer to 1
+# token/char, so a Japanese-heavy request should price higher than an ASCII one of the same body size, not the same
+node -e "process.stdout.write('cat ' + 'x'.repeat(300))" >"$tmp/ascii-est.txt"
+node -e "process.stdout.write('cat ' + 'あ'.repeat(100))" >"$tmp/cjk-est.txt" # 100 x 3 UTF-8 bytes = same 300 bytes
+a=$($J --dry-run -e cat "$tmp/ascii-est.txt" | grep -oE '~[0-9]+ input tokens' | grep -oE '[0-9]+')
+c=$($J --dry-run -e cat "$tmp/cjk-est.txt" | grep -oE '~[0-9]+ input tokens' | grep -oE '[0-9]+')
+[ "$c" -gt "$a" ] || fail "CJK-heavy content prices higher than same-byte-length ASCII: ascii=$a cjk=$c"
 
 # the spinner (#89): on a terminal, one line on stderr while waiting, erased before the output; never when not a terminal
 printf 'cat @slow\ndog\n' >"$tmp/slow.txt"

@@ -204,13 +204,14 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
   -M NUM, --max-columns=NUM  a line (or record, with -z) longer than NUM characters is skipped: it is
                never sent and cannot match. Default 2000 (8000 with -z). One line per file on stderr
                counts how many were skipped, not with -q
-  --max-filesize=SIZE  before the bulk of requests, every file about to be searched is sized (K/M/G
-               suffix, default 10M); one over this is listed and the run asks to continue, as below
-  --max-cost=USD  the input tokens about to be sent are estimated and priced; over this (default 1) the
-               run asks to continue, in the same question as --max-filesize. No terminal and a limit
-               exceeded is exit 2, naming the option that would let it through. -i already asks
-               unconditionally and earlier, so it is not asked twice
-  -y, --yes    answer that question yes without asking (SYS1GREP_OPTS='--max-filesize ... -y' for scripts)
+  --max-filesize=SIZE  before any file is read, every target is sized (K/M/G suffix, default 10M); one
+               over this is listed and the run asks to continue, before --max-cost's own question below
+  --max-cost=USD  the input tokens about to be sent are estimated and priced (including --max-filesize's
+               own question above, if it asked); over this (default 1) the run asks to continue too, as a
+               second question when both apply. No terminal and a limit exceeded is exit 2, naming the
+               option that would let it through. -i already asks unconditionally and earlier, so neither
+               asks again
+  -y, --yes    answer both questions yes without asking (SYS1GREP_OPTS='--max-filesize ... -y' for scripts)
   --dedup      judge one line per template instead of every line. Lines that differ only in ids, hashes,
                numbers, dates and times, paths and URLs share a template; one of them is sent and its answer
                is reused for the rest. Which of those may be folded depends on the meaning: a number decides
@@ -351,13 +352,13 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
   -M NUM, --max-columns=NUM  NUM 文字を超える行 (-z ならレコード) は送らず飛ばす。それだけでは
                当たらなくなる。既定 2000 (-z なら 8000)。飛ばした数をファイルごとに stderr へ 1 行、
                -q では出さない
-  --max-filesize=SIZE  リクエストの本体を送る前に、検索対象のファイルを 1 つずつ計測する
-               (K/M/G の接尾辞、既定 10M)。これを超えるものがあれば一覧を出し、続けるか聞く (下記と同じ質問)
-  --max-cost=USD  送る予定の入力トークンを見積もって値段を出す。これ (既定 1) を超えたら
-               --max-filesize と同じ質問で続けるか聞く。端末が無く、いずれかの上限を超えていれば
-               終了コード 2 で、どのオプションを緩めれば通るかを言う。-i は無条件かつこれより前に
-               聞くので、二重には聞かない
-  -y, --yes    その質問に yes と答えて聞かない (スクリプトからは SYS1GREP_OPTS='--max-filesize ... -y')
+  --max-filesize=SIZE  ファイルを読む前に、検索対象を 1 つずつ計測する
+               (K/M/G の接尾辞、既定 10M)。これを超えるものがあれば一覧を出し、続けるか聞く (--max-cost の質問より先)
+  --max-cost=USD  送る予定の入力トークンを見積もって値段を出す (--max-filesize の質問がもう出ていれば、その分も込みで)。
+               これ (既定 1) を超えたら続けるか聞く。両方に該当すれば二問になる。端末が無く、いずれかの
+               上限を超えていれば終了コード 2 で、どのオプションを緩めれば通るかを言う。-i は無条件かつ
+               これより前に聞くので、どちらも二重には聞かない
+  -y, --yes    どちらの質問にも yes と答えて聞かない (スクリプトからは SYS1GREP_OPTS='--max-filesize ... -y')
   --dedup      全行ではなくテンプレートごとに 1 行だけ判定する。ID・ハッシュ・数値・日付と時刻・パス・
                URL だけが違う行は同じテンプレートとみなし、代表 1 行を送ってその答えを残りにも使う。
                どれをまとめてよいかは意味による。「ディスク使用率が 90% を超えている」なら数値が、
@@ -842,11 +843,22 @@ if (opt.interactive && !dry) {
   }
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// Scripts written without spaces between words (needed here for estimateTokens' CJK-aware pricing below, and
+// later for joining wrapped lines without adding a word space, --sentence).
+const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}\p{Script=Tibetan}ー、。]/u;
+// #58: how many of a request body's bytes are CJK script, for estimateTokens' CJK-aware pricing.
+const cjkBytesOf = text => Buffer.byteLength((text.match(new RegExp(CJK, 'gu')) ?? []).join(''));
 let usedTokens = 0, usedCost = 0, requestCount = 0, dedupTokens = 0; // dedupTokens: what --dedup's own questions cost
+let sentBytes = 0, sentCjkBytes = 0, sentRequests = 0; // #58 review: bytes/requests already sent for real (scope,
+// --dedup and --sentence=jev's judgeBreaks() all run before the chunk requests below are even built), so --max-cost's
+// own estimate counts them instead of only the chunks about to go out.
 // Jev bills input tokens; without a response they can only be estimated from the request bodies. Fitted on 7 requests
 // to Jev (English and Japanese, 1-3 questions a line, 2026-09-26): 650 a request + 0.21 a body byte, within -8%..+12%.
-const estimateTokens = (requests, bytes) => Math.round(650 * requests + 0.21 * bytes);
-let traced = 0, tracedQuestions = 0, tracedChars = 0, tracedBytes = 0;
+// That rate assumes English's ~4 characters a token; CJK text runs closer to 1 token a character, ~3 bytes in UTF-8
+// (~0.33 tokens/byte), so a CJK-heavy request undershoots on the fitted rate alone (#58 asked the estimate to err
+// high). cjkBytes prices that part of the body at ~1 token/char instead, and the rest at the fitted rate.
+const estimateTokens = (requests, bytes, cjkBytes = 0) => Math.round(650 * requests + 0.21 * (bytes - cjkBytes) + 0.33 * cjkBytes);
+let traced = 0, tracedQuestions = 0, tracedChars = 0, tracedBytes = 0, tracedCjkBytes = 0;
 const cut = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 // --dry-run / --verbose: one line per request, then its questions grouped by wording (line ids read Lnnn).
 // --dry-run answers every question no (0), which also decides what --dedup folds and where --sentence joins.
@@ -858,19 +870,22 @@ function show(state, questions, label) {
   if (state.note) trace(`  ${cut(state.note, 110)}`);
   [...count].slice(0, 3).forEach(([q, k]) => trace(`  ${String(k).padStart(3)}× ${cut(q, 100)}`));
   if (count.size > 3) trace(`       (+${count.size - 3} more)`);
-  tracedQuestions += n; tracedChars += chars; tracedBytes += Buffer.byteLength(JSON.stringify({ model, state, questions }));
+  const body = JSON.stringify({ model, state, questions });
+  tracedQuestions += n; tracedChars += chars; tracedBytes += Buffer.byteLength(body); tracedCjkBytes += cjkBytesOf(body);
 }
 // One request with retries: 429 / 529 / 5xx, connection errors and timeouts back off exponentially.
 async function post(state, questions, label) {
   if (trace) show(state, questions, label);
   if (dry) return Object.fromEntries(Object.keys(questions).map(k => [k, { noul: 0 }]));
+  const body = JSON.stringify({ model, state, questions });
+  sentBytes += Buffer.byteLength(body); sentCjkBytes += cjkBytesOf(body); sentRequests++;
   for (let attempt = 0; ; attempt++) {
     let res;
     try {
       res = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...(credential && { authorization: `Bearer ${credential}` }) },
-        body: JSON.stringify({ model, state, questions }),
+        body,
         signal: AbortSignal.timeout(60_000),
       });
     } catch (e) {
@@ -928,6 +943,26 @@ if (!opt.quiet && narrowable) {
 // A file named on the command line is sized too: it was named on purpose, but a giant one is still a giant one.
 const oversized = opt.gitlog ? [] : targets.filter(f => f !== '-')
   .map(f => { try { return { file: f, size: statSync(f).size }; } catch { return null; } }).filter(x => x && x.size > MAX_FILESIZE);
+// One question, on /dev/tty; -y answers it yes without asking; no terminal is exit 2. Shared by the size guard
+// right below and the cost guard further down (#58 review: the two used to share one prompt after chunking, which
+// let --sentence=jev's judgeBreaks() send real file content before ever asking; the size guard now fires first,
+// straight off the file stat, before any line of a target is read).
+function askToContinue(msg) {
+  if (!warned.includes(msg)) { console.error(msg); warned.push(msg); }
+  let tty;
+  try { tty = openSync('/dev/tty', 'r+'); }
+  catch { die('large input needs a terminal to confirm on (-y, or a higher --max-filesize / --max-cost, lets it through)'); }
+  writeSync(tty, 'sys1grep: continue? [y/N] ');
+  const buf = Buffer.alloc(256);
+  if (!/^\s*y(es)?\s*$/i.test(buf.toString('utf8', 0, readSync(tty, buf)))) {
+    // #58 review: auto-scope (and, with --sentence=jev, judgeBreaks) can have sent real requests already by the
+    // time either guard asks, so "nothing sent" would be false; say what already went out instead.
+    console.error(sentRequests ? `sys1grep: stopped; ${sentRequests} setup request${sentRequests === 1 ? '' : 's'} already sent` : 'sys1grep: nothing sent');
+    process.exit(1);
+  }
+}
+if (oversized.length && !dry && !opt.interactive && !opt.yes)
+  askToContinue(`sys1grep: large files: ${oversized.map(o => `${safe(o.file)} (${fmtSize(o.size)})`).join(', ')}  (--max-filesize ${opt['max-filesize'] ?? '10M'})`);
 // -g: git log over the commits the scopes of the one term admit. Within the term the scopes are ANDed: the latest
 // time, and the ranges together; languages and authors are each ORed (git's pathspecs and --author are).
 // ponytail: two meanings each naming a language OR them; AND them if that ever matters.
@@ -956,7 +991,6 @@ if (opt.gitlog) {
 // number. Each joined piece is then split by Intl.Segmenter (Unicode UAX #29 sentence boundaries).
 const SENTENCES = new Intl.Segmenter(undefined, { granularity: 'sentence' });
 // Scripts written without spaces between words: joining their wrapped lines must not add one
-const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}\p{Script=Tibetan}ー、。]/u;
 const hardBreak = (prev, next) => !prev || !next || /[{}\[\]<>|;]$/.test(prev) || /^[{}\[\]<>|"\-*+#>\d]/.test(next)
   || /[{}\[\];]$/.test(next); // a line ending like code is not a continuation of prose either
 // lines -> [{ text, spans }]. A span [unit, from, to] is where the sentence lies in the original units: the unit
@@ -1222,30 +1256,24 @@ async function evaluate(chunk) {
   const answers = await post(state, questions, `[judge] ${a.file}:${a.no}-${a.file === b.file ? '' : `${b.file}:`}${b.no}, ${chunk.length} ${unitName}`);
   chunk.forEach((l, i) => [...asksByUnit.get(l).keys()].forEach((text, k) => asksByUnit.get(l).set(text, answers[`${id(i)}_${k}`].noul)));
 }
-// #58: one question covers both the size guard above and the cost estimated from what is actually about to be
-// sent (after the regex prefilter, --dedup grouping and the overlong skip above). This runs after auto-scope's and
-// --dedup's own small setup requests (a handful, not gated: re-running them dry first, as -i does, would double
-// the setup cost every time), so it is not literally before the first request, only before the bulk of them.
+// #58: the cost of what is actually about to be sent (after the regex prefilter, --dedup grouping and the
+// overlong skip above), PLUS the setup requests already sent for real above (auto-scope, --dedup, and
+// --sentence=jev's judgeBreaks(), tallied in sentBytes/sentRequests as they went out, #58 review: they used to
+// be missing from this estimate entirely). Not gated on chunks.length (#58 review: an empty chunk set used to
+// skip this whole check, silently, even when the setup requests above already cost something).
 // -i already asked earlier, unconditionally and before anything at all is sent, which covers this; -y answers
-// this question yes without asking (it does not also answer -i's).
-if (!dry && !opt.interactive && !opt.yes && chunks.length) {
-  const estBytes = chunks.reduce((t, c) => t + Buffer.byteLength(JSON.stringify({ model, ...requestOf(c) })), 0);
-  const estTokens = estimateTokens(chunks.length, estBytes);
+// this question yes without asking (it does not also answer -i's). The size guard above already asked about
+// oversized files, so this is cost only.
+if (!dry && !opt.interactive && !opt.yes) {
+  const bits = chunks.reduce((t, c) => {
+    const body = JSON.stringify({ model, ...requestOf(c) });
+    return { bytes: t.bytes + Buffer.byteLength(body), cjk: t.cjk + cjkBytesOf(body) };
+  }, { bytes: sentBytes, cjk: sentCjkBytes });
+  const estTokens = estimateTokens(sentRequests + chunks.length, bits.bytes, bits.cjk);
   // Unlike --dry-run's own display, --max-cost is checked at TypeSafe's list price even for a custom endpoint
   // (OpenRouter, a local server): a wrong number the guard can act on beats none it cannot (#58's open question).
   const estPrice = (estTokens * 0.042) / 1e6;
-  if (oversized.length || estPrice > MAX_COST) {
-    const msgs = [];
-    if (oversized.length) msgs.push(`sys1grep: large files: ${oversized.map(o => `${safe(o.file)} (${fmtSize(o.size)})`).join(', ')}  (--max-filesize ${opt['max-filesize'] ?? '10M'})`);
-    msgs.push(`sys1grep: about ${estTokens.toLocaleString('en-US')} input tokens, ~$${estPrice.toFixed(2)}  (--max-cost ${MAX_COST})`);
-    for (const m of msgs) if (!warned.includes(m)) { console.error(m); warned.push(m); }
-    let tty;
-    try { tty = openSync('/dev/tty', 'r+'); }
-    catch { die('large input needs a terminal to confirm on (-y, or a higher --max-filesize / --max-cost, lets it through)'); }
-    writeSync(tty, 'sys1grep: continue? [y/N] ');
-    const buf = Buffer.alloc(256);
-    if (!/^\s*y(es)?\s*$/i.test(buf.toString('utf8', 0, readSync(tty, buf)))) { console.error('sys1grep: nothing sent'); process.exit(1); }
-  }
+  if (estPrice > MAX_COST) askToContinue(`sys1grep: about ${estTokens.toLocaleString('en-US')} input tokens, ~$${estPrice.toFixed(2)}  (--max-cost ${MAX_COST})`);
 }
 const isHit = l => expr.some(term => termHolds(term, l));
 // -q: a failed request is reported and the rest still run, since a later match means exit 0 (grep -q).
@@ -1406,7 +1434,7 @@ if (summarizer && !dry && matched && pipedBytes > SUMMARY_MAX) {
 // Summary only when interactive; grep prints nothing to stderr when scripted.
 if (dry) {
   const assumed = [opt.dedup && '--dedup', opt.sentence === 'jev' && '--sentence'].filter(Boolean);
-  const tokens = estimateTokens(traced, tracedBytes), price = customUrl ? '' : `, ~$${(tokens * 0.042 / 1e6).toFixed(6)}`;
+  const tokens = estimateTokens(traced, tracedBytes, tracedCjkBytes), price = customUrl ? '' : `, ~$${(tokens * 0.042 / 1e6).toFixed(6)}`;
   // #58: --dry-run and -i show the same guard a real run would ask about, so both stay consistent with it.
   const guard = oversized.length ? `; large files: ${oversized.map(o => `${safe(o.file)} (${fmtSize(o.size)})`).join(', ')} (--max-filesize ${opt['max-filesize'] ?? '10M'}) would ask`
     : (tokens * 0.042) / 1e6 > MAX_COST ? `; over --max-cost ${MAX_COST}, would ask` : '';
@@ -1420,7 +1448,10 @@ if (dry) {
   let folded = '';
   if (opt.dedup) {
     const judged = new Set(sent), members = lines.filter(l => !judged.has(l));
-    const saved = chunked(members).reduce((t, c) => t + estimateTokens(1, Buffer.byteLength(JSON.stringify({ model, ...requestOf(c) }))), 0) - dedupTokens;
+    const saved = chunked(members).reduce((t, c) => {
+      const body = JSON.stringify({ model, ...requestOf(c) });
+      return t + estimateTokens(1, Buffer.byteLength(body), cjkBytesOf(body));
+    }, 0) - dedupTokens;
     const share = saved + usedTokens > 0 ? `, ${Math.round((100 * saved) / (saved + usedTokens))}%` : '';
     folded = ` (${members.length} folded by --dedup, ~${saved} input tokens${perToken ? ` / ~$${(saved * perToken).toFixed(6)}` : ''} saved${share})`;
   }
