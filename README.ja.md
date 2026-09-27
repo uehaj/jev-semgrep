@@ -597,6 +597,9 @@ $ sys1grep -r -n --summarize -e "API キーをファイルから読んでいる"
 - `-n`・`-A/-B/-C`・`-p`・ファイル名は表示どおりに渡し、色は付けません。一致がなければ何も渡しません（終了コード 1）。
 - `SYS1GREP_SUMMARIZER` は値を付けない `--summarize` の TOOL を、`SYS1GREP_SUMMARIZER_MODEL` はそのモデルを決めます。
 - `-q`・`-l`・`-c` は行を出さないので、一緒には使えません。
+- 答えはプレーンテキストです。何も言わなければ LLM は Markdown で書き、端末では雑音になるので、plain を頼みます。
+  `--summarize-format=markdown` か `=html` でそれらを頼めます（`… --summarize-format=html … > summary.html`）。
+  答えは確かめずにそのまま表示します。`SYS1GREP_OPTS` に書けば常用の設定になり、`--summarize` が無いときは無視します。
 - `--dedup` では、Jev に送ったものと同じく、テンプレートごとの代表を 1 回だけ `(×N like it)` を付けて渡します。
   答えを使い回したすべての行は渡しません。
 - 200 KB（約 5 万トークン）を超えるときは何も渡さず、大きさを示して終了コード 2 で止まります。TOOL の費用がかかる前です。
@@ -609,7 +612,7 @@ $ sys1grep -r -n --summarize --summarize-prompt="3 行以内で。どのファ�
     -e "API キーをファイルから読んでいる" .
 ```
 
-`--summarize` が要ります。空の TEXT は指定しないのと同じです。
+`--summarize` が要ります。空の TEXT は指定しないのと同じです。`--summarize-format` の文より後に置くので、TEXT で書式を上書きできます。
 
 他の TOOL:
 
