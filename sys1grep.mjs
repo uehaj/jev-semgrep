@@ -246,11 +246,12 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
   -M NUM, --max-columns=NUM  send at most the first NUM characters of a line (or record, with -z); it
                is still searched and judged, but a match past NUM cannot be found there. Default 2000
                (8000 with -z)
-  --max-filesize=SIZE  before any file is read, every target is sized (K/M/G suffix, default 10M); one
+  --max-filesize=SIZE  before any target is read, every one is sized (K/M/G suffix, default 10M); one
                over this is skipped outright and named on stderr, like rg's own --max-filesize. -y does
                not affect it (a named file over the limit is skipped too). stdin is sized once it is
-               read, and skipped the same way if it is over. -g's commits stay out of this: each is
-               already bounded by -M when sent
+               read, and skipped the same way if it is over. --cached / <tree>: targets are blobs, sized
+               from their content too. -g's commits stay out of this: each is already bounded by -M
+               when sent
   --max-cost=USD  the input tokens about to be sent are estimated and priced; over this (default 1) the
                run asks to continue, on the terminal. No terminal and the limit exceeded is exit 2,
                naming the option that would let it through; -q does not change this (scripts pass -y).
@@ -424,11 +425,11 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                y のときだけ検索する。答えるまで何も送らない。端末が無ければエラー
   -M NUM, --max-columns=NUM  行 (-z ならレコード) の先頭 NUM 文字までを送る。それでも検索・判定は
                される (NUM より先にある一致だけは見つからない)。既定 2000 (-z なら 8000)
-  --max-filesize=SIZE  ファイルを読む前に、検索対象を 1 つずつ計測する
+  --max-filesize=SIZE  読む前に、検索対象を 1 つずつ計測する
                (K/M/G の接尾辞、既定 10M)。これを超えるものは rg の --max-filesize と同じく無条件に飛ばし、
                stderr に名前を出す。-y は効かない (明示的に指定したファイルでも超えていれば飛ばす)。
-               標準入力は読んでから計測し、超えていれば同じく飛ばす。-g のコミットはここに含まれない
-               (送るときに -M ですでに上限がある)
+               標準入力は読んでから計測し、超えていれば同じく飛ばす。--cached / <tree>: の対象は blob
+               で、その内容から計測する。-g のコミットはここに含まれない (送るときに -M ですでに上限がある)
   --max-cost=USD  送る予定の入力トークンを見積もって値段を出す。これ (既定 1) を超えたら端末で続けるか
                聞く。端末が無く上限を超えていれば終了コード 2 で、どのオプションを緩めれば通るかを言う。
                -q でも変わらない (スクリプトからは -y)。
@@ -1358,13 +1359,19 @@ const spansOf = new Map(); // file -> spans of each sentence (--sentence only)
 const allLines = [], unitCount = new Map();
 const read = new Map(); // file -> units as read (lines, or records with -z)
 for (const file of targets) {
-  // #58 / #125 review: every target is sized before it is read (git log's own commits, opt.gitlog, have none,
-  // and stay out of --max-filesize: each is already bounded by -M at send time). stdin is read whole already
-  // (see stdinBuf above), so it is sized from that buffer instead of stat'd. One over --max-filesize is skipped
-  // outright, like rg, and named on stderr even with -q's own file (unlike the binary-file message below, which
-  // only speaks up for a file named on the command line). -y does not affect it.
+  // #58 / #125 / #126 review: every target is sized before it is read (git log's own commits, opt.gitlog, have
+  // none, and stay out of --max-filesize: each is already bounded by -M at send time). stdin is read whole
+  // already (see stdinBuf above), so it is sized from that buffer instead of stat'd. --cached and <tree>:
+  // targets are blobs, not files on disk: fetchBlobs already read every one of them in one `git cat-file
+  // --batch` call above (blobContent), so the blob's already-read buffer sizes it too, no extra git process
+  // per file. One over --max-filesize is skipped outright, like rg, and named on stderr even with -q's own
+  // file (unlike the binary-file message below, which only speaks up for a file named on the command line).
+  // -y does not affect it.
   if (file !== GITLOG) {
-    const size = file === '-' ? (stdinBuf?.length ?? null) : (() => { try { return statSync(file).size; } catch { return null; } })();
+    const blobId = blobOfLabel.get(file);
+    const size = file === '-' ? (stdinBuf?.length ?? null)
+      : blobId ? (blobContent.get(blobId)?.length ?? null)
+      : (() => { try { return statSync(file).size; } catch { return null; } })();
     if (size != null && size > MAX_FILESIZE) {
       console.error(`sys1grep: ${safe(file)}: skipped, ${fmtSize(size)} is over --max-filesize=${opt['max-filesize'] ?? '10M'}`);
       continue;

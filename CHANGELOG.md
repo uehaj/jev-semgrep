@@ -21,7 +21,10 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   truncated text. Standard input is sized once it is read (it is already read whole into memory), and skipped
   the same way as a file (`sys1grep: -: skipped, 190 KB is over --max-filesize=10K`), nothing from it sent.
   `-g`'s commits stay out of `--max-filesize` (each is already bounded by `-M` at send time). `-q` combined with
-  `--max-cost` and no terminal is unchanged: still an exit-2 stop (scripts pass `-y`).
+  `--max-cost` and no terminal is unchanged: still an exit-2 stop (scripts pass `-y`). A `--cached` or `<tree>:`
+  target (#50/#126) is a blob, not a file `stat` can size; `--max-filesize` now sizes it from its content
+  instead, read once already by the batch `git cat-file --batch` those options use, so no extra `git` process
+  runs per blob (#58 closes).
 - `git sys1grep` gets `--cached`, `--untracked` and `<tree>...`, as `git grep` has them (#50). `--cached`
   searches the blobs staged in the index instead of the working tree (a file deleted from the working tree
   but still staged is still found); `--untracked` searches tracked files plus untracked ones (`.gitignore`

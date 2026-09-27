@@ -334,6 +334,20 @@ eq "$(cd "$G" && $GS -e cat base.txt 2>&1 >/dev/null | head -1)" "sys1grep: ambi
 code 2 "#50: a nonexistent path without -- is now an error (git sys1grep, behaviour change)" -- sh -c "cd '$G' && $GS -e cat nosuchpath"
 eq "$(cd "$G" && $GS -e cat nosuchpath 2>&1 >/dev/null | head -1)" "sys1grep: ambiguous argument 'nosuchpath': unknown revision or path not in the working tree" "#50 (owner decision 4): neither a tree nor a path, as git does"
 (cd "$G" && git tag -d base.txt >/dev/null)
+
+# #58/#126: --cached and <tree>: targets are blobs, not files on disk; --max-filesize sizes them from the batch
+# blob read fetchBlobs already did (one git process for the lot), not a fresh stat or cat-file per file.
+(cd "$G" && node -e "for (let i = 0; i < 20000; i++) console.log('cat ' + i)" >hugeblob.txt && git add hugeblob.txt && git commit -q -m v4 && git tag v4)
+reset; out=$(cd "$G" && $GS --max-filesize 10K -e cat v4 -- hugeblob.txt 2>&1 >/dev/null) || true
+eq "$(stat count)" "0" "#58/#126: an oversized <tree>: blob is skipped, nothing sent"
+echo "$out" | grep -q -- "v4:hugeblob.txt: skipped, .* is over --max-filesize=10K" || fail "#58/#126: the skip message names the <tree>: blob: $out"
+reset; eq "$(cd "$G" && $GS --max-filesize 10K -c -e cat v1 -- base.txt)" "v1:base.txt:1" "#58/#126: a <tree>: blob under the limit is still searched"
+(cd "$G" && cp hugeblob.txt staged-huge.txt && git add staged-huge.txt) # staged only, not committed
+reset; out=$(cd "$G" && $GS --cached --max-filesize 10K -e cat -- staged-huge.txt 2>&1 >/dev/null) || true
+eq "$(stat count)" "0" "#58/#126: an oversized --cached blob is skipped, nothing sent"
+echo "$out" | grep -q -- "staged-huge.txt: skipped, .* is over --max-filesize=10K" || fail "#58/#126: the skip message names the --cached blob: $out"
+reset; eq "$(cd "$G" && $GS --cached --max-filesize 10K -n -e cat -- base.txt)" "base.txt:1:cat" "#58/#126: a --cached blob under the limit is still searched"
+
 GC="$tmp/g50-clone"
 (git clone -q "$G" "$GC" && cd "$GC" && git config user.email t@t && git config user.name t)
 printf 'cat local\n' >"$GC/base.txt"; (cd "$GC" && git commit -qam local) # a local, unpushed commit
