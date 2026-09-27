@@ -1196,7 +1196,7 @@ function gitlogArgs() {
   const cs = (expr.length === 1 ? expr[0] : []).filter(l => l.kind === 's').flatMap(l => l.cs), args = [], paths = [];
   const times = cs.filter(c => c.cat === 'time'), since = Math.max(...times.map(c => c.from)), until = Math.min(...times.filter(c => c.to).map(c => c.to));
   if (since > -Infinity) args.push(`--since=${new Date(since).toISOString()}`);
-  if (until < Infinity) args.push(`--until=${new Date(until).toISOString()}`);
+  if (until < Infinity) args.push(`--until=${new Date(until - 1000).toISOString()}`); // git's --until is inclusive, to the second
   const who = c => (c.key === 'g_mine' ? gitOut('.', 'config', 'user.email') : c.email);
   for (const c of cs.filter(c => c.cat === 'author')) if (who(c)) args.push('-i', `--author=<${who(c).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}>`);
   if (cs.some(c => c.key === 'g_branch') && forkPoint('.')) args.push(`${forkPoint('.')}..HEAD`);
