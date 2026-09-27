@@ -16,12 +16,12 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   in the same run, as two questions. `-y`/`--yes` answers either yes without asking, and without a terminal a
   limit exceeded is exit 2. `-i` already asks unconditionally and earlier, so neither asks again; `--dry-run`
   and `-i` show the same verdict.
-
-### Changed
-- A unit over `-M`/`--max-columns` used to still be sent, truncated to the limit, so a match depending on text
-  past the cutoff (anywhere past character 2000 by default) could still be found. It is now skipped outright and
-  cannot match at all (see above): existing long-line or long-commit-message searches that relied on the
-  truncated tail may now miss lines they used to find; raise `-M`/`--max-columns` if that happens.
+- `--verbose` / `--dry-run` print the settings the search ran with, before the per-file lines: the endpoint and
+  model, the key (the variable or option name only, never its value), `SYS1GREP_OPTS` (when set), the effective
+  thresholds / `--chunk` / `-j` / `--sentence` / `--dedup` / `-z` / scope on-or-off / `--include` / `--exclude` /
+  `--changed-within` / #58's `-M` / `--max-filesize` / `--max-cost` / `-y`, and, with `--summarize`, its TOOL and model (the TOOL's own default when unset), the key of a URL TOOL (by name) and whether `--summarize-prompt` is set. Each is marked with its source when it did not
+  come from the command line: `(default)`, `(SYS1GREP_OPTS)`, `(ENV_NAME)`, or `(ENV_NAME, ~/.config/sys1grep/.env)`.
+  `-i`'s preview shows the same lines (#90).
 - `-g` / `--gitlog` searches the commits of `git log` instead of files, one record each (`%h %ad %s`, then the
   body). With one term, auto-scope turns into git log's arguments: a time into `--since`, a language into
   pathspecs, an author or "mine" into `--author`, this branch or not pushed into a range, so
@@ -39,6 +39,18 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   model. The matching lines are sent a second time, to the TOOL's provider. `--dry-run` shows the command.
   With `--dedup` the TOOL gets each template's representative once, marked `(×N like it)`; more than 200 KB is
   not sent at all (exit 2), never cut short (#98).
+- `--summarize-prompt=TEXT` adds the user's own instruction after `--summarize`'s fixed one (#88). Needs
+  `--summarize`; empty TEXT is the same as none.
+- `--summarize=ollama` / `--summarize=lmstudio` / `--summarize=http(s)://...` send the same request straight to
+  an OpenAI-compatible chat server by `fetch`, no CLI, so the matching lines never leave the machine a second
+  time with a local server (#76). All three need `SYS1GREP_SUMMARIZER_MODEL` (no default model);
+  `SYS1GREP_SUMMARIZER_API_KEY` goes as `Authorization: Bearer` to a URL TOOL only, never `SYS1GREP_API_KEY`.
+  `OLLAMA_HOST` moves `ollama`'s host.
+- `--summarize=llm` runs Simon Willison's `llm -n -s PROMPT` (`-m` too, with `SYS1GREP_SUMMARIZER_MODEL`); tools
+  stay off since sys1grep never passes `-T` / `--functions` (#77).
+- `--summarize=pi` runs `pi --print --no-tools --no-session --no-context-files --no-extensions --no-skills
+  --no-prompt-templates --thinking off --system-prompt PROMPT` (`--model` too, with `SYS1GREP_SUMMARIZER_MODEL`)
+  (#78). `codex`, `opencode` and `fm` stayed out: research on #78.
 - On a terminal, a one-line spinner on stderr while sys1grep waits for Jev (`12 of 149 requests`) or the summarizer,
   drawn after 300 ms and erased before any output (#89). Not with `-q`, `--dry-run`, `--verbose` or `TERM=dumb`,
   and never when stderr is not a terminal, so scripts see exactly what they saw before.
@@ -65,6 +77,10 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   candidates too. One git process per repository and question.
 
 ### Changed
+- A unit over `-M`/`--max-columns` used to still be sent, truncated to the limit, so a match depending on text
+  past the cutoff (anywhere past character 2000 by default) could still be found. It is now skipped outright and
+  cannot match at all (see above): existing long-line or long-commit-message searches that relied on the
+  truncated tail may now miss lines they used to find; raise `-M`/`--max-columns` if that happens.
 - `--sentence` colors the matching sentence bold yellow instead of bold red, so a regex match inside it stands out.
 
 ### Renamed
