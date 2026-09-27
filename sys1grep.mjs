@@ -6,6 +6,7 @@
 //   A leading ! negates just that meaning: -e A -e '!B' is A or not B.
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync, writeSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -149,7 +150,8 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                node_modules, .ssh/.aws/.gnupg/.kube/.docker, binary files and likely secrets (.env*,
                .netrc, .npmrc, .git-credentials, *.pem, *.key, id_rsa*...). Every searched line is sent
                to the TypeSafe API. Inside a git repository, what git ignores (.gitignore) is skipped
-               too; a file or directory named on the command line is searched even so
+               too; a file or directory named on the command line is searched even so.
+               A .gz file (a rotated log) is read decompressed, as zgrep does, and printed by its name
   --include=GLOB, --exclude=GLOB  with -r and git sys1grep, only files whose name matches GLOB (* ? [...]),
                or not; both can be repeated. With -r a file named on the command line is always
                searched; git sys1grep's pathspecs are filtered like the rest.
@@ -303,7 +305,8 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                .ssh/.aws/.gnupg/.kube/.docker、バイナリ、秘密情報らしいファイル (.env*, .netrc, .npmrc,
                .git-credentials, *.pem, *.key, id_rsa*...) は飛ばす。git リポジトリの中では
                git が無視するもの (.gitignore) も飛ばす。コマンドラインで指定したファイル・ディレクトリは
-               それでも探す。検索した行はすべて TypeSafe の API に送られる
+               それでも探す。.gz (ローテートしたログ) は zgrep のように展開して読み、その名前で表示する。
+               検索した行はすべて TypeSafe の API に送られる
   --include=GLOB, --exclude=GLOB  -r と git sys1grep で、名前が GLOB (* ? [...]) に合うファイルだけ
                (または合わないものだけ) を探す。複数指定可。-r ではコマンドラインで指定したファイルは
                必ず探す。git sys1grep の pathspec は他と同じく絞り込む。
@@ -1131,7 +1134,9 @@ const allLines = [], unitCount = new Map();
 const read = new Map(); // file -> units as read (lines, or records with -z)
 for (const file of targets) {
   let buf;
-  try { buf = file === '-' ? stdinBuf : file === GITLOG ? gitlogBuf : readFileSync(file); } catch (e) { warn(file, e); continue; }
+  // A .gz is read decompressed, as zgrep does (#68), by its name only; a corrupt one is an unreadable file (exit 2).
+  // The binary sniff below sees the decompressed bytes, so a gzipped binary is still skipped.
+  try { buf = file === '-' ? stdinBuf : file === GITLOG ? gitlogBuf : readFileSync(file); if (file.endsWith('.gz')) buf = gunzipSync(buf); } catch (e) { warn(file, e); continue; }
   // UTF-16 with a BOM is text though every ASCII character carries a NUL, so it skips the binary sniff.
   const utf16 = { fffe: 'utf-16le', feff: 'utf-16be' }[buf.subarray(0, 2).toString('hex')]; // its encoding, or undefined
   // With -z a NUL is the record terminator, so the binary sniff looks for other control bytes (ELF, images, archives).

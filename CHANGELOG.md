@@ -6,6 +6,10 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
+- A file named `*.gz` is read decompressed, as `zgrep` does, and printed by its name on disk (#68): rotated logs
+  (`app.log.1.gz`) are searched in place and under `-r`; `--include='*.gz'` picks them. The binary sniff
+  sees the decompressed bytes, so a gzipped binary is still skipped; a corrupt `.gz` is an unreadable file (exit 2).
+  Only gzip, only by the name; stdin is not decompressed.
 - `--verbose` / `--dry-run` print the settings the search ran with, before the per-file lines: the endpoint and
   model, the key (the variable or option name only, never its value), `SYS1GREP_OPTS` (when set), the effective
   thresholds / `--chunk` / `-j` / `--sentence` / `--dedup` / `-z` / scope on-or-off / `--include` / `--exclude` /

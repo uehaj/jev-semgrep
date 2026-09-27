@@ -172,7 +172,7 @@ $ ./sys1grep -o -n -e '/[A-Z]+-\d+/' -a 'the ticket is still open' notes.txt   #
 Every line sent to Jev costs money and time, so the cheapest line is the one never sent. From the widest cut
 to the narrowest:
 
-- **Which files.** `-r` skips `.git`, `node_modules`, binary files, likely secrets and what git ignores;
+- **Which files.** `-r` skips `.git`, `node_modules`, binary files, likely secrets and what git ignores (`.gz` is read decompressed);
   [`git sys1grep`](#as-a-git-subcommand-git-sys1grep) searches tracked files only. `--include` / `--exclude`
   (file-name globs) and `--changed-within` (`30m`, `7d`, `today`, `this-week`, a date) narrow them further.
   A meaning that restricts itself to a language or a time of change narrows them by itself: see
@@ -401,6 +401,9 @@ that usually hold secrets (`.env*`, `.netrc`, `.npmrc`, `.pypirc`, `.pgpass`, `.
 `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `id_rsa*` and friends; names compared without case). **Every line that is searched is sent to the TypeSafe API**, so point `-r` at a directory
 you mean to scan. Inside a git repository, `-r` also skips what git ignores (`.gitignore`, `.git/info/exclude`, the
 global excludes file), so build output and local files stay home; a tracked file is searched even if it matches.
+A file named `*.gz` (a rotated log: `app.log.1.gz`) is read decompressed, as `zgrep` does, and printed by its
+name on disk (`app.log.1.gz:12:...`); `--include='*.gz'` picks those, the binary sniff sees the decompressed
+bytes, and a corrupt `.gz` is an unreadable file (exit 2). Only gzip, only by the name.
 A file named explicitly on the command line is always searched, even if it matches the skip list or is ignored;
 so is a directory that git ignores, when you name it (`sys1grep -r -e ... dist`). `-l` prints each
 matching file once, in the order matches are found, and works with or without `-r`. `-c` prints the number of
