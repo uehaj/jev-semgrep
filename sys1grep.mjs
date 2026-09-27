@@ -1138,8 +1138,21 @@ const runsOf = src => (opt.z
 const runsByFile = new Map([...read].map(([file, src]) => [file, opt.sentence ? runsOf(src) : []]));
 const splits = new Map(); // run -> Set of breaks Jev judged to end an entry
 if (opt.sentence === 'jev') spin.set('judging where wrapped lines break (--sentence)');
-if (opt.sentence === 'jev')
-  await Promise.all([...runsByFile].flatMap(([file, runs]) => runs.map(run => judgeBreaks(run.lines, file).then(sp => splits.set(run, sp)))));
+// #50: a blob shared by several trees is judged once; the other labels' runs share its splits (keyed by blob id
+// + the run's index within its file, since identical content gives identical runs and questions), as the
+// matching above shares answers keyed by blob id + line number.
+if (opt.sentence === 'jev') {
+  const rep = new Map(); // blob+run index -> Promise<Set>
+  await Promise.all([...runsByFile].flatMap(([file, runs]) => runs.map((run, i) => {
+    const blob = blobOfLabel.get(file);
+    const key = blob !== undefined ? `${blob}\0${i}` : undefined;
+    const shared = key !== undefined && rep.get(key);
+    if (shared) return shared.then(sp => splits.set(run, sp));
+    const job = judgeBreaks(run.lines, file).then(sp => { splits.set(run, sp); return sp; });
+    if (key !== undefined) rep.set(key, job);
+    return job;
+  })));
+}
 for (const [file, src] of read) {
   sources.set(file, src);
   let units = src;

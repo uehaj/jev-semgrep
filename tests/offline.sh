@@ -286,12 +286,16 @@ G="$tmp/g50"
 mkdir -p "$G"
 (cd "$G" && git init -q -b main && git config user.email t@t && git config user.name t)
 printf 'cat\n' >"$G/base.txt"; printf 'cat\n' >"$G/removed.txt"
-(cd "$G" && git add base.txt removed.txt && git commit -q -m v1 && git tag v1)
+printf '猫がいる\n犬もいる\n' >"$G/neko.txt" # unpunctuated Japanese: --sentence=jev asks about the wrap between its lines
+(cd "$G" && git add base.txt removed.txt neko.txt && git commit -q -m v1 && git tag v1)
 (cd "$G" && git commit -q --allow-empty -m v2 && git tag v2) # base.txt's blob is unchanged: shared with v1
 reset
 eq "$(cd "$G" && $GS --chunk 1 -n -e cat v1 v2 -- base.txt | tr '\n' ' ')" "v1:base.txt:1:cat v2:base.txt:1:cat " "#50: a blob shared by two trees prints under each tree's prefix"
 eq "$(stat count)" "1" "#50: ...but is judged once (one request for the shared blob)"
 eq "$(cd "$G" && $GS -c -e cat v1 -- base.txt)" "v1:base.txt:1" "#50: a <tree>: -c is prefixed too"
+reset
+eq "$(cd "$G" && $GS --chunk 1 --sentence -c -e '猫がいる' v1 v2 -- neko.txt | tr '\n' ' ')" "v1:neko.txt:2 v2:neko.txt:2 " "#50: --sentence=jev on a blob shared by two trees"
+eq "$(stat count)" "2" "#50: ...also asks its break-judging once, not once per tree (one break request, one match request)"
 # a symlink and a submodule in a tree are left out, as in the working tree
 (cd "$G" && ln -s base.txt link.txt && git add link.txt && git update-index --add --cacheinfo 160000,"$(git rev-parse HEAD)",fakesub && git commit -q -m v3 && git tag v3)
 eq "$(cd "$G" && $GS -l -e cat v3 | tr '\n' ' ')" "v3:base.txt v3:removed.txt " "#50: a <tree>: a symlink and a submodule are left out"
