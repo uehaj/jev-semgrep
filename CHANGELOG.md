@@ -6,6 +6,25 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
+- Guards against generated and oversized input (#58, with the owner's decisions on #125's review applied). `-r`
+  and `git sys1grep` now also skip generated files (`*.map`, `*.min.js`, `*.min.css`, `package-lock.json` and other
+  lock files), named explicitly still searched. Every target is sized (`--max-filesize`, K/M/G, default 10M)
+  before anything is read; one over it is skipped outright, like `rg`'s own `--max-filesize`
+  (`sys1grep: big.log: skipped, 25 MB is over --max-filesize=10M`), named on stderr, and `-y` does not affect it
+  (a named file over the limit is skipped too). Separately, the input about to be sent (including the setup
+  requests above, if any ran) is priced (`--max-cost`, default 1 USD) and asks to continue on the terminal if it
+  is over; a custom `SYS1GREP_URL` is still priced at TypeSafe's list price, and the question says so.
+  `-y`/`--yes` answers that question yes without asking, and without a terminal a limit exceeded is exit 2.
+  `-i` already asks unconditionally and earlier, so this does not ask again; `--dry-run` and `-i` show the same
+  verdict. `-M`/`--max-columns` (default 2000, 8000 with `-z`) is unchanged from before this PR: it bounds only
+  what is sent, truncating a unit to its first NUM characters; the unit is still searched and judged on that
+  truncated text. Standard input is sized once it is read (it is already read whole into memory), and skipped
+  the same way as a file (`sys1grep: -: skipped, 190 KB is over --max-filesize=10K`), nothing from it sent.
+  `-g`'s commits stay out of `--max-filesize` (each is already bounded by `-M` at send time). `-q` combined with
+  `--max-cost` and no terminal is unchanged: still an exit-2 stop (scripts pass `-y`). A `--cached` or `<tree>:`
+  target (#50/#126) is a blob, not a file `stat` can size; `--max-filesize` now sizes it from its content
+  instead, read once already by the batch `git cat-file --batch` those options use, so no extra `git` process
+  runs per blob (#58 closes).
 - `git sys1grep` gets `--cached`, `--untracked` and `<tree>...`, as `git grep` has them (#50). `--cached`
   searches the blobs staged in the index instead of the working tree (a file deleted from the working tree
   but still staged is still found); `--untracked` searches tracked files plus untracked ones (`.gitignore`
@@ -24,7 +43,7 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 - `--verbose` / `--dry-run` print the settings the search ran with, before the per-file lines: the endpoint and
   model, the key (the variable or option name only, never its value), `SYS1GREP_OPTS` (when set), the effective
   thresholds / `--chunk` / `-j` / `--sentence` / `--dedup` / `-z` / scope on-or-off / `--include` / `--exclude` /
-  `--changed-within`, and, with `--summarize`, its TOOL and model (the TOOL's own default when unset), the key of a URL TOOL (by name) and whether `--summarize-prompt` is set. Each is marked with its source when it did not
+  `--changed-within` / #58's `-M` / `--max-filesize` / `--max-cost` / `-y`, and, with `--summarize`, its TOOL and model (the TOOL's own default when unset), the key of a URL TOOL (by name) and whether `--summarize-prompt` is set. Each is marked with its source when it did not
   come from the command line: `(default)`, `(SYS1GREP_OPTS)`, `(ENV_NAME)`, or `(ENV_NAME, ~/.config/sys1grep/.env)`.
   `-i`'s preview shows the same lines (#90).
 - `-g` / `--gitlog` searches the commits of `git log` instead of files, one record each (`%h %ad %s`, then the
