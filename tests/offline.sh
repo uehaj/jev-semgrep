@@ -18,8 +18,9 @@ stat() { curl -s "$base" | node -pe "JSON.parse(require('fs').readFileSync(0)).$
 reset() { curl -s "$base/reset" >/dev/null; }
 nums() { cut -d: -f1 | tr '\n' ' '; }
 fail() { echo "FAIL: $*" >&2; exit 1; }
-# eq ACTUAL EXPECTED DESCRIPTION
-eq() { [ "$1" = "$2" ] || fail "$3: got '$1', want '$2'"; }
+# eq ACTUAL EXPECTED DESCRIPTION. Each check counts; OFFLINE_VERBOSE=1 prints it (CI does, so the log names them)
+n=0
+eq() { [ "$1" = "$2" ] || fail "$3: got '$1', want '$2'"; n=$((n + 1)); [ -z "$OFFLINE_VERBOSE" ] || echo "ok: $3"; }
 # code EXPECTED DESCRIPTION -- COMMAND...: the exit status of COMMAND
 code() { want=$1 what=$2; shift 3; set +e; "$@" >/dev/null 2>&1; got=$?; set -e; eq "$got" "$want" "$what (exit)"; }
 
@@ -796,4 +797,4 @@ eq "$($E node ../sys1grep.mjs -V)" "sys1grep $v" "-V"
 code 0 "--version with no key" -- $E node ../sys1grep.mjs --version
 $E LANG=ja_JP.UTF-8 node ../sys1grep.mjs --help | grep -q '何も表示せず' || fail "--help in Japanese"
 $E LANG=C LC_MESSAGES=ja_JP.UTF-8 node ../sys1grep.mjs --help | grep -q '何も表示せず' || fail "LC_MESSAGES"
-echo OK
+echo "OK: $n checks passed (and the grep-guarded ones)"

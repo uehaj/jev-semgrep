@@ -25,7 +25,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - run: npm run test:offline
+      - run: OFFLINE_VERBOSE=1 npm run test:offline | tee offline.log
+      - run: tail -1 offline.log >> "$GITHUB_STEP_SUMMARY"
+        if: always()
 
   # Every commit, merges' diffs included (-m), and the tree as it stands. Not gitleaks-action: it reads at most 30
   # of a PR's commits and skips what a merge brought in. A pinned release, checked against its sha256.
