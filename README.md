@@ -604,14 +604,39 @@ The expensive model reads only what Jev kept. Asking why `./.env` is no longer r
 `git log` (168 commits), Claude's input fell from 22,059 tokens to 1,356, the total cost with Jev's from
 $0.094 to $0.013, with the same answer (#69). It pays when the answer sits in a few lines.
 
-- The matching lines leave the machine a second time, to Anthropic.
+- The matching lines leave the machine a second time, to Anthropic (or whatever TOOL talks to).
 - `-n`, `-A/-B/-C`, `-p` and file names go in as they would print; colors never do. No match runs nothing (exit 1).
-- `SYS1GREP_SUMMARIZER` picks the TOOL of a bare `--summarize` (only `claude` so far), `SYS1GREP_SUMMARIZER_MODEL` its model.
+- `SYS1GREP_SUMMARIZER` picks the TOOL of a bare `--summarize`, `SYS1GREP_SUMMARIZER_MODEL` its model.
 - `-q`, `-l` and `-c` print no lines, so they cannot be combined with it.
 - With `--dedup`, the TOOL gets what Jev got: each template's representative once, marked `(×N like it)`,
   not every line its answer was reused for.
 - More than 200 KB (about 50k tokens) is not sent at all: exit 2, with the size, before the TOOL is paid.
   It is never cut short, since a summary of the first part would read as a summary of all of it.
+
+`--summarize-prompt=TEXT` adds your own instruction after the fixed one (how long, what to focus on):
+
+```sh
+$ sys1grep -r -n --summarize --summarize-prompt="3 lines or fewer, just which file to fix" \
+    -e "the API key is read from a file" .
+```
+
+It needs `--summarize`; empty TEXT is the same as leaving it out.
+
+Other TOOLs:
+
+```sh
+$ sys1grep --summarize=llm -e "..." FILE            # Simon Willison's llm, tools off (no -T given)
+$ sys1grep --summarize=pi -e "..." FILE             # pi --print --no-tools --no-session ...
+$ SYS1GREP_SUMMARIZER_MODEL=qwen3.5:9b sys1grep --summarize=ollama -e "..." FILE
+$ SYS1GREP_SUMMARIZER_MODEL=some-id sys1grep --summarize=lmstudio -e "..." FILE   # model id from GET /v1/models
+$ SYS1GREP_SUMMARIZER_MODEL=some-id sys1grep --summarize=http://localhost:8080/v1 -e "..." FILE  # llama.cpp, vLLM, LocalAI, a gateway
+```
+
+`ollama` and `lmstudio` talk to a local OpenAI-compatible server (`POST /v1/chat/completions`) by `fetch`, no
+CLI: the matching lines never leave the machine a second time. A plain `http(s)://` URL is any other
+OpenAI-compatible server. All three need `SYS1GREP_SUMMARIZER_MODEL`: none has a default model.
+`SYS1GREP_SUMMARIZER_API_KEY` goes as `Authorization: Bearer` to a URL TOOL only (never `SYS1GREP_API_KEY`,
+which is Jev's). `OLLAMA_HOST` moves ollama's host, as it does for the `ollama` CLI itself.
 
 ## Use it from Claude Code
 
