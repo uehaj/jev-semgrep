@@ -184,18 +184,26 @@ code 2 "--dedup=bogus" -- $J --dedup=bogus -e cat "$F"
 code 2 "--no-dedup: a string option, like --no-level or --no-unit" -- $J --no-dedup -e cat "$F"
 # 120 lines sharing one skeleton (a trailing number, which 'num' folds): 1 template, so it clearly pays.
 awk 'BEGIN { for (i = 1; i <= 120; i++) print "cat " i }' >"$tmp/rep.txt"
+# never: ceil(120/30) = 4 requests; always/auto-folded: 1 [dedup] request (one meaning) + 1 judge request (1
+# template) = 2. The hint's "requests saved" is that NET delta (4-2=2), not members' own gross chunk count
+# (120-1=119 lines -> ceil(119/30)=4, which used to double as the "saved" figure and so overstated it, #143 review).
 reset; V=$($J --verbose -e cat "$tmp/rep.txt" 2>&1 >/dev/null)
-echo "$V" | grep -Eq '^sys1grep: dedup: 120 units fold to at most 1 templates \(~[0-9]+ requests, ~[0-9]+k? tokens saved\): off \(never\)$' || fail "--verbose: the decision line, default: $V"
-echo "$V" | grep -q -- 'sys1grep: 120 units fold to at most 1 templates; --dedup=auto would save' || fail "default: the hint: $V"
+echo "$V" | grep -Eq '^sys1grep: dedup: 120 units fold to at most 1 templates \(~2 requests, ~[0-9]+k? tokens saved\): off \(never\)$' || fail "--verbose: the decision line, default: $V"
+echo "$V" | grep -Fq -- 'sys1grep: 120 units fold to at most 1 templates; --dedup=auto would save ~2 requests' || fail "default: the hint, net requests not members' gross count: $V"
 eq "$(stat count)" "4" "default: every unit still sent, no [dedup] request"
 reset; V=$($J --verbose --dedup=never -e cat "$tmp/rep.txt" 2>&1 >/dev/null)
 echo "$V" | grep -q -- '--dedup=auto would save' || fail "--dedup=never: the hint too: $V"
 eq "$(stat count)" "4" "--dedup=never: every unit still sent"
+reset; V=$($J -q --verbose --dedup=never -e cat "$tmp/rep.txt" 2>&1 >/dev/null)
+echo "$V" | grep -q -- 'would save' && fail "-q: no would-save hint on stderr (#143 review): $V"
 reset; V=$($J --verbose --dedup=auto -e cat "$tmp/rep.txt" 2>&1 >/dev/null)
 echo "$V" | grep -Eq '^sys1grep: dedup: 120 units fold to at most 1 templates .*: on$' || fail "--verbose --dedup=auto, pays: on: $V"
+echo "$V" | grep -q -- 'would save' && fail "--dedup=auto, pays: no separate would-save hint, only the decision line (#143 review): $V"
 eq "$(echo "$V" | grep -c '\[dedup\]')" "1" "--dedup=auto, pays: exactly one [dedup] request"
 eq "$(stat count)" "2" "--dedup=auto, pays: the pre-question plus one judge request"
 reset; $J --dedup=always -e cat "$tmp/rep.txt" >/dev/null; eq "$(stat count)" "2" "--dedup=always: folds regardless"
+reset; V=$($J --verbose --dedup=always -e cat "$tmp/rep.txt" 2>&1 >/dev/null)
+echo "$V" | grep -Eq ': on \(always\)$' || fail "--verbose --dedup=always: the decision line reads on (always) (#143 review): $V"
 # A non-repeating fixture ($F's 7 sendable lines share no MASK value): --dedup=auto asks nothing, sends everything.
 reset; V=$($J --verbose --dedup=auto -e cat "$F" 2>&1 >/dev/null)
 echo "$V" | grep -Eq '^sys1grep: dedup: 7 units fold to at most 7 templates .*: off \(auto\)$' || fail "--verbose --dedup=auto, no pay: off (auto): $V"
@@ -704,6 +712,15 @@ eq "$($S --summarize --dedup -e cat "$tmp/dd.txt")" "SUMMARY" "--summarize --ded
 eq "$(cat "$tmp/sum.in")" "cat 1   (×3 like it)" "--summarize --dedup: a representative and its count"
 grep -q 'stands for N matching lines' "$tmp/sum.argv" || fail "--summarize --dedup: the prompt says what ×N is"
 $S --summarize -e cat "$tmp/dd.txt" >/dev/null; grep -q 'like it' "$tmp/sum.argv" && fail "--summarize without --dedup: no ×N in the prompt"
+# --dedup=auto: whether folding happens (willFold), not just opt.dedup, decides whether the prompt explains ×N
+# (#143 review: the prompt used to be built, and so decided, long before willFold was known).
+printf 'cat\ncat dog\n' >"$tmp/dda.txt"
+$S --summarize --dedup=auto -n -e cat "$tmp/dda.txt" >/dev/null
+grep -q '(×' "$tmp/sum.in" && fail "--summarize --dedup=auto, no pay: no ×N marker should reach the summarizer"
+grep -q 'stands for N matching lines' "$tmp/sum.argv" && fail "--summarize --dedup=auto, no pay: prompt should not mention ×N (#143 review): $(tail -1 "$tmp/sum.argv")"
+$S --summarize --dedup=auto -n -e cat "$tmp/rep.txt" >/dev/null
+grep -q '(×' "$tmp/sum.in" || fail "--summarize --dedup=auto, pays: a ×N marker should reach the summarizer"
+grep -q 'stands for N matching lines' "$tmp/sum.argv" || fail "--summarize --dedup=auto, pays: prompt should mention ×N: $(tail -1 "$tmp/sum.argv")"
 printf 'The cat 1 sat. A dog ran.\nThe cat 2 sat.\nThe cat 3\nsat.\n' >"$tmp/dds.txt"
 $S --summarize --dedup --unit=sentence-by-rule -n -e cat "$tmp/dds.txt" >/dev/null
 eq "$(tr '\n' '|' <"$tmp/sum.in")" "1:The cat 1 sat. A dog ran.   (×3 like it)|" "--summarize --dedup --unit=sentence-by-*: one representative for sentences across lines"
