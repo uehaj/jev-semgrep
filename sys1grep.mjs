@@ -1373,7 +1373,7 @@ async function judgeBreaks(lines, file) { // -> Set of i where the break before 
 }
 
 const execAt = (lit, text) => { lit.re.lastIndex = 0; return lit.re.exec(text); }; // reset: /re/g or /re/y would else carry state across units
-const sources = new Map(); // file -> the units printed (lines or records; sentences with -o); includes blank lines
+const sources = new Map(); // file -> the units printed (lines or records; sentences with --unit=sentence-by-* and -o); includes blank lines
 const spansOf = new Map(); // file -> spans of each sentence (--unit=sentence-by-* only)
 // { file, no, text }: the units some term's regexes hold for (every unit when a term has no regex), blank ones
 // included; what the expression is evaluated over. A unit no term's regexes hold for can never match, so it is not
