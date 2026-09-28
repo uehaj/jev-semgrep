@@ -16,9 +16,9 @@ and applies a threshold.
 ./sys1grep -n -e "customer is angry or frustrated" tickets.txt
 ```
 
-[![sys1grep demo: a Japanese meaning finds refund requests in six languages; "asking for a refund" vs "about a refund"; -Q finds the answer](docs/demo.svg)](https://uehaj.github.io/sys1grep/)
+[![sys1grep demo: a Japanese meaning finds refund requests in six languages; "asking for a refund" vs "about a refund"; -Q finds the answer](docs/demo.svg)](https://sys1grep.js.org/)
 
-<sub>▶ Click the demo, or open <a href="https://uehaj.github.io/sys1grep/">uehaj.github.io/sys1grep</a>, for the full demo on the landing page.</sub>
+<sub>▶ Click the demo, or open <a href="https://sys1grep.js.org/">uehaj.github.io/sys1grep</a>, for the full demo on the landing page.</sub>
 
 - Zero dependencies. One file, Node.js 20.16+ and `fetch`.
 - Fast. 30 lines go into one request, requests run 8 at a time. A 210-line file finishes in under a second.
