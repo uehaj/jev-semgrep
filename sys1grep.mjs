@@ -1026,7 +1026,7 @@ const SKIP_FILE = /^\.env|^\.(netrc|npmrc|pypirc|pgpass|git-credentials)(\.gz)?$
 // Generated files carry no meaning of their own and are often large (#58); a source map's sourcesContent can even
 // smuggle the original source back in as a string, so a fragment of it can match. Skipped like SKIP_FILE: only
 // found by -r or git sys1grep, a name on the command line is still searched.
-const GENERATED_FILE = /\.(?:map|min\.js|min\.css)$|^(?:package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|poetry\.lock|composer\.lock|Gemfile\.lock|go\.sum)$/i;
+const GENERATED_FILE = /\.(?:map|min\.js|min\.css)(?:\.gz)?$|^(?:package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|poetry\.lock|composer\.lock|Gemfile\.lock|go\.sum)(?:\.gz)?$/i; // .gz too, like SKIP_FILE (#68)
 let hadError = false;
 const warned = []; // what warn printed, so -i does not repeat it from its dry run
 const warn = (file, e) => { const m = `sys1grep: ${safe(file)}: ${safe(e.message)}`; warned.push(m); console.error(m); hadError = true; };

@@ -220,6 +220,8 @@ eq "$($J -r -l -e cat "$tmp/sec")" "$tmp/sec/ok.txt" "-r skips credential files"
 mkdir -p "$tmp/gen"
 for f in app.js.map app.min.js app.min.css package-lock.json yarn.lock pnpm-lock.yaml Cargo.lock poetry.lock composer.lock Gemfile.lock go.sum ok.txt; do printf 'cat\n' >"$tmp/gen/$f"; done
 eq "$($J -r -l -e cat "$tmp/gen")" "$tmp/gen/ok.txt" "-r skips generated files"
+printf 'cat\n' | gzip >"$tmp/gen/app.min.js.gz"; printf 'cat\n' | gzip >"$tmp/gen/package-lock.json.gz"
+eq "$($J -r -l -e cat "$tmp/gen")" "$tmp/gen/ok.txt" "-r skips gzipped generated files too"
 eq "$($J -l -e cat "$tmp/gen/app.min.js")" "$tmp/gen/app.min.js" "a generated file named on the command line is still searched"
 
 # the response and the error body come from whatever server SYS1GREP_URL names
