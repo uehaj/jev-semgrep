@@ -18,8 +18,9 @@ stat() { curl -s "$base" | node -pe "JSON.parse(require('fs').readFileSync(0)).$
 reset() { curl -s "$base/reset" >/dev/null; }
 nums() { cut -d: -f1 | tr '\n' ' '; }
 fail() { echo "FAIL: $*" >&2; exit 1; }
-# eq ACTUAL EXPECTED DESCRIPTION
-eq() { [ "$1" = "$2" ] || fail "$3: got '$1', want '$2'"; }
+# eq ACTUAL EXPECTED DESCRIPTION. Each check counts; OFFLINE_VERBOSE=1 prints it (CI does, so the log names them)
+n=0
+eq() { [ "$1" = "$2" ] || fail "$3: got '$1', want '$2'"; n=$((n + 1)); [ -z "$OFFLINE_VERBOSE" ] || echo "ok: $3"; }
 # code EXPECTED DESCRIPTION -- COMMAND...: the exit status of COMMAND
 code() { want=$1 what=$2; shift 3; set +e; "$@" >/dev/null 2>&1; got=$?; set -e; eq "$got" "$want" "$what (exit)"; }
 
@@ -81,6 +82,8 @@ eq "$($J -n --level strict -e fish "$F" | nums)" "" "strict: 0.6 is below 0.7"
 eq "$($J -n -v fish "$F" | cut -d: -f1 | grep -cx 6 || true)" "0" "normal: not fish needs below 0.5"
 eq "$($J -n --level loose -v fish "$F" | cut -d: -f1 | grep -cx 6 || true)" "1" "loose: not fish needs below 0.7"
 eq "$($J -n --level strict -v bird "$F" | cut -d: -f1 | grep -cx 5 || true)" "0" "strict: not bird needs below 0.3"
+# a name every object inherits is not a value: --level, --summarize and --summarize-format look theirs up by name
+for v in nope constructor toString __proto__; do code 2 "--level=$v" -- $J --level=$v -e cat "$F"; done
 eq "$($J -n --level strict -t 0.5 -e fish "$F" | nums)" "6 " "-t overrides --level"
 eq "$($J -n -T 0.7 -v fish "$F" | cut -d: -f1 | grep -cx 6 || true)" "1" "-T overrides --level"
 eq "$($J -n -t 0.7 -T 0.3 -e bird -e '!bird' "$F" | cut -d: -f1 | grep -cx 5 || true)" "0" "0.4 is neither bird nor not bird"
@@ -138,6 +141,8 @@ eq "$($J --verbose -e cat "$F" 2>&1 >/dev/null | grep -c '^sys1grep: request 1 \
 # The summary line says what its numbers are (#91); its total counts every line read, also those a regex left out (#79)
 eq "$($J --verbose -e cat "$F" 2>&1 >/dev/null | tail -1)" "2 of 8 lines matched; 7 sent to Jev in 1 request, 1 input token" "summary line"
 eq "$($J --verbose -e /cat/ "$F" 2>&1 >/dev/null | tail -1)" "2 of 8 lines matched; nothing sent" "summary line, regex only"
+# stderr whose reader quit: what cannot be said is dropped (as console.error drops it) and the exit status stands
+( $J --verbose -e /cat/ "$F" 2>&1 >/dev/null && r=0 || r=$?; echo $r >"$tmp/rc" ) | true; eq "$(cat "$tmp/rc")" "0" "--verbose with stderr closed"
 eq "$($J --verbose -e /dog/ -a cat "$F" 2>&1 >/dev/null | tail -1)" "1 of 8 lines matched; 2 sent to Jev in 1 request, 1 input token" "summary line counts the lines a regex left out"
 $J --verbose --dedup -e cat "$F" 2>&1 >/dev/null | tail -1 | grep -Eq '^2 of 8 lines matched; [0-9]+ sent to Jev \([0-9]+ folded by --dedup, ~-?[0-9]+ input tokens saved, -?[0-9]+%\) in 2 requests, 2 input tokens$' || fail "summary line with --dedup"
 $J --dry-run -e /dog/ -a cat "$F" | tail -1 | grep -q ', 2 of 8 lines to send,' || fail "--dry-run counts the lines a regex left out"
@@ -211,6 +216,12 @@ mkdir -p "$tmp/sec/.kube" "$tmp/sec/.docker"
 for f in .envrc .env-local .env_prod .ENV .netrc .npmrc .pypirc .pgpass .git-credentials id_rsa_work x.JKS .kube/config .docker/config.json ok.txt; do printf 'cat\n' >"$tmp/sec/$f"; done
 eq "$($J -r -l -e cat "$tmp/sec")" "$tmp/sec/ok.txt" "-r skips credential files"
 
+# #58: -r also skips generated files (source maps, minified JS/CSS, lock files); named, still searched
+mkdir -p "$tmp/gen"
+for f in app.js.map app.min.js app.min.css package-lock.json yarn.lock pnpm-lock.yaml Cargo.lock poetry.lock composer.lock Gemfile.lock go.sum ok.txt; do printf 'cat\n' >"$tmp/gen/$f"; done
+eq "$($J -r -l -e cat "$tmp/gen")" "$tmp/gen/ok.txt" "-r skips generated files"
+eq "$($J -l -e cat "$tmp/gen/app.min.js")" "$tmp/gen/app.min.js" "a generated file named on the command line is still searched"
+
 # the response and the error body come from whatever server SYS1GREP_URL names
 printf 'cat @drop\n' >"$tmp/drop"
 code 2 "a missing answer is an error, not 0 (which would make -v match)" -- $J -v cat "$tmp/drop"
@@ -252,6 +263,14 @@ eq "$($J -rl -e cat --include='*.gz' "$tmp/gz")" "$tmp/gz/a.log.1.gz" "--include
 eq "$($J -rl -e cat --include='*.log' "$tmp/gz")" "" "--include='*.log' does not match a.log.1.gz"
 gzip -c "$F" >"$tmp/gz/private.key.gz"; gzip -c "$F" >"$tmp/gz/.netrc.gz"
 eq "$($J -rl -e cat "$tmp/gz")" "$tmp/gz/a.log.1.gz" "-r still skips a gzipped secret (private.key.gz, .netrc.gz)"
+# --max-filesize measures a .gz decompressed (#125 follow-up): 30 KB of repeated lines gzip to ~1 KB
+yes 'cat and dog' | head -2500 | gzip -c >"$tmp/gz/big.gz"
+[ "$(wc -c <"$tmp/gz/big.gz")" -lt 10240 ] || fail "test fixture: big.gz should be under 10K compressed"
+reset; code=0; out=$($J --max-filesize 10K -c -e cat "$tmp/gz/big.gz" 2>&1) || code=$?
+echo "$out" | grep -q -- "big.gz: skipped, .*decompressed.*--max-filesize" || fail "a .gz over --max-filesize decompressed is skipped: $out"
+eq "$(stat count)" "0" "a skipped .gz sends nothing"
+eq "$code" "1" "a skipped .gz: exit 1 (no match)"
+eq "$($J --max-filesize 40K -c -e cat "$tmp/gz/big.gz")" "2500" "a .gz under --max-filesize decompressed is searched"
 reset; eq "$($J -e cat "$tmp/gz/bin.gz" 2>&1)" "sys1grep: $tmp/gz/bin.gz: binary file skipped" "a gzipped binary is skipped"
 eq "$(stat count)" "0" "nothing is sent from a gzipped binary"
 code 2 "a corrupt .gz" -- $J -e cat "$tmp/bad.gz"
@@ -268,9 +287,10 @@ reset; $J --sentence -c -e '/猫/' "$tmp/ja" >/dev/null; eq "$(stat count)" "0" 
 R="$tmp/repo" GS="$E SYS1GREP_URL=$base/v1 node $PWD/../git-sys1grep.mjs" SG="$PWD/../sys1grep.mjs"
 mkdir -p "$R/sub" "$tmp/plain"
 printf 'cat\n' >"$R/a.txt"; printf 'cat\n' >"$R/sub/b.txt"; printf 'cat\n' >"$R/ignored.txt"; printf 'cat\n' >"$R/.env.sample"
+printf 'cat\n' >"$R/app.min.js"; printf 'cat\n' >"$R/package-lock.json"
 echo ignored.txt >"$R/.gitignore"
-(cd "$R" && git init -q && git add a.txt sub/b.txt .gitignore .env.sample)
-eq "$(cd "$R" && $GS -l -e cat | tr '\n' ' ')" "a.txt sub/b.txt " "git sys1grep: tracked files, not ignored ones or the skip list"
+(cd "$R" && git init -q && git add a.txt sub/b.txt .gitignore .env.sample app.min.js package-lock.json)
+eq "$(cd "$R" && $GS -l -e cat | tr '\n' ' ')" "a.txt sub/b.txt " "git sys1grep: tracked files, not ignored ones, the skip list or generated files (#58)"
 eq "$(cd "$R/sub" && $GS -l -e cat)" "b.txt" "git sys1grep: under the current directory"
 eq "$(cd "$R" && $GS -n -e cat a.txt)" "a.txt:1:cat" "git sys1grep: pathspec, file name even for one file"
 code 1 "git sys1grep: never stdin" -- sh -c "cd '$R' && echo cat | $GS -e cat -- nothing"
@@ -287,6 +307,72 @@ code 1 "git sys1grep: over 1 MiB of paths" -- sh -c "cd '$R' && $GS -e cat -- ma
 # SYS1GREP_GIT in ./.env does not turn plain sys1grep into git sys1grep
 printf 'SYS1GREP_GIT=1\n' >"$tmp/plain/.env"
 eq "$(cd "$tmp/plain" && echo cat | $E SYS1GREP_URL=$base/v1 node "$SG" -e cat)" "cat" "SYS1GREP_GIT in .env"
+
+# #50: --cached (the index), --untracked (tracked plus untracked) and <tree>... (a revision's tree) choose
+# what git sys1grep searches instead of the working tree, as git grep has them.
+code 2 "#50: plain sys1grep --cached" -- $J --cached -e cat "$F"
+code 2 "#50: plain sys1grep --untracked" -- $J --untracked -e cat "$F"
+code 2 "#50: --cached in SYS1GREP_OPTS" -- $E SYS1GREP_OPTS=--cached SYS1GREP_URL=$base/v1 node ../sys1grep.mjs -e cat "$F"
+code 2 "#50: --untracked in SYS1GREP_OPTS" -- $E SYS1GREP_OPTS=--untracked SYS1GREP_URL=$base/v1 node ../sys1grep.mjs -e cat "$F"
+G="$tmp/g50"
+mkdir -p "$G"
+(cd "$G" && git init -q -b main && git config user.email t@t && git config user.name t)
+printf 'cat\n' >"$G/base.txt"; printf 'cat\n' >"$G/removed.txt"
+printf '猫がいる\n犬もいる\n' >"$G/neko.txt" # unpunctuated Japanese: --sentence=jev asks about the wrap between its lines
+(cd "$G" && git add base.txt removed.txt neko.txt && git commit -q -m v1 && git tag v1)
+(cd "$G" && git commit -q --allow-empty -m v2 && git tag v2) # base.txt's blob is unchanged: shared with v1
+reset
+eq "$(cd "$G" && $GS --chunk 1 -n -e cat v1 v2 -- base.txt | tr '\n' ' ')" "v1:base.txt:1:cat v2:base.txt:1:cat " "#50: a blob shared by two trees prints under each tree's prefix"
+eq "$(stat count)" "1" "#50: ...but is judged once (one request for the shared blob)"
+eq "$(cd "$G" && $GS -c -e cat v1 -- base.txt)" "v1:base.txt:1" "#50: a <tree>: -c is prefixed too"
+out=$(cd "$G" && $GS --dry-run -e cat v1 -- '*.txt')
+echo "$out" | grep -qF 'sys1grep: file v1:base.txt: ' || fail "#50 (owner decision 1): a <tree>'s glob pathspec reaches base.txt: $out"
+echo "$out" | grep -qF 'sys1grep: file v1:neko.txt: ' || fail "#50 (owner decision 1): a <tree>'s glob pathspec reaches neko.txt: $out"
+echo "$out" | grep -qF 'sys1grep: file v1:removed.txt: ' || fail "#50 (owner decision 1): a <tree>'s glob pathspec reaches removed.txt: $out"
+reset
+eq "$(cd "$G" && $GS --chunk 1 --sentence -c -e '猫がいる' v1 v2 -- neko.txt | tr '\n' ' ')" "v1:neko.txt:2 v2:neko.txt:2 " "#50: --sentence=jev on a blob shared by two trees"
+eq "$(stat count)" "2" "#50: ...also asks its break-judging once, not once per tree (one break request, one match request)"
+# a symlink and a submodule in a tree are left out, as in the working tree
+(cd "$G" && ln -s base.txt link.txt && git add link.txt && git update-index --add --cacheinfo 160000,"$(git rev-parse HEAD)",fakesub && git commit -q -m v3 && git tag v3)
+eq "$(cd "$G" && $GS -l -e cat v3 | tr '\n' ' ')" "v3:base.txt v3:removed.txt " "#50: a <tree>: a symlink and a submodule are left out"
+# diverge the working tree, the index and the untracked files from v3's committed state
+rm "$G/removed.txt" # gone from the working tree, still in the index
+printf 'cat wtree\n' >"$G/base.txt" # a working-tree change, not staged
+printf 'cat\n' >"$G/staged.txt"; (cd "$G" && git add staged.txt) # a staged change
+printf 'cat\n' >"$G/untracked.txt" # untracked
+printf 'cat\n' >"$G/ignored.txt"; echo ignored.txt >"$G/.gitignore"; (cd "$G" && git add .gitignore)
+eq "$(cd "$G" && $GS -l -e cat | tr '\n' ' ')" "base.txt staged.txt " "#50: the working tree: as edited; untracked and ignored files left out"
+eq "$(cd "$G" && $GS --cached -l -e cat | tr '\n' ' ')" "base.txt removed.txt staged.txt " "#50: --cached: the index, not the working tree's edit; a file gone from disk is still found"
+eq "$(cd "$G" && $GS --cached -n -e cat -- base.txt)" "base.txt:1:cat" "#50: --cached: content from the index, not the edited working tree; the name as in the working tree"
+eq "$(cd "$G" && $GS --untracked -l -e cat | tr '\n' ' ')" "base.txt staged.txt untracked.txt " "#50: --untracked: tracked (as edited) plus untracked, not ignored"
+code 2 "#50: --cached and --untracked together" -- sh -c "cd '$G' && $GS --cached --untracked -e cat"
+code 2 "#50: --cached with a <tree>" -- sh -c "cd '$G' && $GS --cached -e cat v1"
+code 2 "#50: --untracked with a <tree>" -- sh -c "cd '$G' && $GS --untracked -e cat v1"
+code 2 "#50: --changed-within needs the working tree" -- sh -c "cd '$G' && $GS --cached --changed-within=7d -e cat"
+(cd "$G" && git tag base.txt) # a tag with the same name as a tracked path: ambiguous without --
+code 2 "#50: an argument that is both a path and a revision is ambiguous" -- sh -c "cd '$G' && $GS -e cat base.txt"
+eq "$(cd "$G" && $GS -e cat base.txt 2>&1 >/dev/null | head -1)" "sys1grep: ambiguous argument 'base.txt': both revision and filename; use -- to separate" "#50 (owner decision 4): both a tree and a path names both, as git does"
+code 2 "#50: a nonexistent path without -- is now an error (git sys1grep, behaviour change)" -- sh -c "cd '$G' && $GS -e cat nosuchpath"
+eq "$(cd "$G" && $GS -e cat nosuchpath 2>&1 >/dev/null | head -1)" "sys1grep: ambiguous argument 'nosuchpath': unknown revision or path not in the working tree" "#50 (owner decision 4): neither a tree nor a path, as git does"
+(cd "$G" && git tag -d base.txt >/dev/null)
+
+# #58/#126: --cached and <tree>: targets are blobs, not files on disk; --max-filesize sizes them from the batch
+# blob read fetchBlobs already did (one git process for the lot), not a fresh stat or cat-file per file.
+(cd "$G" && node -e "for (let i = 0; i < 20000; i++) console.log('cat ' + i)" >hugeblob.txt && git add hugeblob.txt && git commit -q -m v4 && git tag v4)
+reset; out=$(cd "$G" && $GS --max-filesize 10K -e cat v4 -- hugeblob.txt 2>&1 >/dev/null) || true
+eq "$(stat count)" "0" "#58/#126: an oversized <tree>: blob is skipped, nothing sent"
+echo "$out" | grep -q -- "v4:hugeblob.txt: skipped, .* is over --max-filesize=10K" || fail "#58/#126: the skip message names the <tree>: blob: $out"
+reset; eq "$(cd "$G" && $GS --max-filesize 10K -c -e cat v1 -- base.txt)" "v1:base.txt:1" "#58/#126: a <tree>: blob under the limit is still searched"
+(cd "$G" && cp hugeblob.txt staged-huge.txt && git add staged-huge.txt) # staged only, not committed
+reset; out=$(cd "$G" && $GS --cached --max-filesize 10K -e cat -- staged-huge.txt 2>&1 >/dev/null) || true
+eq "$(stat count)" "0" "#58/#126: an oversized --cached blob is skipped, nothing sent"
+echo "$out" | grep -q -- "staged-huge.txt: skipped, .* is over --max-filesize=10K" || fail "#58/#126: the skip message names the --cached blob: $out"
+reset; eq "$(cd "$G" && $GS --cached --max-filesize 10K -n -e cat -- base.txt)" "base.txt:1:cat" "#58/#126: a --cached blob under the limit is still searched"
+
+GC="$tmp/g50-clone"
+(git clone -q "$G" "$GC" && cd "$GC" && git config user.email t@t && git config user.name t)
+printf 'cat local\n' >"$GC/base.txt"; (cd "$GC" && git commit -qam local) # a local, unpushed commit
+eq "$(cd "$GC" && $GS -n -e cat '@{u}' -- base.txt)" "@{u}:base.txt:1:cat" "#50: @{u}: the name as typed, the upstream's tree, not the local commit"
 
 # -r leaves out what git ignores; a file or directory named on the command line is searched even so
 I="$tmp/ign" JI="$E SYS1GREP_URL=$base/v1 node $SG"
@@ -345,7 +431,7 @@ echo "$V" | grep -q '^sys1grep: scope "cat @s:l_python' || fail "--verbose: a he
 echo "$V" | grep -qE '^sys1grep:   ✓ Python files \(\*\.py \*\.pyi \*\.pyw\) +0\.90  keeps 3 of 4 files$' || fail "--verbose: an applied candidate and its count: $V"
 echo "$V" | grep -qE '^sys1grep:   · test code \(.*\) +0\.40  \(below 0\.6, not applied\)$' || fail "--verbose: a candidate below 0.6: $V"
 echo "$V" | grep -qE '^sys1grep:   ✓ what was changed yesterday .*keeps [0-9]+ of 4 files$' || fail "--verbose: the narrowest span applied: $V"
-echo "$V" | grep -qE '^sys1grep:   · what was changed within the last 30 days .*\(a narrower span applied\)$' || fail "--verbose: a wider span not applied: $V"
+echo "$V" | grep -qE '^sys1grep:   · what was changed within the last 30 days .*\(another span applied\)$' || fail "--verbose: a wider span not applied: $V"
 eq "$($JI -r -l --dry-run --verbose -e 'cat @s:l_python' "$S" 2>&1 | grep -c '^sys1grep:   [✓·]' || true)" "0" "--verbose: no candidate lines with --dry-run"
 # --verbose (#104): the scopes a matching file got through, once per file; the files left out, 10 by name
 V=$($JI -r -n --verbose -e 'cat @s:l_python' "$S" "$S/b.js" 2>&1 >/dev/null || true)
@@ -389,25 +475,48 @@ eq "$(grep -c shortlog "$tmp/git.log" || true)" "0" "auto-scope: no git for nega
 : >"$tmp/git.log"; PATH="$tmp/gitwrap:$PATH" $JI -r -c -e cat "$G" >/dev/null
 [ "$(grep -c shortlog "$tmp/git.log")" -ge 1 ] || fail "auto-scope: git asked when a meaning can scope"
 # -g: git log's commits, one record each; auto-scope becomes git log arguments. Every commit carries every meaning.
-L="$tmp/gitlog"; mkdir -p "$L"; LM=$(printf '%s\n' 'cat @s:t_today' 'cat @s:l_python' 'cat @s:a_a_x' 'cat @s:g_mine' 'cat @s:t_today @s:l_python')
+L="$tmp/gitlog"; mkdir -p "$L"; LM=$(printf '%s\n' 'cat @s:t_today' 'cat @s:l_python' 'cat @s:a_a_x' 'cat @s:g_mine' 'cat @s:t_today @s:l_python' 'cat @s:t_yesterday' 'cat @s:t_yesterday @s:t_day1' 'cat @s:t_yesterday @s:t_day7' 'cat @s:t_today @s:t_yesterday' 'cat @s:t_day1' 'cat @s:t_lastmonth @s:t_day7' 'cat @s:t_lastmonth @s:t_day30')
 (cd "$L" && git init -q -b main && git config user.email b@x && git config user.name Bob && git config core.hooksPath /dev/null \
   && echo 1 >a.py && git add a.py && GIT_AUTHOR_DATE=2020-01-01T00:00 GIT_COMMITTER_DATE=2020-01-01T00:00 git commit -q --author='Alice <a@x>' -m oldpy -m "$LM" \
+  && Y=$(node -e 'const d=new Date();d.setDate(d.getDate()-1);d.setHours(12,0,0,0);console.log(d.toISOString())') \
+  && echo 4 >d.py && git add d.py && GIT_AUTHOR_DATE=$Y GIT_COMMITTER_DATE=$Y git commit -q -m yday -m "$LM" \
+  && M=$(node -e 'const d=new Date();d.setHours(0,0,0,0);console.log(d.toISOString())') \
+  && echo 5 >e.txt && git add e.txt && GIT_AUTHOR_DATE=$M GIT_COMMITTER_DATE=$M git commit -q -m midn -m "$LM" \
   && echo 2 >b.js && git add b.js && git commit -q -m newjs -m "$LM" && echo 3 >c.py && git add c.py && git commit -q -m newpy -m "$LM")
 gl() { (cd "$L" && $JI -g "$@" 2>/dev/null) | grep -aoE '^[0-9a-f]{7,} [0-9-]{10} [a-z]+' | awk '{print $3}' | tr '\n' ' '; }
-eq "$(gl -e cat)" "newpy newjs oldpy " "-g: a record per commit, newest first"
-eq "$(gl -e 'cat @s:t_today')" "newpy newjs " "-g: a time becomes --since"
-eq "$(gl -e 'cat @s:l_python')" "newpy oldpy " "-g: a language becomes pathspecs"
+eq "$(gl -e cat)" "newpy newjs midn yday oldpy " "-g: a record per commit, newest first"
+eq "$(gl -e 'cat @s:t_today')" "newpy newjs midn " "-g: a time becomes --since"
+# #120: a span with an end (yesterday, last week, last month) gets --until; a calendar span wins over the rolling one
+# of about the same length that Jev also says yes to (yesterday over the last 24 hours)
+eq "$(gl -e 'cat @s:t_yesterday')" "yday " "-g: yesterday becomes --since and --until (git's --until is inclusive: today 00:00:00 is out)"
+eq "$(gl -e 'cat @s:t_yesterday @s:t_day1')" "yday " "-g: yesterday over the last 24 hours"
+eq "$(gl -e 'cat @s:t_yesterday @s:t_day7')" "yday " "-g: yesterday is the narrowest"
+eq "$(gl -e 'cat @s:t_today @s:t_yesterday')" "newpy newjs midn " "-g: today is narrower than yesterday"
+# a span with an end wins only over a rolling one of about the same length: last month over the last 30 days (their
+# starts are days apart), never over the last 7 days. The second bites in the first week of a month, when last month
+# contains the 7 days' start; later it does not, and the 7 days win anyway.
+glc() { (cd "$L" && $JI -g "$@" 2>&1 >/dev/null) | grep '^sys1grep: git log ' || fail "-g $*: no git log line"; }
+glc -e 'cat @s:t_lastmonth @s:t_day30' | grep -q -- '--until=' || fail "-g: last month over the last 30 days"
+glc -e 'cat @s:t_lastmonth @s:t_day7' | grep -qE -- '--since=[0-9T:.-]+Z --$' || fail "-g: the last 7 days over last month: $(glc -e 'cat @s:t_lastmonth @s:t_day7')"
+(cd "$L" && $JI -g -e 'cat @s:t_yesterday' 2>&1 >/dev/null) | grep -qE "^sys1grep: git log .*--since=[0-9T:.-]+Z --until=[0-9T:.-]+Z " || fail "-g: --until on stderr"
+(cd "$L" && $JI -g -e 'cat @s:t_day1' 2>&1 >/dev/null) | grep -q -- '--until' && fail "-g: a rolling span has no --until"
+eq "$($JI -r -l -e 'cat @s:t_yesterday' "$S" 2>&1 >/dev/null | grep -c 'since .* (from "what was changed yesterday: 0.90")')" "1" "files: a span's end means nothing (a later change moves the mtime)"
+eq "$(gl -e 'cat @s:l_python')" "newpy yday oldpy " "-g: a language becomes pathspecs"
 eq "$(gl -e 'cat @s:a_a_x')" "oldpy " "-g: an author becomes --author"
-eq "$(gl -e 'cat @s:g_mine')" "newpy newjs " "-g: mine becomes --author with user.email"
+eq "$(gl -e 'cat @s:g_mine')" "newpy newjs midn yday " "-g: mine becomes --author with user.email"
 eq "$(gl -e 'cat @s:t_today @s:l_python')" "newpy " "-g: scopes of one meaning together"
 eq "$(gl -e 'cat @s:l_python' b.js)" "newjs " "-g: FILE is a pathspec, never narrowed"
-eq "$(gl --no-auto-scope -e 'cat @s:t_today')" "newpy newjs oldpy " "-g: --no-auto-scope"
+eq "$(gl --no-auto-scope -e 'cat @s:t_today')" "newpy newjs midn yday oldpy " "-g: --no-auto-scope"
 eq "$(cd "$L" && $JI -g --dry-run -e 'cat @s:l_python' -e dog | grep -c '\[scope\]' || true)" "0" "-g: no scope question with two terms"
 (cd "$L" && $JI -g -e 'cat @s:t_today @s:l_python' 2>&1 >/dev/null) | grep -qE "^sys1grep: git log .*--since=[0-9T:.-]+Z -- ':\(glob\)\*\*/\*\.py'" || fail "-g: the git log command on stderr"
 gn() { (cd "$L" && $JI -g --verbose "$@" 2>&1 >/dev/null) | grep '^sys1grep:   note: ' | sort -u; }
 eq "$(gn -e 'cat @s:t_today @s:l_python')" "sys1grep:   note: every record here is from Python files, what was changed today." "-g: the note names the scopes git log took"
 eq "$(gn -e 'cat @s:l_python' b.js)" "" "-g: no language in the note when FILE pathspecs replaced it"
 code 2 "-g with -r" -- sh -c "cd '$L' && $JI -g -r -e cat"
+# item 2 (owner 2026-09-27): -g's commits stay out of --max-filesize (each is already bounded by -M at send time),
+# so a tiny --max-filesize still searches every commit, none skipped.
+eq "$(gl --max-filesize 1 -e cat)" "newpy newjs midn yday oldpy " "-g: a tiny --max-filesize still searches every commit"
+eq "$(cd "$L" && $JI -g --max-filesize 1 -e cat 2>&1 >/dev/null | grep -c 'skipped, .* is over --max-filesize' || true)" "0" "-g: no commit is reported skipped"
 eq "$(gs g_branch)" "dirty.txt feat.txt staged.txt untr.txt " "git scope: this branch"
 eq "$(gs g_unpushed)" "dirty.txt feat.txt new.txt old.txt " "git scope: unpushed, no remote"
 eq "$(cd "$G" && $GS -l -e 'cat @s:g_staged' 2>/dev/null | tr '\n' ' ')" "staged.txt " "git scope: git sys1grep"
@@ -501,8 +610,11 @@ eq "$($E PATH=$tmp/bin:$PATH SUM=$tmp/sum SYS1GREP_OPTS=--summarize-format=html 
 eq "$($E PATH=$tmp/bin:$PATH SYS1GREP_OPTS=--summarize-format=html SYS1GREP_URL=$base/v1 node ../sys1grep.mjs -c -e cat "$F")" "2" "--summarize-format in SYS1GREP_OPTS, no --summarize: ignored"
 reset
 for o in -q -l -c; do code 2 "--summarize with $o" -- $S --summarize $o -e cat "$F"; done
-code 2 "--summarize=unknown" -- $S --summarize=nope -e cat "$F"
-for f in rtf constructor; do code 2 "--summarize-format=$f" -- $S --summarize --summarize-format=$f -e cat "$F"; done
+for v in nope constructor toString __proto__; do # the message too: an inherited name used to fail later, also with exit 2
+  code 2 "--summarize=$v" -- $S --summarize=$v -e cat "$F"
+  $S --summarize=$v -e cat "$F" 2>&1 | grep -q '^sys1grep: --summarize must be one of' || fail "--summarize=$v: $($S --summarize=$v -e cat "$F" 2>&1 | head -1)"
+done
+for f in rtf constructor toString __proto__; do code 2 "--summarize-format=$f" -- $S --summarize --summarize-format=$f -e cat "$F"; done
 code 2 "--summarize-format without --summarize" -- $S --summarize-format=markdown -e cat "$F"
 code 2 "SYS1GREP_SUMMARIZER=unknown" -- env SYS1GREP_SUMMARIZER=nope $S --summarize -e cat "$F"
 code 2 "--summarize, claude not on PATH" -- $E PATH=/usr/bin:/bin SYS1GREP_URL=$base/v1 "$(command -v node)" ../sys1grep.mjs --summarize -e cat "$F"
@@ -529,6 +641,77 @@ $S --summarize -e '/cat/' "$tmp/big.txt" 2>&1 >/dev/null | grep -q '^sys1grep: -
 node -e "for (let i = 0; i < 3000; i++) console.log('cat ' + [...String(i % 300)].map(d => 'ghijklmnop'[d]).join('') + ' ' + 'x'.repeat(800) + ' ' + i)" >"$tmp/bigdd.txt"
 $S --summarize --dedup --chunk 100 -e cat "$tmp/bigdd.txt" 2>&1 >/dev/null | grep -q '^sys1grep: --summarize: 3000 matching lines as 300 representatives ([0-9]* KB) are more than the 200 KB to summarize; narrow the expression$' || fail "--summarize --dedup over 200 KB: $($S --summarize --dedup --chunk 100 -e cat "$tmp/bigdd.txt" 2>&1 >/dev/null)"
 $S --summarize --dry-run -e cat "$F" | grep -q '^sys1grep: summarize: .* (stops over 200 KB)$' || fail "--dry-run shows the limit"
+
+# #58 / #125 review (item 9, owner 2026-09-27): -M/--max-columns bounds only what is *sent*, as before this PR: a
+# unit past it is truncated to the first NUM characters, still searched and judged on that truncated text, not
+# skipped. A meaning inside the truncated part still matches; one whose only occurrence is past the cutoff does
+# not, until -M is raised. Default 2000 (8000 with -z)
+printf 'cat\n' >"$tmp/long.txt"; node -e "console.log('dog ' + 'x'.repeat(2000) + ' cat')" >>"$tmp/long.txt"
+reset; eq "$($J -n -e cat "$tmp/long.txt" | nums)" "1 " "cat past the default -M cutoff is not found there"
+eq "$(stat asked)" "2" "the overlong line is judged too (on its truncated text), not skipped"
+reset; eq "$($J -n -e dog "$tmp/long.txt" | nums)" "2 " "dog inside the truncated part still matches"
+reset; eq "$($J -n -M 4000 -e cat "$tmp/long.txt" | nums)" "1 2 " "-M raises the limit: cat past the old cutoff is now found"
+code 2 "-M 0" -- $J -M 0 -e cat "$F"
+code 2 "-M not a number" -- $J -M abc -e cat "$F"
+
+# #58 / #125 review (item 2, owner 2026-09-27): an oversized target is skipped outright, like rg's own
+# --max-filesize, not asked about: named on stderr, `-y` does not affect it, and a file named explicitly on the
+# command line is skipped too (item 3, unchanged). No terminal is needed for this, unlike --max-cost below.
+node -e "for (let i = 0; i < 20000; i++) console.log('cat ' + i)" >"$tmp/huge.txt"
+reset; code 1 "an oversized file is skipped: no terminal needed, no match" -- $J --max-filesize 10K -e cat "$tmp/huge.txt" </dev/null
+eq "$(stat count)" "0" "nothing is sent for a skipped file"
+$J --max-filesize 10K -e cat "$tmp/huge.txt" </dev/null 2>&1 >/dev/null | grep -q -- "$tmp/huge.txt: skipped, .* is over --max-filesize=10K" || fail "the message names the file, the size and the option"
+reset; code 1 "-y does not un-skip an oversized file" -- $J -y --max-filesize 10K -e cat "$tmp/huge.txt" </dev/null
+code 2 "--max-filesize, not a size" -- $J --max-filesize nope -e cat "$F"
+# item 1 (owner 2026-09-27): stdin is sized after it is read (it is already in memory), and skipped the same way
+# as a file, named `-` on stderr, nothing from it sent.
+reset; code 1 "oversized stdin is skipped: no match" -- sh -c "$J --max-filesize 10K -e cat < '$tmp/huge.txt'"
+eq "$(stat count)" "0" "nothing is sent from a skipped stdin"
+sh -c "$J --max-filesize 10K -e cat < '$tmp/huge.txt'" 2>&1 >/dev/null | grep -q -- "^sys1grep: -: skipped, .* is over --max-filesize=10K" || fail "the message names stdin as -, the size and the option"
+reset; eq "$(sh -c "$J -n -e cat < '$F'" | nums)" "1 4 " "stdin under --max-filesize is still searched"
+# --max-cost 0: any estimated price is over it, so even ordinary input asks; --max-filesize's own skip above never
+# asks, so a run now shows at most this one question (item 8, now moot: see the PR body)
+reset; code 2 "--max-cost 0, no terminal" -- sh -c "$J --max-cost 0 -e cat '$F' </dev/null"
+out=$($J --max-cost 0 -e cat "$F" </dev/null 2>&1 >/dev/null) || true
+echo "$out" | grep -q -- 'input tokens.*--max-cost 0' || fail "the message names --max-cost: $out"
+# item 4 (owner 2026-09-27): --max-cost keeps pricing at TypeSafe's list price even for a custom endpoint (every
+# offline test's own SYS1GREP_URL counts as one), and now says so in the question
+echo "$out" | grep -q "at TypeSafe's list price (SYS1GREP_URL is another endpoint)" || fail "the question says it priced at TypeSafe's list price for the custom endpoint: $out"
+reset; eq "$($J -y --max-cost 0 -n -e cat "$F" | nums)" "1 4 " "-y bypasses --max-cost too"
+# -i already asks unconditionally, before anything is sent: the guard above does not ask a second time
+reset; out=$(asking "$JI -i --max-cost 0 -l -e cat '$P/a.md'" y)
+eq "$(printf '%s\n' "$out" | grep -c '\[y/N\]')" "1" "-i and the cost guard together: one question, not two"
+# --dry-run and -i show the same verdict the cost guard would ask about; the size guard no longer asks, so it has
+# nothing left to show in this line (the skip above already told the real story, per file)
+out=$($J --dry-run --max-filesize 10K -e cat "$tmp/huge.txt" 2>&1)
+case "$out" in *'large files:'*) fail "--dry-run no longer shows a size-guard verdict: $out" ;; esac
+echo "$out" | grep -q -- "$tmp/huge.txt: skipped, .* is over --max-filesize=10K" || fail "--dry-run still shows the file being skipped, like a real run: $out"
+$J --dry-run --max-cost 0 -e cat "$F" | grep -q 'over --max-cost 0, would ask' || fail "--dry-run shows the cost guard's verdict"
+# -M and --max-filesize/--max-cost/-y all take effect from SYS1GREP_OPTS too, not just the command line
+reset; eq "$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS='--max-columns 3000' node ../sys1grep.mjs -n -e cat "$tmp/long.txt" | nums)" "1 2 " "--max-columns in SYS1GREP_OPTS"
+reset; code 1 "--max-filesize, --max-cost and -y in SYS1GREP_OPTS take effect" -- $E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS='--max-filesize 10K --max-cost 0 -y' node ../sys1grep.mjs -e cat "$tmp/huge.txt" </dev/null
+
+# #58 review (blocker) / #125 review (item 2): --sentence=jev's judgeBreaks must never read an oversized file's
+# content; since the file is now skipped before it is ever opened, this holds regardless of ordering
+node -e "for (let i = 0; i < 50; i++) console.log('これはとても長い日本語の文章であり改行があいまいです' + i)" >"$tmp/cjk.txt"
+reset; $J --sentence --max-filesize 1K -e cat "$tmp/cjk.txt" >/dev/null 2>&1 || true
+eq "$(stat count)" "0" "an oversized file is skipped before --sentence=jev's judgeBreaks ever reads it"
+$J --sentence --max-filesize 1K -e cat "$tmp/cjk.txt" 2>&1 >/dev/null | grep -q -- "$tmp/cjk.txt: skipped, .* is over --max-filesize=1K" || fail "the skip message names the CJK file too"
+
+# an oversized file under -r / auto-scope: the scope-narrowing request (meaning text only) still goes out, but the
+# file's own content is skipped, not read
+mkdir -p "$tmp/scopebig"; cp "$tmp/huge.txt" "$tmp/scopebig/huge.txt"
+reset; out=$($J -r --max-filesize 10K -e cat "$tmp/scopebig" 2>&1 >/dev/null) || true
+eq "$(stat count)" "1" "auto-scope's own request still goes out; the file's content does not"
+echo "$out" | grep -q -- "huge.txt: skipped, .* is over --max-filesize=10K" || fail "the skip message, under -r: $out"
+
+# #58 review (minor): the byte-rate estimate assumed English's ~4 chars/token; CJK content runs closer to 1
+# token/char, so a Japanese-heavy request should price higher than an ASCII one of the same body size, not the same
+node -e "process.stdout.write('cat ' + 'x'.repeat(300))" >"$tmp/ascii-est.txt"
+node -e "process.stdout.write('cat ' + 'あ'.repeat(100))" >"$tmp/cjk-est.txt" # 100 x 3 UTF-8 bytes = same 300 bytes
+a=$($J --dry-run -e cat "$tmp/ascii-est.txt" | grep -oE '~[0-9]+ input tokens' | grep -oE '[0-9]+')
+c=$($J --dry-run -e cat "$tmp/cjk-est.txt" | grep -oE '~[0-9]+ input tokens' | grep -oE '[0-9]+')
+[ "$c" -gt "$a" ] || fail "CJK-heavy content prices higher than same-byte-length ASCII: ascii=$a cjk=$c"
 
 # --summarize-prompt (#88): TEXT is added after the fixed instruction, only when --summarize is also given
 $S --summarize --summarize-prompt='3 lines or fewer' -e cat "$F" >/dev/null
@@ -594,7 +777,7 @@ eq "$($J -n -e cat "$F" 2>&1 >/dev/null)" "" "no settings lines without --verbos
 hostport=$(echo "$base" | sed 's#^[a-z]*://##')
 out=$($E node ../sys1grep.mjs --dry-run -e /cat/ "$F")
 echo "$out" | grep -qx 'sys1grep: endpoint api.typesafe.ai/v1/systemone (default), model jev-latest (default)' || fail "endpoint/model default: $out"
-echo "$out" | grep -qx 'sys1grep: options: --level normal = -t 0.5 -T 0.5, --chunk 30, -j 8, scope on' || fail "options, all defaults: $out"
+echo "$out" | grep -qx 'sys1grep: options: --level normal = -t 0.5 -T 0.5, --chunk 30, -j 8, scope on, -M 2000, --max-filesize 10M, --max-cost 1' || fail "options, all defaults: $out"
 echo "$out" | grep -q '^sys1grep: key: ' && fail "no key line with regex-only meanings (nothing is ever sent): $out"
 out=$($J --dry-run -e cat "$F")
 echo "$out" | grep -qF "sys1grep: endpoint $hostport/v1 (SYS1GREP_URL), model jev-latest (default)" || fail "endpoint from an environment variable: $out"
@@ -621,7 +804,7 @@ echo "$out" | grep -qF "sys1grep: endpoint $hostport/v1 (SYS1GREP_URL, ~/.config
 rm -rf "$tmp/.config"
 out=$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS='--level strict --color=never' node ../sys1grep.mjs --verbose -e cat "$F" 2>&1 >/dev/null)
 echo "$out" | grep -qx 'sys1grep: SYS1GREP_OPTS: --level strict --color=never' || fail "the raw SYS1GREP_OPTS line: $out"
-echo "$out" | grep -qx 'sys1grep: options: --level strict (SYS1GREP_OPTS) = -t 0.7 -T 0.3, --chunk 30, -j 8, scope on' || fail "options names --level's source: $out"
+echo "$out" | grep -qx 'sys1grep: options: --level strict (SYS1GREP_OPTS) = -t 0.7 -T 0.3, --chunk 30, -j 8, scope on, -M 2000, --max-filesize 10M, --max-cost 1' || fail "options names --level's source: $out"
 out=$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS='--sys1-api-key=sekrit9 --level strict' node ../sys1grep.mjs --dry-run -e cat "$F")
 echo "$out" | grep -qxF 'sys1grep: SYS1GREP_OPTS: --sys1-api-key=*** --level strict' || fail "SYS1GREP_OPTS's own key value is masked (--sys1-api-key=VALUE): $out"
 [ "$(echo "$out" | grep -c sekrit9)" = 0 ] || fail "the key's value must never print (--sys1-api-key in SYS1GREP_OPTS): $out"
@@ -631,9 +814,9 @@ echo "$out" | grep -qxF 'sys1grep: SYS1GREP_OPTS: --sys1-api-key ***' || fail "S
 out=$($J --verbose -e cat "$F" 2>&1 >/dev/null)
 echo "$out" | grep -q '^sys1grep: SYS1GREP_OPTS:' && fail "no SYS1GREP_OPTS line when it is empty: $out"
 out=$($J --verbose -t 0.6 -e cat "$F" 2>&1 >/dev/null)
-echo "$out" | grep -qx 'sys1grep: options: -t 0.6, -T 0.5, --chunk 30, -j 8, scope on' || fail "-t alone overrides just one threshold: $out"
+echo "$out" | grep -qx 'sys1grep: options: -t 0.6, -T 0.5, --chunk 30, -j 8, scope on, -M 2000, --max-filesize 10M, --max-cost 1' || fail "-t alone overrides just one threshold: $out"
 out=$($J --verbose --no-auto-scope -e cat "$F" 2>&1 >/dev/null)
-echo "$out" | grep -qx 'sys1grep: options: --level normal = -t 0.5 -T 0.5, --chunk 30, -j 8, scope off' || fail "scope off: $out"
+echo "$out" | grep -qx 'sys1grep: options: --level normal = -t 0.5 -T 0.5, --chunk 30, -j 8, scope off, -M 2000, --max-filesize 10M, --max-cost 1' || fail "scope off: $out"
 out=$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS=--no-auto-scope node ../sys1grep.mjs --verbose -e cat "$F" 2>&1 >/dev/null)
 echo "$out" | grep -q 'scope off (SYS1GREP_OPTS)' || fail "scope off, its source: $out"
 out=$($S --verbose --summarize -e cat "$F" 2>&1 >/dev/null)
@@ -676,6 +859,52 @@ echo "$out" | grep -qx 'sys1grep: summarize: claude (default), model haiku (defa
 reset; out=$(asking "$O -i --summarize=ollama -e cat '$F'" n)
 echo "$out" | grep -q '^sys1grep: summarize: ollama, model qwen3.5:9b' || fail "-i shows the summarize line: $out"
 echo "$out" | grep -q '^sys1grep: summarize: POST ' || fail "-i shows the POST line: $out"
+# #58's limits in #90's options line, with their sources like the others; -M's default follows -z
+out=$($J --dry-run -M 3000 --max-filesize 5M --max-cost 0.5 -y -e cat "$F")
+echo "$out" | grep -qx 'sys1grep: options: --level normal = -t 0.5 -T 0.5, --chunk 30, -j 8, scope on, -M 3000, --max-filesize 5M, --max-cost 0.5, -y' || fail "options: #58's limits from the command line: $out"
+out=$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS='-M 3000 --max-filesize 5M --max-cost 2 -y' node ../sys1grep.mjs --dry-run -e cat "$F")
+echo "$out" | grep -qF -- '-M 3000 (SYS1GREP_OPTS), --max-filesize 5M (SYS1GREP_OPTS), --max-cost 2 (SYS1GREP_OPTS), -y (SYS1GREP_OPTS)' || fail "options: #58's limits from SYS1GREP_OPTS: $out"
+$J --dry-run -z -e cat "$F" | grep -q '^sys1grep: options: .*, -M 8000, ' || fail "options: -M's default with -z"
+# -i's preview passes #58's lines: the options line with the limits, and the cost guard's verdict (the size guard
+# no longer has one to show: an oversized file is skipped, not asked about, before -i's own preview even runs)
+reset; out=$(asking "$JI -i --max-cost 0 -l -e cat '$F'" n)
+eq "$(stat count)" "0" "-i with the guard's verdict, n: nothing sent"
+echo "$out" | grep -q '^sys1grep: options: .*--max-cost 0' || fail "-i shows the limits in the options line: $out"
+echo "$out" | grep -q 'over --max-cost 0, would ask' || fail "-i shows the cost guard's verdict: $out"
+reset; out=$(onpty "$JI -i --max-filesize 10K -l -e cat '$tmp/huge.txt'; echo rc=\$?")
+echo "$out" | grep -q -- "$tmp/huge.txt: skipped, .* is over --max-filesize=10K" || fail "-i shows the file being skipped, not a guard question: $out"
+case "$out" in *'[y/N]'*) fail "-i asks nothing more once the only target is skipped: $out" ;; esac
+echo "$out" | grep -q 'rc=1' || fail "-i on a skipped-only run: exit 1 (no match), not asked: $out"
+# #125 review (item 2): an oversized file is skipped before it ever reaches Jev or the summarizer; nothing matched,
+# so the summarizer (#98's own 200 KB limit included) is never invoked either, no terminal needed, -y unaffected
+reset; code 1 "an oversized file with --summarize: no match, no terminal needed" -- sh -c "$O --summarize='$base/v1' --max-filesize 100K -e '/cat/' '$tmp/big.txt' </dev/null"
+eq "$(stat chat)" "null" "a skipped file never reaches the HTTP summarizer"
+$O --summarize="$base/v1" --max-filesize 100K -e '/cat/' "$tmp/big.txt" </dev/null 2>&1 >/dev/null | grep -q -- "$tmp/big.txt: skipped, .* is over --max-filesize=100K" || fail "the skip message, not the summarizer's own limit"
+reset; code 1 "-y does not un-skip it either" -- $O -y --summarize="$base/v1" --max-filesize 100K -e '/cat/' "$tmp/big.txt"
+eq "$(stat chat)" "null" "still nothing POSTed to the HTTP summarizer"
+out=$($O --dry-run --summarize="$base/v1" --max-filesize 100K -e '/cat/' "$tmp/big.txt" 2>&1)
+echo "$out" | grep -q -- "$tmp/big.txt: skipped, .* is over --max-filesize=100K" || fail "--dry-run shows the file being skipped: $out"
+reset
+# #90 with #50: the settings name what git sys1grep searches instead of the working tree, the per-file lines name
+# the <tree>: / index copy, -i's preview shows both, and --summarize pipes the <tree>: prefixes
+GSM="$PWD/../git-sys1grep.mjs"
+out=$(cd "$tmp/g50" && $GS --dry-run -e cat v1 v2 -- base.txt)
+echo "$out" | grep -qx 'sys1grep: options: --level normal = -t 0.5 -T 0.5, --chunk 30, -j 8, scope on, -M 2000, --max-filesize 10M, --max-cost 1, <tree> v1 v2' || fail "#50/#90: options name the <tree>s: $out"
+echo "$out" | grep -qx 'sys1grep: file v2:base.txt: 1 lines, 1 to send' || fail "#50/#90: a file line names its <tree>: $out"
+out=$(cd "$tmp/g50" && $GS --dry-run --cached -e cat -- base.txt)
+echo "$out" | grep -q '^sys1grep: options: .*, scope on, .*--cached$' || fail "#50/#90: options name --cached: $out"
+echo "$out" | grep -qx 'sys1grep: file base.txt (index): 1 lines, 1 to send' || fail "#50/#90: --cached: a file line says it is the index copy: $out"
+out=$(cd "$tmp/g50" && $GS --dry-run --untracked -e cat -- untracked.txt)
+echo "$out" | grep -q '^sys1grep: options: .*, scope on, .*--untracked$' || fail "#50/#90: options name --untracked: $out"
+reset; out=$(asking "cd '$tmp/g50' && $GS -i -l -e cat v1 -- base.txt" n)
+echo "$out" | grep -q '^sys1grep: options: .*<tree> v1' || fail "#50/#90: -i shows the <tree> in options: $out"
+echo "$out" | grep -q '^sys1grep: file v1:base.txt: ' || fail "#50/#90: -i shows the <tree>'s file line: $out"
+eq "$(stat count)" "0" "#50/#90: -i, n with a <tree>: nothing sent"
+eq "$(cd "$tmp/g50" && $E PATH=$tmp/bin:$PATH SUM=$tmp/sum SYS1GREP_URL=$base/v1 node "$GSM" --summarize -n -e cat v1 v2 -- base.txt)" "SUMMARY" "#50: --summarize over <tree>s"
+eq "$(tr '\n' '|' <"$tmp/sum.in")" "v1:base.txt:1:cat|v2:base.txt:1:cat|" "#50: --summarize pipes the <tree>: prefixes"
+grep -qF 'A file named REV:path is path as of the git revision REV' "$tmp/sum.argv" || fail "#50: --summarize's prompt says what REV:path is"
+(cd "$tmp/g50" && $E PATH=$tmp/bin:$PATH SUM=$tmp/sum SYS1GREP_URL=$base/v1 node "$GSM" --summarize --cached -e cat -- base.txt >/dev/null)
+grep -qF 'as staged in the git index' "$tmp/sum.argv" || fail "#50: --summarize --cached: the prompt says the files are the index copy"
 reset
 
 # the spinner (#89): on a terminal, one line on stderr while waiting, erased before the output; never when not a terminal
@@ -697,7 +926,7 @@ case $out in *'summarizingwithclaude'*'033[KSUMMARY'*) ;; *) fail "spinner while
 # --help: exit 0, Japanese by locale, lists the options
 code 0 "--help" -- $E LANG=C node ../sys1grep.mjs --help
 eq "$($E LANG=C node ../sys1grep.mjs -h | head -1 | cut -c1-15)" "usage: sys1grep" "-h"
-for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename' '--summarize' '--summarize-prompt' '--summarize-format'; do
+for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename' '--summarize' '--summarize-prompt' '--summarize-format' '-M' '--max-filesize' '--max-cost' '-y, --yes'; do
   $E LANG=C node ../sys1grep.mjs --help | grep -q -- "$o" || fail "--help lacks $o"
 done
 $E LANG=C node ../sys1grep.mjs --help | grep -q 'grep by meaning' || fail "--help in English"
@@ -709,4 +938,4 @@ eq "$($E node ../sys1grep.mjs -V)" "sys1grep $v" "-V"
 code 0 "--version with no key" -- $E node ../sys1grep.mjs --version
 $E LANG=ja_JP.UTF-8 node ../sys1grep.mjs --help | grep -q '何も表示せず' || fail "--help in Japanese"
 $E LANG=C LC_MESSAGES=ja_JP.UTF-8 node ../sys1grep.mjs --help | grep -q '何も表示せず' || fail "LC_MESSAGES"
-echo OK
+echo "OK: $n checks passed (and the grep-guarded ones)"

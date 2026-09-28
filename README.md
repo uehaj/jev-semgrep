@@ -14,7 +14,7 @@ and applies a threshold.
 ./sys1grep -n -e "customer is angry or frustrated" tickets.txt
 ```
 
-[![sys1grep demo: a Japanese meaning finds refund requests in six languages; "asking for a refund" vs "about a refund"; -Q finds the answer](docs/demo.svg)](https://uehaj.github.io/sys1grep/)
+[![sys1grep demo: a Japanese meaning finds refund requests in six languages; "asking for a refund" vs "about a refund"; -Q finds the answer](docs/demo.svg)](https://uehaj.github.io/jev-semgrep/)
 
 <sub>▶ Click the demo, or open <a href="https://uehaj.github.io/sys1grep/">uehaj.github.io/sys1grep</a>, for the full demo on the landing page.</sub>
 
@@ -172,19 +172,29 @@ $ ./sys1grep -o -n -e '/[A-Z]+-\d+/' -a 'the ticket is still open' notes.txt   #
 Every line sent to Jev costs money and time, so the cheapest line is the one never sent. From the widest cut
 to the narrowest:
 
-- **Which files.** `-r` skips `.git`, `node_modules`, binary files, likely secrets and what git ignores;
-  [`git sys1grep`](#as-a-git-subcommand-git-sys1grep) searches tracked files only. `--include` / `--exclude`
-  (file-name globs) and `--changed-within` (`30m`, `7d`, `today`, `this-week`, a date) narrow them further.
-  A meaning that restricts itself to a language or a time of change narrows them by itself: see
-  [Scope from the meaning](#scope-from-the-meaning).
+- **Which files.** `-r` skips `.git`, `node_modules`, binary files, likely secrets, generated files (source maps,
+  minified JS/CSS, lock files) and what git ignores; [`git sys1grep`](#as-a-git-subcommand-git-sys1grep) searches
+  tracked files only. `--include` / `--exclude` (file-name globs) and `--changed-within` (`30m`, `7d`, `today`,
+  `this-week`, a date) narrow them further. A meaning that restricts itself to a language or a time of change
+  narrows them by itself: see [Scope from the meaning](#scope-from-the-meaning).
 - **Which lines.** A [regex term](#regex-terms) is matched locally, and only the lines it holds for are asked
-  its AND term's meanings. Blank lines are never sent.
+  its AND term's meanings. Blank lines are never sent. Only the first `-M`/`--max-columns` characters of a line
+  (default 2000, 8000 with `-z`) are sent: it is still searched and judged, just not past that cutoff.
 - **How many times.** [`--dedup`](#one-line-per-template---dedup) judges one line per template: lines that
   differ only in ids, numbers, times or paths share one answer.
 - **Check before paying.** `--dry-run` sends nothing and prints the settings the search would run with, the
   files, how many lines each would send and every request with its questions. Its last line estimates the input
   tokens and, for TypeSafe itself, the price (`~3178 input tokens, ~$0.000133`; within about 10%). `-i` shows the
   same totals on the terminal and sends only after `y`.
+  Before the bulk of requests, every target is sized (`--max-filesize`, default 10M); one over it is skipped
+  outright, like `rg`'s own `--max-filesize`, named on stderr (`-y` does not affect it). A `.gz` is sized
+  decompressed (zlib stops at the limit, so an oversized one is never inflated in full). stdin is sized once it
+  is read (it is already in memory), and skipped the same way if it is over; a `--cached` or `<tree>:` target
+  is a blob rather than a file, sized from its content (already read in one `git cat-file --batch` call, not a
+  fresh git process per blob); `-g`'s commits stay out of this, since each is already bounded by `-M` when it
+  is sent. The input about to be sent is priced too (`--max-cost`,
+  default 1 USD); over it, one question asks to continue on the terminal, `-y` answers it yes, and without a
+  terminal it is exit 2 (this applies with `-q` too — scripts pass `-y`).
 
 ```sh
 $ sys1grep --dry-run -r --include='*.log' --changed-within=today -e '/ERROR|FATAL/' -a 'a customer is affected' logs/
@@ -200,7 +210,7 @@ $ SYS1GREP_OPTS='--level strict' sys1grep --verbose -e "the API key is read from
 sys1grep: endpoint api.typesafe.ai/v1/systemone (default), model jev-latest (default)
 sys1grep: key: SYS1GREP_API_KEY (~/.config/sys1grep/.env)
 sys1grep: SYS1GREP_OPTS: --level strict
-sys1grep: options: --level strict (SYS1GREP_OPTS) = -t 0.7 -T 0.3, --chunk 30, -j 8, scope on
+sys1grep: options: --level strict (SYS1GREP_OPTS) = -t 0.7 -T 0.3, --chunk 30, -j 8, scope on, -M 2000, --max-filesize 10M, --max-cost 1
 sys1grep: file ./a.py: 120 lines, 120 to send
 …
 ```
@@ -396,9 +406,12 @@ tests/tickets/sub/b.txt
 ```
 
 `-r` walks directories in sorted order and skips `.git`, `node_modules`, `.ssh`, `.aws`, `.gnupg`, `.kube`,
-`.docker`, binary files (a NUL byte in the first 8 KB, or a PDF; UTF-16 with a BOM is read as text) and files
+`.docker`, binary files (a NUL byte in the first 8 KB, or a PDF; UTF-16 with a BOM is read as text), files
 that usually hold secrets (`.env*`, `.netrc`, `.npmrc`, `.pypirc`, `.pgpass`, `.git-credentials`, `*.pem`,
-`*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `id_rsa*` and friends; names compared without case). **Every line that is searched is sent to the TypeSafe API**, so point `-r` at a directory
+`*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `id_rsa*` and friends; names compared without case) and
+generated files (`*.map`, `*.min.js`, `*.min.css`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`,
+`Cargo.lock`, `poetry.lock`, `composer.lock`, `Gemfile.lock`, `go.sum`). **Every line that is searched is sent
+to the TypeSafe API**, so point `-r` at a directory
 you mean to scan. Inside a git repository, `-r` also skips what git ignores (`.gitignore`, `.git/info/exclude`, the
 global excludes file), so build output and local files stay home; a tracked file is searched even if it matches.
 A file named `*.gz` (a rotated log: `app.log.1.gz`) is read decompressed, as `zgrep` does, and printed by its
@@ -471,6 +484,25 @@ Without FILE it searches every tracked file under the current directory. The `-r
 applies even to tracked files. `--include`, `--exclude` and `--changed-within` filter the tracked files, those named
 by a pathspec included. `--changed-within` reads the working tree's modification times, not git history: right after
 a clone or a checkout, every file it wrote counts as just changed. For help use `git sys1grep -h`: git takes `--help` itself and looks for a man page.
+
+`--cached`, `--untracked` and a `<tree>...` choose what is searched instead of the working tree, as `git grep` has
+them (only one of the three at a time):
+
+```sh
+$ git sys1grep --cached -e "a retry is attempted"       # staged, uncommitted changes included
+$ git sys1grep --untracked -e "a retry is attempted"    # tracked files plus untracked ones (.gitignore still applies)
+$ git sys1grep -n -e "a retry is attempted" main v0.3.1 -- '*.py'
+main:src/job.py:42:    retry(job, times=3)
+v0.3.1:src/job.py:40:    retry(job)
+```
+
+A `<tree>` (a branch, tag, commit or `@{u}`) is any argument before `--` that resolves as a revision; several may
+be given, searched in the order given, each line prefixed with the name as typed (`@{u}:path`, not the branch it
+resolves to). `--changed-within` needs the working tree: a blob (`--cached`, a `<tree>`) has no mtime of its own.
+A `<tree>`'s own pathspec takes a glob too, same as elsewhere in sys1grep (`git diff-tree` against the empty
+tree, not `git ls-tree`'s own literal/directory-prefix match); `--include` / `--exclude` (by name) still work.
+**An old `<tree>` can hold a secret an ordinary file once carried and was later removed from**: the skip list
+drops files by name only, not by what changed since.
 
 ### Everything that is *not* something
 
@@ -699,7 +731,11 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
   -T THRESH    negative threshold: "not X" when probability < THRESH (overrides --level)
                with -t 0.6 -T 0.3 a line at 0.3..0.6 matches neither X nor not-X
   -r           recurse into directories (current directory when FILE is omitted);
-               skips .git, node_modules, binary files, likely secrets and what git ignores
+               skips .git, node_modules, binary files, likely secrets, generated files and what git ignores
+  --cached     git sys1grep only: search the index instead of the working tree, as git grep --cached
+  --untracked  git sys1grep only: also search untracked files (.gitignore still applies), as git grep --untracked
+  <tree>...    git sys1grep only: a branch, tag, commit or @{u} before -- searches that revision's tree
+               instead, as git grep does; output is prefixed <tree>: with the name as typed
   --include=GLOB, --exclude=GLOB  with -r and git sys1grep, only files whose name matches GLOB, or not
                (with -r a file named on the command line is always searched; git sys1grep's pathspecs are filtered)
   --changed-within=WHEN  with -r and git sys1grep, only files modified within 30m / 2h / 7d / 2w, since a date
@@ -726,6 +762,15 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
                command line), each file searched and each request with its questions
   --verbose    print the same to stderr while searching
   -i, --interactive  show what --dry-run would send, and search only after y on the terminal
+  -M NUM, --max-columns=NUM  send at most the first NUM characters of a line (or record, with -z); still
+               searched and judged, just not past that cutoff (default 2000, 8000 with -z)
+  --max-filesize=SIZE  size every target first (K/M/G, default 10M); over it, skip it outright, like rg's own
+               --max-filesize (-y does not affect it). stdin is sized once read, and skipped the same way if
+               it is over; a --cached / <tree>: target is a blob, sized from its content; -g's commits stay
+               out of this (each is already bounded by -M when sent)
+  --max-cost=USD  price the input about to be sent; over it (default 1), ask to continue on the terminal; -y
+               answers yes without asking; no terminal and the limit exceeded is exit 2, unchanged by -q
+               (scripts pass -y); -i already asks unconditionally and earlier, so this does not ask again
   --dedup      judge one line per template and reuse its answer for the rest (see "One line per template" above)
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are

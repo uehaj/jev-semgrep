@@ -6,15 +6,50 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
+- Guards against generated and oversized input (#58, with the owner's decisions on #125's review applied). `-r`
+  and `git sys1grep` now also skip generated files (`*.map`, `*.min.js`, `*.min.css`, `package-lock.json` and other
+  lock files), named explicitly still searched. Every target is sized (`--max-filesize`, K/M/G, default 10M)
+  before anything is read; one over it is skipped outright, like `rg`'s own `--max-filesize`
+  (`sys1grep: big.log: skipped, 25 MB is over --max-filesize=10M`), named on stderr, and `-y` does not affect it
+  (a named file over the limit is skipped too). Separately, the input about to be sent (including the setup
+  requests above, if any ran) is priced (`--max-cost`, default 1 USD) and asks to continue on the terminal if it
+  is over; a custom `SYS1GREP_URL` is still priced at TypeSafe's list price, and the question says so.
+  `-y`/`--yes` answers that question yes without asking, and without a terminal a limit exceeded is exit 2.
+  `-i` already asks unconditionally and earlier, so this does not ask again; `--dry-run` and `-i` show the same
+  verdict. `-M`/`--max-columns` (default 2000, 8000 with `-z`) is unchanged from before this PR: it bounds only
+  what is sent, truncating a unit to its first NUM characters; the unit is still searched and judged on that
+  truncated text. Standard input is sized once it is read (it is already read whole into memory), and skipped
+  the same way as a file (`sys1grep: -: skipped, 190 KB is over --max-filesize=10K`), nothing from it sent.
+  `-g`'s commits stay out of `--max-filesize` (each is already bounded by `-M` at send time). `-q` combined with
+  `--max-cost` and no terminal is unchanged: still an exit-2 stop (scripts pass `-y`). A `--cached` or `<tree>:`
+  target (#50/#126) is a blob, not a file `stat` can size; `--max-filesize` now sizes it from its content
+  instead, read once already by the batch `git cat-file --batch` those options use, so no extra `git` process
+  runs per blob (#58 closes).
+- `git sys1grep` gets `--cached`, `--untracked` and `<tree>...`, as `git grep` has them (#50). `--cached`
+  searches the blobs staged in the index instead of the working tree (a file deleted from the working tree
+  but still staged is still found); `--untracked` searches tracked files plus untracked ones (`.gitignore`
+  still applies); a `<tree>...` (a branch, tag, commit or `@{u}`, named before `--`) searches that revision's
+  tree instead, several may be given, each line prefixed `<tree>:` with the name as typed. Only one of the
+  three at a time. A blob shared by several trees is judged once, without needing `--dedup`. Auto-scope does
+  not narrow a blob (index or tree) target, and `--changed-within` is an error with `--cached` or a `<tree>`:
+  a blob has no mtime of its own. A `<tree>`'s own pathspec takes a glob too, same as elsewhere in sys1grep
+  (`git diff-tree` against the empty tree, not `git ls-tree`'s own literal/directory-prefix match). An
+  argument before `--` that is both a tree and a path is `ambiguous argument '…': both revision and filename;
+  use -- to separate`; one that is neither is `ambiguous argument '…': unknown revision or path not in the
+  working tree` — the two messages `git` itself gives.
+  `--verbose` / `--dry-run` (and `-i`'s preview) list `--cached`, `--untracked` or the `<tree>`s among the options,
+  and a `--cached` file line reads `file PATH (index): ...`; `--summarize` pipes the `<tree>:` prefixes, and its
+  prompt says what `REV:path` is (or that the files are the index copy).
 - A file named `*.gz` is read decompressed, as `zgrep` does, and printed by its name on disk (#68): rotated logs
   (`app.log.1.gz`) are searched in place and under `-r`; `--include='*.gz'` picks them. The binary sniff
   sees the decompressed bytes, so a gzipped binary is still skipped; a gzipped secret (`private.key.gz`, `.netrc.gz`) is
   skipped like the plain one; a corrupt `.gz` is an unreadable file.
-  Only gzip, only by the name; stdin is not decompressed.
+  Only gzip, only by the name; stdin is not decompressed. `--max-filesize` measures a `.gz` decompressed: zlib stops
+  at the limit, so an oversized one is skipped without being inflated in full.
 - `--verbose` / `--dry-run` print the settings the search ran with, before the per-file lines: the endpoint and
   model, the key (the variable or option name only, never its value), `SYS1GREP_OPTS` (when set), the effective
   thresholds / `--chunk` / `-j` / `--sentence` / `--dedup` / `-z` / scope on-or-off / `--include` / `--exclude` /
-  `--changed-within`, and, with `--summarize`, its TOOL and model (the TOOL's own default when unset), the key of a URL TOOL (by name) and whether `--summarize-prompt` is set. Each is marked with its source when it did not
+  `--changed-within` / #58's `-M` / `--max-filesize` / `--max-cost` / `-y`, and, with `--summarize`, its TOOL and model (the TOOL's own default when unset), the key of a URL TOOL (by name) and whether `--summarize-prompt` is set. Each is marked with its source when it did not
   come from the command line: `(default)`, `(SYS1GREP_OPTS)`, `(ENV_NAME)`, or `(ENV_NAME, ~/.config/sys1grep/.env)`.
   `-i`'s preview shows the same lines (#90).
 - `-g` / `--gitlog` searches the commits of `git log` instead of files, one record each (`%h %ad %s`, then the
@@ -23,6 +58,10 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   `sys1grep -g -Q '今日、.mjsにおこなった性能向上の修正'` runs `git log --since=<today> -- '*.mjs' …` and judges
   those commits. The command is printed on stderr. FILE arguments are pathspecs and are never narrowed. Places
   and uncommitted / staged / untracked are not asked. Not with `-r` or `git sys1grep`.
+  A span with an end (yesterday, last week, last month) also gets `--until`, and wins over the rolling span of
+  about the same length Jev says yes to as well (yesterday over the last 24 hours, whose start moves with the
+  clock), so `昨日のバグ修正` judges yesterday's commits only (#120). Files are still narrowed by a span's start
+  alone: a later change moves the mtime.
 - Auto-scope's note (#111): each judging request tells Jev which scopes all its lines got through, in one
   `note` in its state (`note: every line here is from what was changed yesterday, .mjs files.`), named as the
   scope question named them, or a language by the extension the meaning wrote. A line cannot show when it

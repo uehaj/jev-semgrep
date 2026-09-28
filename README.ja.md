@@ -13,7 +13,7 @@ Jev は文章を生成せず、typed な質問に確率だけを返すモデル�
 ./sys1grep -n -e "顧客が怒っている、または不満を持っている" tickets.txt
 ```
 
-[![sys1grep のデモ: 日本語の意味で 6 言語の返金要求を探す / 「返金について」と「返金を求めている」の違い / -Q で答えを探す](docs/demo.svg)](https://uehaj.github.io/sys1grep/)
+[![sys1grep のデモ: 日本語の意味で 6 言語の返金要求を探す / 「返金について」と「返金を求めている」の違い / -Q で答えを探す](docs/demo.svg)](https://uehaj.github.io/jev-semgrep/)
 
 <sub>▶ デモをクリックするか <a href="https://uehaj.github.io/sys1grep/">uehaj.github.io/sys1grep</a> を開くと、ランディングページで全編のデモが見られます。</sub>
 
@@ -159,19 +159,31 @@ $ ./sys1grep -o -n -e '/[A-Z]+-\d+/' -a 'チケットがまだ閉じていない
 Jev に送る行が増えるほど、費用も時間もかかります。いちばん安いのは、送らずに済ませた行です。絞り方を、
 大きく削れるものから順に並べます。
 
-- **どのファイルを探すか。** `-r` は `.git`、`node_modules`、バイナリ、秘密情報らしいファイル、git が無視する
+- **どのファイルを探すか。** `-r` は `.git`、`node_modules`、バイナリ、秘密情報らしいファイル、生成されたファイル
+  （ソースマップ、minify 済み JS/CSS、ロックファイル）、git が無視する
   ものを飛ばします。[`git sys1grep`](#git-のサブコマンドとして-git-sys1grep) は追跡しているファイルだけを探します。
   `--include` / `--exclude`（ファイル名のグロブ）と `--changed-within`（`30m`、`7d`、`today`、`this-week`、日付）で
   さらに絞れます。言語や変更時期を指定する意味は、それだけでファイルを絞ります
   ([意味からの絞り込み](#意味からの絞り込み))。
 - **どの行を送るか。** [正規表現項](#正規表現項)はローカルで判定し、当たった行だけが同じ AND 項の意味を
-  尋ねられます。空行は送りません。
+  尋ねられます。空行は送りません。`-M`/`--max-columns`（既定 2000、`-z` なら 8000）を超える行は、
+  先頭からその文字数までだけを送ります。判定はそれでも行われ、超えた先にしか無い一致だけが見つかりません。
 - **何回判定するか。** [`--dedup`](#テンプレートごとに-1-行だけ判定する---dedup) は、ID・数値・時刻・パスだけが
   違う行をまとめて、テンプレートごとに 1 行だけ判定します。
 - **払う前に確かめる。** `--dry-run` は何も送らず、この検索が使う設定、検索するファイル、ファイルごとの
   送る行数、各リクエストとその質問を表示します。最後の行には入力トークン数と、TypeSafe 本体なら料金の
   見積もりが出ます（`~3178 input tokens, ~$0.000133`。誤差 1 割程度）。`-i` は同じ集計を端末に出し、
   `y` と答えたときだけ送ります。
+  リクエストの本体を送る前に、まず対象のサイズ（`--max-filesize`、既定 10M）を計測し、超えるものは
+  rg の `--max-filesize` と同じく無条件に飛ばして stderr に名前を出します（`-y` は効きません）。`.gz` は
+  展開後の大きさで計測します（上限で展開を止めるので、大きすぎるものを全部展開することはありません）。標準入力は
+  読んでから（すでにメモリ上にあるので）計測し、超えていれば同じく飛ばします。`--cached` / `<tree>:` の
+  対象はファイルではなく blob なので、その内容（`git cat-file --batch` で一括して読んだもの。blob ごとに
+  git を起動し直しません）から計測します。`-g` のコミットはここに含まれません。送るときにすでに `-M` で
+  上限があるからです。
+  送る予定のトークンの値段（`--max-cost`、既定 1 USD）は別に見積もり、超えていれば端末で続けるか聞きます。
+  `-y` は聞かずに yes と答え、端末が無く超えていれば終了コード 2 です（`-q` でも同じで、スクリプトからは
+  `-y` を渡します）。
 
 ```sh
 $ sys1grep --dry-run -r --include='*.log' --changed-within=today -e '/ERROR|FATAL/' -a '顧客に影響が出ている' logs/
@@ -186,7 +198,7 @@ $ SYS1GREP_OPTS='--level strict' sys1grep --verbose -e "APIキーがファイル
 sys1grep: endpoint api.typesafe.ai/v1/systemone (default), model jev-latest (default)
 sys1grep: key: SYS1GREP_API_KEY (~/.config/sys1grep/.env)
 sys1grep: SYS1GREP_OPTS: --level strict
-sys1grep: options: --level strict (SYS1GREP_OPTS) = -t 0.7 -T 0.3, --chunk 30, -j 8, scope on
+sys1grep: options: --level strict (SYS1GREP_OPTS) = -t 0.7 -T 0.3, --chunk 30, -j 8, scope on, -M 2000, --max-filesize 10M, --max-cost 1
 sys1grep: file ./a.py: 120 lines, 120 to send
 …
 ```
@@ -384,7 +396,9 @@ tests/tickets/sub/b.txt
 `-r` はディレクトリを名前順にたどり、`.git`、`node_modules`、`.ssh`、`.aws`、`.gnupg`、`.kube`、`.docker`、
 バイナリ（先頭 8 KB に NUL がある、または PDF。BOM 付きの UTF-16 はテキストとして読む）、
 秘密情報になりがちなファイル（`.env*`、`.netrc`、`.npmrc`、`.pypirc`、`.pgpass`、`.git-credentials`、`*.pem`、
-`*.key`、`*.p12`、`*.pfx`、`*.jks`、`*.keystore`、`id_rsa*` など。大文字小文字は区別しない）を飛ばします。
+`*.key`、`*.p12`、`*.pfx`、`*.jks`、`*.keystore`、`id_rsa*` など。大文字小文字は区別しない）、
+生成されたファイル（`*.map`、`*.min.js`、`*.min.css`、`package-lock.json`、`yarn.lock`、`pnpm-lock.yaml`、
+`Cargo.lock`、`poetry.lock`、`composer.lock`、`Gemfile.lock`、`go.sum`）を飛ばします。
 **検索対象の行はすべて TypeSafe の API に送られる**ので、スキャンするつもりのディレクトリだけを指定してください。
 git リポジトリの中では、git が無視するもの（`.gitignore`、`.git/info/exclude`、グローバルの除外ファイル）も `-r` で
 飛ばすので、ビルド成果物や手元だけのファイルは送られません。追跡中のファイルは、無視パターンに当たっても検索します。
@@ -455,6 +469,26 @@ FILE を省くとカレントディレクトリ以下の追跡ファイルを全
 `--changed-within` は git の履歴ではなく作業ツリーのファイルの更新時刻を見ます。clone や checkout の直後は、書き出されたファイルがすべて
 「いま変わった」扱いになります。
 ヘルプは `git sys1grep -h` です（`--help` は git が横取りして man ページを探しに行きます）。
+
+`--cached`、`--untracked`、`<tree>...` は作業ツリーの代わりに探す対象を選びます。`git grep` と同じで、
+3 つのうち同時に使えるのは 1 つだけです。
+
+```sh
+$ git sys1grep --cached -e "リトライしている"       # ステージ済み、未コミットの変更も含む
+$ git sys1grep --untracked -e "リトライしている"    # 追跡ファイルに加え未追跡ファイルも (.gitignore は効いたまま)
+$ git sys1grep -n -e "リトライしている" main v0.3.1 -- '*.py'
+main:src/job.py:42:    retry(job, times=3)
+v0.3.1:src/job.py:40:    retry(job)
+```
+
+`<tree>`（ブランチ・タグ・コミット・`@{u}`）は `--` の前に置いた、リビジョンとして解決できる引数です。複数指定でき、
+指定順に探し、各行には解決前の名前をそのまま付けます (`@{u}:path` であって、解決したブランチ名ではありません)。
+`--changed-within` は作業ツリーが要ります。blob（`--cached`、`<tree>`）には自分の mtime がないためです。
+`<tree>` 自身の pathspec も sys1grep の他の場所と同じくグロブが使えます（空の tree との `git diff-tree` を使い、
+`git ls-tree` 自身のリテラル・ディレクトリ前方一致のみのルールには従いません）。`--include` / `--exclude`
+（名前で絞る方）はそのまま使えます。
+**古い `<tree>` には、後で削除された秘密情報が普通のファイルとして残っていることがあります**。スキップ対象は
+名前で判定するだけで、変更履歴では判定しません。
 
 ### 「〜でない」行を全部
 
@@ -680,7 +714,11 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
   -T THRESH    否定条件の閾値。確率 < THRESH で「〜でない」と判定 (--level より優先)
                -t 0.6 -T 0.3 なら 0.3〜0.6 の曖昧な行はどちらにも当たらない
   -r           ディレクトリを再帰的に探す (FILE 省略時はカレント)。.git、node_modules、
-               バイナリ、秘密情報らしいファイル、git が無視するものは飛ばす
+               バイナリ、秘密情報らしいファイル、生成されたファイル、git が無視するものは飛ばす
+  --cached     git sys1grep 限定。作業ツリーではなくインデックスを探す (git grep --cached と同じ)
+  --untracked  git sys1grep 限定。追跡ファイルに加え未追跡ファイルも探す (.gitignore は効いたまま。git grep --untracked と同じ)
+  <tree>...    git sys1grep 限定。-- の前のブランチ・タグ・コミット・@{u} はそのリビジョンのツリーを探す
+               (git grep と同じ)。出力には <tree>: を付け、名前は解決前のまま表示する
   --include=GLOB, --exclude=GLOB  -r と git sys1grep で、名前が GLOB に合うファイルだけ (または合わないものだけ) を探す
                (-r ではコマンドラインで指定したファイルは必ず探す。git sys1grep の pathspec は絞り込む)
   --changed-within=WHEN  -r と git sys1grep で、30m / 2h / 7d / 2w 以内、日付か日時以降、today / this-week /
@@ -706,6 +744,15 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
                各リクエストとその質問を表示
   --verbose    同じ表示を検索しながら stderr に出す
   -i, --interactive  --dry-run と同じ内容を見せ、端末で y と答えたときだけ検索する
+  -M NUM, --max-columns=NUM  行 (-z ならレコード) の先頭 NUM 文字までを送る。判定はそれでもされる
+               (NUM より先にしか無い一致だけ見つからない)。既定 2000、-z なら 8000
+  --max-filesize=SIZE  対象を先に計測 (K/M/G、既定 10M)。超えるものは rg の --max-filesize と同じく
+               無条件に飛ばす (-y は効かない)。標準入力は読んでから計測し、超えていれば同じく飛ばす。
+               --cached / <tree>: の対象は blob で、その内容から計測する。-g のコミットはここに
+               含まれない (送るときに -M ですでに上限がある)
+  --max-cost=USD  送る予定の入力を見積もって値段を出す。超えれば (既定 1) 端末で続けるか聞く。
+               -y は聞かずに yes と答える。端末が無く超えていれば終了コード 2、-q でも変わらない
+               (スクリプトからは -y)。-i は無条件かつこれより前に聞くので二重には聞かない
   --dedup      テンプレートごとに 1 行だけ判定し、その答えを残りにも使う (前述の「テンプレートごとに 1 行だけ判定する」を参照)
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、

@@ -1,0 +1,68 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline:
+    name: offline (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20.16', '22', '24'] # 20.16: engines' floor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: OFFLINE_VERBOSE=1 npm run test:offline | tee offline.log
+      - run: tail -1 offline.log >> "$GITHUB_STEP_SUMMARY"
+        if: always()
+
+  # Every commit, merges' diffs included (-m), and the tree as it stands. Not gitleaks-action: it reads at most 30
+  # of a PR's commits and skips what a merge brought in. A pinned release, checked against its sha256.
+  gitleaks:
+    runs-on: ubuntu-latest
+    env:
+      V: 8.30.1
+      SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: |
+          cd "$RUNNER_TEMP" # not in the checkout, which dir scans
+          curl -sSfLo gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v$V/gitleaks_${V}_linux_x64.tar.gz"
+          echo "$SHA256  gitleaks.tgz" | sha256sum -c -
+          tar xzf gitleaks.tgz gitleaks
+          cd "$GITHUB_WORKSPACE"
+          "$RUNNER_TEMP/gitleaks" git --no-banner --redact --log-opts='--all --full-history -m' .
+          "$RUNNER_TEMP/gitleaks" dir --no-banner --redact .
+
+  # What npm would publish: exactly package.json's files, plus what npm always adds.
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: |
+          npm pack --dry-run --json | node -e '
+            const got = JSON.parse(require("fs").readFileSync(0))[0].files.map(f => f.path).sort();
+            const want = [...require("./package.json").files, "package.json", "LICENSE"].sort();
+            if (JSON.stringify(got) !== JSON.stringify(want)) {
+              console.error(`npm pack: got\n  ${got.join("\n  ")}\nwant\n  ${want.join("\n  ")}`);
+              process.exit(1);
+            }
+            console.log(got.join("\n"));'
