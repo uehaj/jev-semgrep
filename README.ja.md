@@ -4,6 +4,8 @@
 
 背景と設計の解説: [Jevのキラーアプリ、「意味で探す grep」を作った（Zenn）](https://zenn.dev/uehaj/articles/jev-semgrep-grep-by-meaning)
 
+> **semgrep から改名しました（0.5.0）。** 静的解析ツール [Semgrep](https://semgrep.dev/) と名前が衝突するため、0.5.0 から **sys1grep**（System 1 + grep）になりました。npm パッケージは `@uehaj/sys1grep`（旧 `@uehaj/semgrep`）、コマンドは `sys1grep` / `git sys1grep`、環境変数は `SYS1GREP_*`、設定ファイルは `~/.config/sys1grep/.env` です。旧 `SEMGREP_*` と `~/.config/semgrep/.env` は 1 マイナーリリースの間は読み、使うたびに非推奨の 1 行を出します（1.0.0 で廃止）。詳細は [CHANGELOG](CHANGELOG.md#renamed)。Zenn 記事の URL は旧 slug のままです。
+
 正規表現ではなく **意味** で行を探す grep です。
 判定には [TypeSafe AI](https://typesafe.ai/) の System One モデル **Jev** を使います。
 Jev は文章を生成せず、typed な質問に確率だけを返すモデルなので、1 行ごとに
