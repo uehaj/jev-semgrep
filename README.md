@@ -187,7 +187,8 @@ to the narrowest:
   tokens and, for TypeSafe itself, the price (`~3178 input tokens, ~$0.000133`; within about 10%). `-i` shows the
   same totals on the terminal and sends only after `y`.
   Before the bulk of requests, every target is sized (`--max-filesize`, default 10M); one over it is skipped
-  outright, like `rg`'s own `--max-filesize`, named on stderr (`-y` does not affect it). stdin is sized once it
+  outright, like `rg`'s own `--max-filesize`, named on stderr (`-y` does not affect it). A `.gz` is sized
+  decompressed (zlib stops at the limit, so an oversized one is never inflated in full). stdin is sized once it
   is read (it is already in memory), and skipped the same way if it is over; a `--cached` or `<tree>:` target
   is a blob rather than a file, sized from its content (already read in one `git cat-file --batch` call, not a
   fresh git process per blob); `-g`'s commits stay out of this, since each is already bounded by `-M` when it
@@ -413,6 +414,10 @@ generated files (`*.map`, `*.min.js`, `*.min.css`, `package-lock.json`, `yarn.lo
 to the TypeSafe API**, so point `-r` at a directory
 you mean to scan. Inside a git repository, `-r` also skips what git ignores (`.gitignore`, `.git/info/exclude`, the
 global excludes file), so build output and local files stay home; a tracked file is searched even if it matches.
+A file named `*.gz` (a rotated log: `app.log.1.gz`) is read decompressed, as `zgrep` does, and printed by its
+name on disk (`app.log.1.gz:12:...`); `--include='*.gz'` picks those, the binary sniff sees the decompressed
+bytes, a gzipped secret (`private.key.gz`) is skipped like the plain one, and a corrupt `.gz` is an unreadable file.
+Only gzip, only by the name.
 A file named explicitly on the command line is always searched, even if it matches the skip list or is ignored;
 so is a directory that git ignores, when you name it (`sys1grep -r -e ... dist`). `-l` prints each
 matching file once, in the order matches are found, and works with or without `-r`. `-c` prints the number of

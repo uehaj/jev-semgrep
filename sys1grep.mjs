@@ -6,6 +6,7 @@
 //   A leading ! negates just that meaning: -e A -e '!B' is A or not B.
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync, writeSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { format, parseArgs } from 'node:util';
@@ -160,7 +161,8 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                .netrc, .npmrc, .git-credentials, *.pem, *.key, id_rsa*...) and generated files
                (*.map, *.min.js, *.min.css, package-lock.json and other lock files). Every searched
                line is sent to the TypeSafe API. Inside a git repository, what git ignores (.gitignore)
-               is skipped too; a file or directory named on the command line is searched even so
+               is skipped too; a file or directory named on the command line is searched even so.
+               A .gz file (a rotated log) is read decompressed, as zgrep does, and printed by its name
   --cached     git sys1grep only: search the blobs staged in the index instead of the working tree, as
                git grep --cached. A file deleted from the working tree but still staged is still found.
                Not with --untracked or a <tree>
@@ -251,7 +253,8 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                over this is skipped outright and named on stderr, like rg's own --max-filesize. -y does
                not affect it (a named file over the limit is skipped too). stdin is sized once it is
                read, and skipped the same way if it is over. --cached / <tree>: targets are blobs, sized
-               from their content too. -g's commits stay out of this: each is already bounded by -M
+               from their content too. a .gz is
+               sized decompressed (zlib stops at the limit). -g's commits stay out of this: each is already bounded by -M
                when sent
   --max-cost=USD  the input tokens about to be sent are estimated and priced; over this (default 1) the
                run asks to continue, on the terminal. No terminal and the limit exceeded is exit 2,
@@ -343,7 +346,8 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                .git-credentials, *.pem, *.key, id_rsa*...)、生成されたファイル (*.map, *.min.js,
                *.min.css, package-lock.json などのロックファイル) は飛ばす。git リポジトリの中では
                git が無視するもの (.gitignore) も飛ばす。コマンドラインで指定したファイル・ディレクトリは
-               それでも探す。検索した行はすべて TypeSafe の API に送られる
+               それでも探す。.gz (ローテートしたログ) は zgrep のように展開して読み、その名前で表示する。
+               検索した行はすべて TypeSafe の API に送られる
   --cached     git sys1grep 限定。作業ツリーではなくインデックス (ステージ済み) の blob を探す
                (git grep --cached と同じ)。作業ツリーから消したファイルもステージ済みなら見つかる。
                --untracked や <tree> とは併用できない
@@ -431,7 +435,8 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                (K/M/G の接尾辞、既定 10M)。これを超えるものは rg の --max-filesize と同じく無条件に飛ばし、
                stderr に名前を出す。-y は効かない (明示的に指定したファイルでも超えていれば飛ばす)。
                標準入力は読んでから計測し、超えていれば同じく飛ばす。--cached / <tree>: の対象は blob
-               で、その内容から計測する。-g のコミットはここに含まれない (送るときに -M ですでに上限がある)
+               で、その内容から計測する。.gz は展開後の大きさで計測する (上限で展開を止める)。
+               -g のコミットはここに含まれない (送るときに -M ですでに上限がある)
   --max-cost=USD  送る予定の入力トークンを見積もって値段を出す。これ (既定 1) を超えたら端末で続けるか
                聞く。端末が無く上限を超えていれば終了コード 2 で、どのオプションを緩めれば通るかを言う。
                -q でも変わらない (スクリプトからは -y)。
@@ -1017,11 +1022,11 @@ const SEP = opt.z ? '\0' : '\n';
 // and files that usually hold secrets (.env*, credential files, keys, .ssh/.aws/.gnupg/.kube/.docker). A file named
 // explicitly is still sent. Case-insensitive: macOS file systems are, so .ENV is .env there.
 const SKIP_DIRS = ['.git', 'node_modules', '.ssh', '.aws', '.gnupg', '.kube', '.docker'];
-const SKIP_FILE = /^\.env|^\.(netrc|npmrc|pypirc|pgpass|git-credentials)$|\.(pem|key|p12|pfx|jks|keystore)$|^id_(rsa|dsa|ecdsa|ed25519)/i;
+const SKIP_FILE = /^\.env|^\.(netrc|npmrc|pypirc|pgpass|git-credentials)(\.gz)?$|\.(pem|key|p12|pfx|jks|keystore)(\.gz)?$|^id_(rsa|dsa|ecdsa|ed25519)/i; // .gz too: it is read decompressed (#68)
 // Generated files carry no meaning of their own and are often large (#58); a source map's sourcesContent can even
 // smuggle the original source back in as a string, so a fragment of it can match. Skipped like SKIP_FILE: only
 // found by -r or git sys1grep, a name on the command line is still searched.
-const GENERATED_FILE = /\.(?:map|min\.js|min\.css)$|^(?:package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|poetry\.lock|composer\.lock|Gemfile\.lock|go\.sum)$/i;
+const GENERATED_FILE = /\.(?:map|min\.js|min\.css)(?:\.gz)?$|^(?:package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|poetry\.lock|composer\.lock|Gemfile\.lock|go\.sum)(?:\.gz)?$/i; // .gz too, like SKIP_FILE (#68)
 let hadError = false;
 const warned = []; // what warn printed, so -i does not repeat it from its dry run
 const warn = (file, e) => { const m = `sys1grep: ${safe(file)}: ${safe(e.message)}`; warned.push(m); console.error(m); hadError = true; };
@@ -1391,10 +1396,19 @@ for (const file of targets) {
       continue;
     }
   }
+  // A .gz is read decompressed, as zgrep does (#68), by its name only; a corrupt one is an unreadable file (exit 2).
+  // The binary sniff below sees the decompressed bytes, so a gzipped binary is still skipped. --max-filesize
+  // measures it decompressed (1 MiB of repeated text gzips to ~1 KB): zlib stops at the limit and the file is
+  // skipped like an oversized one, never inflated past the limit into memory.
   let buf;
   try {
     buf = file === '-' ? stdinBuf : file === GITLOG ? gitlogBuf : blobOfLabel.has(file) ? blobContent.get(blobOfLabel.get(file)) : readFileSync(file);
     if (buf == null) throw new Error('git object is missing'); // listed, but gone by the time it was read
+    if (file.endsWith('.gz')) {
+      try { buf = gunzipSync(buf, { maxOutputLength: MAX_FILESIZE + 1 }); }
+      catch (e) { if (e.code !== 'ERR_BUFFER_TOO_LARGE') throw e; console.error(`sys1grep: ${safe(file)}: skipped, over ${opt['max-filesize'] ?? '10M'} decompressed (--max-filesize)`); continue; }
+      if (buf.length > MAX_FILESIZE) { console.error(`sys1grep: ${safe(file)}: skipped, ${fmtSize(buf.length)} decompressed is over --max-filesize=${opt['max-filesize'] ?? '10M'}`); continue; }
+    }
   } catch (e) { warn(file, e); continue; }
   // UTF-16 with a BOM is text though every ASCII character carries a NUL, so it skips the binary sniff.
   const utf16 = { fffe: 'utf-16le', feff: 'utf-16be' }[buf.subarray(0, 2).toString('hex')]; // its encoding, or undefined

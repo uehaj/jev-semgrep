@@ -40,6 +40,12 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   `--verbose` / `--dry-run` (and `-i`'s preview) list `--cached`, `--untracked` or the `<tree>`s among the options,
   and a `--cached` file line reads `file PATH (index): ...`; `--summarize` pipes the `<tree>:` prefixes, and its
   prompt says what `REV:path` is (or that the files are the index copy).
+- A file named `*.gz` is read decompressed, as `zgrep` does, and printed by its name on disk (#68): rotated logs
+  (`app.log.1.gz`) are searched in place and under `-r`; `--include='*.gz'` picks them. The binary sniff
+  sees the decompressed bytes, so a gzipped binary is still skipped; a gzipped secret (`private.key.gz`, `.netrc.gz`) is
+  skipped like the plain one; a corrupt `.gz` is an unreadable file.
+  Only gzip, only by the name; stdin is not decompressed. `--max-filesize` measures a `.gz` decompressed: zlib stops
+  at the limit, so an oversized one is skipped without being inflated in full.
 - `--verbose` / `--dry-run` print the settings the search ran with, before the per-file lines: the endpoint and
   model, the key (the variable or option name only, never its value), `SYS1GREP_OPTS` (when set), the effective
   thresholds / `--chunk` / `-j` / `--sentence` / `--dedup` / `-z` / scope on-or-off / `--include` / `--exclude` /
