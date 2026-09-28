@@ -1316,7 +1316,7 @@ const hardBreak = (prev, next) => !prev || !next || /[{}\[\]<>|;]$/.test(prev) |
   || /[{}\[\];]$/.test(next); // a line ending like code is not a continuation of prose either
 // lines -> [{ text, spans }]. A span [unit, from, to] is where the sentence lies in the original units: the unit
 // is the 1-based line (or record) number from unitOf, from/to are character offsets inside it (baseOf shifts a
-// line's offset inside its record with -z). Output maps matching sentences back to these units.
+// line's offset inside its record with --unit=zero). Output maps matching sentences back to these units.
 function toSentences(lines, unitOf, baseOf, split = new Set()) { // split: breaks Jev judged to end an entry
   const out = [];
   let text = '', marks = []; // marks: { o: offset in text, unit, base: offset in the unit, len }
