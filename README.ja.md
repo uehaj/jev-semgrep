@@ -572,6 +572,36 @@ Jev は長い行の中からでも当たる文を自分で見つけるので、�
 `Mr.` のような略語の後ろでも切ります。ログは文章ではないので、`ERROR ...` の次の `WARN ...` のように
 英字で始まるログ行が続くと、つながります。
 
+### 関数ごとに判定する (`--unit=function`)
+
+コードについての問いは、たいてい関数についての問い（「ネットワーク障害で再試行している」）で、関数の 1 行だけでは
+そうと分かりません。`--unit=function` は関数ごとに判定し、当たった関数の行を出します。`-n` はファイルの行番号です。
+
+```sh
+$ ./sys1grep -n --unit=function -e "ネットワーク障害で再試行している" src/net.js
+src/net.js:3:async function fetchWithRetry(url) {
+src/net.js:4:  for (let i = 0; i < 5; i++) {
+src/net.js:5:    try { return await fetch(url); }
+src/net.js:6:    catch { await sleep(2 ** i * 100); }
+src/net.js:7:  }
+src/net.js:8:}
+```
+
+関数は、関数名の行から次の関数名の行の前までです（`git grep -W` と同じ）。最初の関数名の行より前の行は 1 つの単位に
+なり、関数の末尾の空行は出力しません。関数名の行は git と同じく、`.gitattributes` の `diff=<driver>` 属性と、git config の
+`diff.<driver>.xfuncname` で決めます。無ければ、JavaScript/TypeScript（トップレベルの `function`・`class`、関数を
+代入する `const` / `let` / `var`）と Python（入れ子も含む `def` / `class`）は sys1grep の規則を使い（デコレータの行 `@retry` から関数が始まる）、それ以外は git の既定
+（英字・`_`・`$` で始まる行）を使います。git 組み込みのドライバ（`diff=python` など）は読まないので、`xfuncname` の無い
+ドライバも同じように扱います。
+
+```sh
+$ printf '*.go diff=golang\n' >> .gitattributes
+$ git config diff.golang.xfuncname '^(func|type)[[:space:]]'
+```
+
+`-M` の既定は `-z` と同じ 8000 文字で、それより長い関数は先頭 8000 文字で判定します。`--chunk` は関数の数、
+`-A`/`-B`/`-C` と `-c` は文の単位と同じく行の数を数えます。`-z`・`-g`・`-o` とは併用できません。
+
 ### テンプレートごとに 1 行だけ判定する (`--dedup`)
 
 費用は送るテキストの量に比例します。機械が吐くログの大半は、ID や数値だけが違う同じ骨格の繰り返しです。
@@ -735,10 +765,11 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
                判定も変わる
   -j N         同時リクエスト数 (既定 8)
   -n           行番号を付ける
-  --unit=UNIT  判定の単位: line (既定)、zero、sentence-by-jev、sentence-by-rule
+  --unit=UNIT  判定の単位: line (既定)、zero、sentence-by-jev、sentence-by-rule、function
   -z, --null-data  --unit=zero。行ではなく NUL 終端のレコードごとに判定し、NUL 終端で出力する (前述の「複数行にまたがるレコード」を参照)。
                --unit=sentence-by-* と併用すると、レコードごとに文に分ける
   --unit=sentence-by-jev|sentence-by-rule  行ではなく文ごとに判定する (前述の「1 文ずつ判定する」を参照)
+  --unit=function  関数ごとに判定し、当たった関数の行を出す (前述の「関数ごとに判定する」を参照)
   -o           --unit=sentence-by-* と併用し、当たった文だけを出す
   -p           各意味の確率を行末に表示 (閾値調整用)
   --dry-run    何も送らず、この検索が使う設定 (コマンドラインでなければその出どころも)・検索するファイル・

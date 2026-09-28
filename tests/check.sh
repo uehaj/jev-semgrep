@@ -66,6 +66,10 @@ z_in | $J -z -e 'the customer is asking for a refund' 2>/dev/null | od -An -c | 
 [ "$($J -n -o --unit=sentence-by-jev -e 'customer is asking for a refund' prose.txt 2>/dev/null)" = "8:先週買った掃除機が初日から動かないので返金してほしいです。" ]
 # --sentence=jev keeps unpunctuated Japanese entries apart, so the refund requests match as they do per line
 [ "$($J -n --unit=sentence-by-jev -e 'the customer is asking for a refund' corpus.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "14 18 " ]
+# --unit=function (#114): no single line says it retries, the function does; the other function does not
+printf 'async function load(url) {\n  for (let i = 0; i < 5; i++) {\n    try { return await fetch(url); }\n    catch (e) { await sleep(i * 100); }\n  }\n}\n\nfunction trim(s) {\n  return s.trim();\n}\n' >"${TMPDIR:-/tmp}/sys1grep-fn-$$.js"
+[ "$($J -n --unit=function -e 'the function retries a failed request' "${TMPDIR:-/tmp}/sys1grep-fn-$$.js" 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 2 3 4 5 6 " ]
+rm -f "${TMPDIR:-/tmp}/sys1grep-fn-$$.js"
 
 # --dedup. The summary line ("… N sent to Jev (F folded by --dedup, …") is only printed to a terminal, so run under script(1).
 # util-linux script answers --version and takes the command with -c; BSD script takes it as arguments.

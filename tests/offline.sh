@@ -289,6 +289,38 @@ eq "$($J --unit=zero -c -e cat "$tmp/rec")" "1" "--unit=zero is -z"
 eq "$($J -z --unit=sentence-by-rule -o -e cat "$tmp/rec")" "a cat." "-z --unit=sentence-by-rule: a record split into sentences"
 code 2 "--unit=bogus" -- $J --unit=bogus -e cat "$F"
 code 2 "--sentence is gone" -- $J --sentence -e cat "$F"
+# --unit=function (#114): the fake matches the meaning in one line, and the whole function prints
+printf 'import x from "y";\n\nasync function retry(url) {\n  for (;;) {\n    await sleep(100); // backoff\n  }\n}\n\nconst parse = (s) => {\n  return s;\n};\n' >"$tmp/net.js"
+eq "$($J --unit=function -n -e backoff "$tmp/net.js" | tr '\n' '|')" "3:async function retry(url) {|4:  for (;;) {|5:    await sleep(100); // backoff|6:  }|7:}|" "--unit=function: the function's lines, no trailing blank"
+eq "$($J --unit=function -n -e '/import/' "$tmp/net.js" | nums)" "1 " "--unit=function: lines before the first function are one unit"
+printf 'def a():\n    pass\nclass B:\n    def m(self):\n        return 2\n' >"$tmp/m.py"
+eq "$($J --unit=function -n -e '/return/' "$tmp/m.py" | nums)" "4 5 " "--unit=function: a nested def in Python"
+printf 'def a():\n    pass\n@retry(times=3)\ndef b():\n    request()\n' >"$tmp/d.py"
+eq "$($J --unit=function -n -e '/retry/' "$tmp/d.py" | nums)" "3 4 5 " "--unit=function: a decorator starts its def"
+printf 'function a() {}\nexport const b: () => number = () => 2;\n' >"$tmp/a.ts"
+eq "$($J --unit=function -n -e '/=> 2/' "$tmp/a.ts" | nums)" "2 " "--unit=function: an arrow function with a type annotation"
+printf 'function a() {}\nconst $ = () => 2;\n' >"$tmp/d.js"
+eq "$($J --unit=function -n -e '/=> 2/' "$tmp/d.js" | nums)" "2 " "--unit=function: \$ is a name"
+eq "$(printf 'intro\n@tag\nnext\n  body\n' | $J --unit=function -n -e '/next/' | nums)" "3 4 " "--unit=function: an @ line joins its def only where the rule takes it as a funcname"
+eq "$(printf 'intro\n== one\nalpha\n== two\nbeta\n' | $J --unit=function -n -e '/beta/' | nums)" "5 " "--unit=function: no attribute, git's default rule"
+reset; $J --unit=function -e backoff "$tmp/net.js" >/dev/null; eq "$(stat count)" "1" "--unit=function: one request for three functions"
+$J --unit=function --dry-run -e backoff "$tmp/net.js" 2>&1 | grep -q "net.js: 3 functions, 3 to send" || fail "--unit=function: --dry-run counts functions"
+$J --unit=function --dry-run -e x "$F" | grep -q '^sys1grep: options: .*--unit=function, .*-M 8000, ' || fail "--unit=function: -M defaults to 8000"
+code 2 "--unit=function -z" -- $J --unit=function -z -e cat "$F"
+code 2 "--unit=function -o" -- $J --unit=function -o -e cat "$F"
+# diff=<driver> and diff.<driver>.xfuncname from git, as git grep -W; a bad regex falls back with a warning
+JF="$E SYS1GREP_URL=$base/v1 node $PWD/../sys1grep.mjs" FG="$tmp/fn-git"; mkdir -p "$FG" && git -C "$FG" init -q && printf '*.txt diff=notes\n' >"$FG/.gitattributes"
+printf 'intro\n== one\nalpha\n== two\nbeta\n' >"$FG/a.txt"
+git -C "$FG" config diff.notes.xfuncname '^==[[:space:]]'
+eq "$(cd "$FG" && $JF --unit=function -n -e '/beta/' a.txt | nums)" "4 5 " "--unit=function: xfuncname from git config, POSIX class"
+eq "$(cd "$FG" && $JF --unit=function -n -e '/beta/' a.txt /etc/hosts | grep a.txt | cut -d: -f2 | tr '\n' ' ')" "4 5 " "--unit=function: a file outside the repository keeps the others' attributes"
+git -C "$FG" config diff.notes.xfuncname '^==[[:nope:]]'
+eq "$(cd "$FG" && $JF --unit=function -n -e '/beta/' a.txt 2>&1 | head -1)" "sys1grep: diff.notes.xfuncname: unknown class [:nope:]; using sys1grep's own rule" "--unit=function: an unknown POSIX class warns"
+git -C "$FG" config --unset diff.notes.xfuncname; git -C "$FG" config diff.notes.funcname '^==\( \)'
+eq "$(cd "$FG" && $JF --unit=function -n -e '/beta/' a.txt | nums)" "4 5 " "--unit=function: funcname is a BRE"
+git -C "$FG" config --unset diff.notes.funcname
+git -C "$FG" config diff.notes.xfuncname '^==('
+eq "$(cd "$FG" && $JF --unit=function -n -e '/beta/' a.txt 2>&1 | tr '\n' '|')" "sys1grep: diff.notes.xfuncname: Invalid regular expression: /^==(/: Unterminated group; using sys1grep's own rule|5:beta|" "--unit=function: a bad xfuncname warns and falls back"
 # --unit=sentence-by-jev with regex terms only asks nothing: the rules join the lines
 printf '猫がいる\n犬もいる\n' >"$tmp/ja"   # unpunctuated Japanese: the breaks --unit=sentence-by-jev would ask about
 reset; $J --unit=sentence-by-jev -c -e '/猫/' "$tmp/ja" >/dev/null; eq "$(stat count)" "0" "--unit=sentence-by-jev with regex terms only sends nothing"
@@ -643,6 +675,10 @@ $S --summarize -e cat "$tmp/dd.txt" >/dev/null; grep -q 'like it' "$tmp/sum.argv
 printf 'The cat 1 sat. A dog ran.\nThe cat 2 sat.\nThe cat 3\nsat.\n' >"$tmp/dds.txt"
 $S --summarize --dedup --unit=sentence-by-rule -n -e cat "$tmp/dds.txt" >/dev/null
 eq "$(tr '\n' '|' <"$tmp/sum.in")" "1:The cat 1 sat. A dog ran.   (×3 like it)|" "--summarize --dedup --unit=sentence-by-*: one representative for sentences across lines"
+# #142 review: every line of a representative over several lines is piped, its count once
+printf 'function a() {\n  cat 1\n}\nfunction a() {\n  cat 2\n}\n' >"$tmp/ddf.js"
+$S --summarize --dedup --unit=function -n -e cat "$tmp/ddf.js" >/dev/null
+eq "$(tr '\n' '|' <"$tmp/sum.in")" "1:function a() {   (×2 like it)|2:  cat 1|3:}|" "--summarize --dedup --unit=function: the representative's lines, the count once"
 node -e "for (let i = 0; i < 3000; i++) console.log('cat ' + 'x'.repeat(80) + ' ' + i)" >"$tmp/big.txt"
 rm -f "$tmp/sum.in"; code 2 "--summarize over 200 KB" -- $S --summarize -e '/cat/' "$tmp/big.txt"
 [ ! -e "$tmp/sum.in" ] || fail "--summarize over 200 KB runs the summarizer"
