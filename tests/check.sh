@@ -60,12 +60,12 @@ z_in() { printf 'the package arrived\nand I want my money back for it\0the sky i
 # matching records end with NUL
 z_in | $J -z -e 'the customer is asking for a refund' 2>/dev/null | od -An -c | grep -q '\\0'
 # --sentence judges sentences but prints the original lines they touch
-[ "$($J -n --sentence -e 'the author admits they made a mistake' prose.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 2 3 " ]
+[ "$($J -n --unit=sentence-by-jev -e 'the author admits they made a mistake' prose.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 2 3 " ]
 # -o prints the sentence itself, joined, numbered by its first line; Japanese joins without a space
-[ "$($J -n -o --sentence -e 'the author admits they made a mistake' prose.txt 2>/dev/null)" = "1:I should have checked the input before shipping, and that was my mistake." ]
-[ "$($J -n -o --sentence -e 'customer is asking for a refund' prose.txt 2>/dev/null)" = "8:先週買った掃除機が初日から動かないので返金してほしいです。" ]
+[ "$($J -n -o --unit=sentence-by-jev -e 'the author admits they made a mistake' prose.txt 2>/dev/null)" = "1:I should have checked the input before shipping, and that was my mistake." ]
+[ "$($J -n -o --unit=sentence-by-jev -e 'customer is asking for a refund' prose.txt 2>/dev/null)" = "8:先週買った掃除機が初日から動かないので返金してほしいです。" ]
 # --sentence=jev keeps unpunctuated Japanese entries apart, so the refund requests match as they do per line
-[ "$($J -n --sentence -e 'the customer is asking for a refund' corpus.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "14 18 " ]
+[ "$($J -n --unit=sentence-by-jev -e 'the customer is asking for a refund' corpus.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "14 18 " ]
 
 # --dedup. The summary line ("… N sent to Jev (F folded by --dedup, …") is only printed to a terminal, so run under script(1).
 # util-linux script answers --version and takes the command with -c; BSD script takes it as arguments.
@@ -129,7 +129,7 @@ node ../scripts/dedup-measure.mjs "$T/ids" | tail -1 | grep -q " | 4 | 2 | "   #
 [ "$(printf '' | $J --dedup -c -e 'about cats' 2>/dev/null)" = "0" ]
 # with --sentence the unit is a sentence, and sentences fold like lines
 printf 'The job 3fa9c1e27b failed. The job 88d0e41a5c failed.\n' > "$T/sent"
-[ "$(sent --sentence=rules -e "'a job failed'" "$T/sent")" = "1 sent to Jev (1 folded" ]
+[ "$(sent --unit=sentence-by-rule -e "'a job failed'" "$T/sent")" = "1 sent to Jev (1 folded" ]
 # -e '/regex/': matched locally, no Jev involved. NOKEY proves it: no key, no .env, still runs.
 # $NJ skips $J's --env-file (a ../.env would bring the key back), SYS1GREP_OPTS= drops the user's defaults.
 NOKEY="env -u TYPESAFE_API_KEY -u SYS1GREP_API_KEY -u SEMGREP_API_KEY -u SYS1GREP_URL -u SEMGREP_URL SYS1GREP_OPTS= HOME=/nonexistent-sys1grep-test-home"
@@ -155,8 +155,8 @@ if $NOKEY $NJ -e '!/(x)/' -a '$1 is valid' fixture.txt >/dev/null 2>&1; then exi
 # -p over a term whose regex failed: its meaning is 0.00, not a crash (it read the failed match's captures).
 # Nothing is sent: the only line fails /A/. SYS1GREP_URL only gets past the missing-key check.
 [ "$(printf 'B\n' | $NOKEY SYS1GREP_URL=http://127.0.0.1:1 $NJ -p -e '/A/' -a 'a meaning' -e '/B/' 2>/dev/null)" = "$(printf 'B\t[0.00 0.00 1.00]')" ]
-# --sentence=rules (no extra Jev calls) and -z apply regex terms per unit
-[ "$($NOKEY $NJ -n --sentence=rules -e '/mistake/i' prose.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 2 3 " ]
+# --unit=sentence-by-rule (no extra Jev calls) and -z apply regex terms per unit
+[ "$($NOKEY $NJ -n --unit=sentence-by-rule -e '/mistake/i' prose.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 2 3 " ]
 [ "$(printf 'usage 95%%\0usage 10%%\0' | $NOKEY $NJ -z -c -e '/usage 9\d%/' 2>/dev/null)" = "1" ]
 # -p shows 1.00 / 0.00 for a regex term, no request needed
 [ "$($NOKEY $NJ -p -e '/ERROR/' fixture.txt 2>/dev/null | grep -c '\[1.00\]')" = "4" ]
@@ -204,7 +204,7 @@ printf '2026-09-19 03:12 alert fired\n2026-09-19 14:40 alert fired\n' > "$T/nigh
 # -e and -Q OR together, each branch bringing a line the other does not: 4 is sunny, 1 names the cat
 [ "$($J -n -e 'the weather is sunny' -Q "the cat's name" intent.txt 2>/dev/null | cut -d: -f1 | tr '\n' ' ')" = "1 4 " ]
 # an answer split over two lines is one sentence with --sentence
-[ "$(printf '名前は\nタマである\n' | $J --sentence=rules -o -Q '猫の名前' 2>/dev/null)" = "名前はタマである" ]
+[ "$(printf '名前は\nタマである\n' | $J --unit=sentence-by-rule -o -Q '猫の名前' 2>/dev/null)" = "名前はタマである" ]
 # -Q needs its argument
 if $J -Q '' intent.txt >/dev/null 2>&1; then exit 1; elif [ $? -ne 2 ]; then exit 1; fi
 # SYS1GREP_OPTS rejects -Q / --question, like -e / -a / -v

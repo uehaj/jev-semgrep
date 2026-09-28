@@ -49,8 +49,8 @@ const SYS1GREP_URL = envURL.value, SYS1GREP_MODEL = envMODEL.value, SYS1GREP_API
 const { TYPESAFE_API_KEY } = process.env;
 
 // A bare --color means --color=auto (as in grep); parseArgs cannot express an optional value, so fill it in first.
-// --no-filename is grep's name for --no-with-filename.
-const fill = a => (a === '--color' ? '--color=auto' : a === '--sentence' ? '--sentence=jev' : a === '--null-data' ? '-z' : a === '--no-filename' ? '--no-with-filename'
+// --no-filename is grep's name for --no-with-filename, --null-data grep's name for -z.
+const fill = a => (a === '--color' ? '--color=auto' : a === '--null-data' ? '-z' : a === '--no-filename' ? '--no-with-filename'
   : a === '--summarize' ? `--summarize=${SYS1GREP_SUMMARIZER || 'claude'}` : a);
 const OPTIONS = {
   e: { type: 'string', multiple: true },
@@ -73,9 +73,9 @@ const OPTIONS = {
   B: { type: 'string' }, // N lines of leading context
   C: { type: 'string' }, // N lines of context on both sides
   n: { type: 'boolean', default: false }, // line numbers
-  z: { type: 'boolean', default: false }, // records are NUL-terminated, on input and output (grep -z)
-  sentence: { type: 'string' }, // the unit of judgement is a sentence; jev / rules decide where wrapped lines join
-  o: { type: 'boolean', default: false }, // with --sentence, print only the matching sentences (grep -o)
+  z: { type: 'boolean', default: false }, // records are NUL-terminated, on input and output (grep -z); --unit=zero
+  unit: { type: 'string', default: 'line' }, // line / zero / sentence-by-jev / sentence-by-rule
+  o: { type: 'boolean', default: false }, // with --unit=sentence-by-*, print only the matching sentences (grep -o)
   p: { type: 'boolean', default: false }, // print each meaning's probability
   dedup: { type: 'boolean', default: false }, // judge one representative per template, reuse its answer
   'dry-run': { type: 'boolean', default: false }, // print the files and requests, send nothing
@@ -217,31 +217,32 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                on ambiguous lines, not just speed
   -j N         concurrent requests (default 8)
   -n           print line numbers
-  -z, --null-data  the unit of judgement is a NUL-terminated record, not a line, so a record may span
-               several lines. Matching records are printed NUL-terminated too (as in grep -z); file names
-               and counts stay on newlines. -n numbers records, -A/-B/-C count records, --chunk counts
-               records. Pairs with tools that already emit records: git log -z, find -print0, xargs -0
-                 git log -z --format='%h %s %b' | sys1grep -z -e "the change alters user-visible behaviour"
-  --sentence[=HOW] judge each sentence instead of each line. Output is still the lines a matching sentence
-               touches, with the sentence in bold yellow. Wrapped lines are joined before splitting,
-               except at a blank line, next to brackets or ; (JSON, code), or before a line starting with
-               - * + # > " or a digit (list, heading, quote, number). Scripts without spaces between words
-               (Japanese, Chinese, Thai, Lao, Khmer, Myanmar, Tibetan) join without one. HOW:
-                 jev (default): also ask Jev about unpunctuated breaks next to those scripts, where entries
-                   often end without 。. One extra request per 30 lines that have such breaks
-                 rules: the rules only, no extra requests
-               The expression is evaluated per sentence. With -z each record is split on its own
-               Sentences sent together (--chunk) read each other as context, so a verdict can shift with
-               where the chunks fall, and a sentence next to a match can match too
+  --unit=UNIT  the unit of judgement: line (default), zero (NUL-terminated record), or sentence-by-jev / sentence-by-rule.
+               -z / --null-data is --unit=zero, and also combines with sentence-by-*: each record is split into sentences
+                 line (default): each line
+                 zero: NUL-terminated record, may span several lines. Matching records are printed NUL-terminated
+                   too (as in grep -z); file names and counts stay on newlines. -n numbers records, -A/-B/-C count
+                   records, --chunk counts records. Pairs with tools that already emit records: git log -z, find
+                   -print0, xargs -0. Example: git log -z --format='%h %s %b' | sys1grep -z -e "..."
+                 sentence-by-jev: judge each sentence instead of each line. Also ask Jev about unpunctuated breaks
+                   next to CJK scripts, where entries often end without 。. One extra request per 30 lines that have
+                   such breaks. Output is still the lines a matching sentence touches, with the sentence in bold yellow
+                 sentence-by-rule: sentence-based judgement, with no extra requests (rules only)
+               Wrapped lines are joined before splitting, except at a blank line, next to brackets or ; (JSON, code),
+               or before a line starting with - * + # > " or a digit (list, heading, quote, number). Scripts without
+               spaces between words (Japanese, Chinese, Thai, Lao, Khmer, Myanmar, Tibetan) join without one.
+               The expression is evaluated per sentence. With -z each record is split on its own.
+               Sentences sent together (--chunk) read each other as context, so a verdict can shift with where the
+               chunks fall, and a sentence next to a match can match too
   -o           print only what matched, one per line: each regex match, as grep -o (a line only meanings
-               matched prints whole; no context). With --sentence, the matching sentences; -n gives the line
-               where the sentence starts, -c and -A/-B/-C count sentences
+               matched prints whole; no context). With --unit=sentence-by-*, the matching sentences; -n gives the
+               line where the sentence starts, -c and -A/-B/-C count sentences
   -p           print each meaning's probability at the end of the line (for tuning thresholds)
   --dry-run    send nothing; print to stdout the settings the search would run with (endpoint, model, key,
                SYS1GREP_OPTS, thresholds, --chunk, -j, scope on/off...), each with its source when not the
                command line, then each file searched (units, and how many would be sent) and each request
                with its questions, grouped by wording (line ids read Lnnn). The key's value never prints.
-               The --dedup and --sentence questions are answered no, so their counts are an estimate.
+               The --dedup and --unit=sentence-by-jev questions are answered no, so their counts are an estimate.
                The last line estimates the input tokens and, for TypeSafe itself, the price (~, within about 10%)
   --verbose    print the same to stderr while searching, and the summary line even when not a terminal
   -i, --interactive  first show what --dry-run would send (files, lines, requests) and ask on the
@@ -268,7 +269,7 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                request per meaning, and the kinds that could change a match are kept apart. Built for
                machine-generated logs, where it can cut the cost by a factor of 30 or more; prose has no
                shared skeleton and barely folds, and a meaning that reads a value folds little.
-               With -z or --sentence the unit that folds is the record or the sentence
+               With --unit=zero or --unit=sentence-by-* the unit that folds is the record or the sentence
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                regex matches are in grep's match color (bold red), matching sentences in bold yellow;
                file and line number use grep's colors; with -p, probabilities are green at or above
@@ -400,30 +401,31 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                判定も変わる
   -j N         同時リクエスト数 (既定 8)
   -n           行番号を付ける
-  -z, --null-data  判定の単位を行ではなく NUL 終端のレコードにする。1 レコードが複数行でもよい。
-               一致したレコードも NUL 終端で出力する (grep -z と同じ)。ファイル名と件数は改行のまま。
-               -n はレコード番号、-A/-B/-C は前後のレコード数、--chunk はレコード数を数える。
-               レコードを出すツールとそのまま繋がる: git log -z、find -print0、xargs -0
-                 git log -z --format='%h %s %b' | sys1grep -z -e "ユーザーに見える振る舞いを変えている"
-  --sentence[=HOW] 行ではなく文ごとに判定する。出力は当たった文がかかる元の行のままで、文の部分を太字の黄で
-               強調する。文に分ける前に折り返した行をつなぐ。ただし空行、括弧や ; (JSON やコード)、
-               - * + # > " や数字で始まる行 (箇条書き・見出し・引用・番号) の前ではつながない。単語の間に
-               空白を置かない文字 (日本語・中国語・タイ語・ラオ語・クメール語・ミャンマー語・チベット語)
-               は空白なしでつなぐ。HOW:
-                 jev (既定): 上の文字に接する句点の無い改行を Jev にも聞く。句点で終わらない 1 行 1 件の
-                   データをつながないため。そうした改行がある 30 行ごとにリクエストが 1 つ増える
-                 rules: 規則だけで決める。追加のリクエストなし
-               式は文ごとに評価する。-z ではレコードごとに文に分け、当たったレコードを出す
+  --unit=UNIT  判定の単位: line (既定)、zero (NUL 終端レコード)、sentence-by-jev / sentence-by-rule
+               -z / --null-data は --unit=zero と同じ。sentence-by-* と併用すると、レコードごとに文に分ける
+               line (既定): 行単位
+               zero: NUL 終端のレコード。1 レコードが複数行でもよい。一致したレコードも NUL 終端で出力
+                 (grep -z と同じ)。ファイル名と件数は改行のまま。-n はレコード番号、-A/-B/-C は前後の
+                 レコード数、--chunk はレコード数を数える。レコードを出すツールと繋がる: git log -z、find -print0、
+                 xargs -0。例: git log -z --format='%h %s %b' | sys1grep -z -e "..."
+               sentence-by-jev: 行ではなく文ごとに判定。上の CJK 文字に接する句点の無い改行を Jev にも聞く。
+                 句点で終わらない 1 行 1 件のデータをつながないため。そうした改行がある 30 行ごとに
+                 リクエストが 1 つ増える。出力は当たった文がかかる元の行のままで、文の部分を太字の黄で強調
+               sentence-by-rule: 文単位の判定。規則だけで決める。追加のリクエストなし
+               文に分ける前に折り返した行をつなぐ。ただし空行、括弧や ; (JSON やコード)、- * + # > " や
+               数字で始まる行 (箇条書き・見出し・引用・番号) の前ではつながない。単語の間に空白を置かない
+               文字 (日本語・中国語・タイ語・ラオ語・クメール語・ミャンマー語・チベット語) は空白なしで
+               つなぐ。式は文ごとに評価する。-z ではレコードごとに文に分け、当たったレコードを出す。
                一緒に送る文 (--chunk) は互いを文脈として読むので、区切りの位置で判定が変わることがあり、
                当たった文の隣の文もつられて当たることがある
   -o           当たった部分だけを 1 行ずつ出す。正規表現の一致をそれぞれ出す (grep -o と同じ。意味だけで
-               当たった行は行全体。前後の行は出さない)。--sentence と併用すると当たった文を出し、-n は文が
-               始まる行、-c と -A/-B/-C は文の数で数える
+               当たった行は行全体。前後の行は出さない)。--unit=sentence-by-* と併用すると当たった文を出し、
+               -n は文が始まる行、-c と -A/-B/-C は文の数で数える
   -p           各意味の確率を行末に表示 (閾値調整用)
   --dry-run    何も送らず、この検索が使う設定 (送信先・モデル・キー・SYS1GREP_OPTS・閾値・--chunk・-j・
                絞り込みの有無…) をその出どころ (コマンドラインでなければ) 付きで stdout に表示し、続けて
                検索するファイル (単位の数と送る数) と各リクエストの質問を表示する (質問は文面ごとにまとめて
-               数え、行の ID は Lnnn と表示)。キーの値は表示しない。--dedup と --sentence の事前の問い合わせは
+               数え、行の ID は Lnnn と表示)。キーの値は表示しない。--dedup と --unit=sentence-by-jev の事前の問い合わせは
                no と答えたものとして数えるので、その場合の数は目安。最後の行に
                入力トークン数と、TypeSafe 本体なら料金の見積もりを出す (~ 付き、誤差 1 割程度)
   --verbose    同じ表示を検索しながら stderr に出す。端末でなくても最後の集計行を出す
@@ -448,7 +450,7 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                「夜間に起きた」なら時刻が答えを決める。そこで意味ごとに小さなリクエストを 1 つ送って
                Jev に聞き、答えを変えうる種類はまとめない。機械が吐くログ向けで、費用が 30 分の 1
                以下になることもある。散文には共通の骨格がないのでほとんど縮まず、値を読む意味もあまり
-               縮まない。-z や --sentence ではレコードや文を単位にまとめる
+               縮まない。--unit=zero や --unit=sentence-by-* ではレコードや文を単位にまとめる
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                正規表現の一致は grep の一致の色 (太字の赤)、当たった文は太字の黄。
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
@@ -581,8 +583,8 @@ for (const term of expr) {
 }
 const hasMeanings = expr.some(term => term.some(lit => lit.kind === 'm'));
 // A compatible local server may need no key; the TypeSafe default always does. Regex-only queries never call the API.
-// --sentence=jev asks Jev where wrapped lines join; with regex terms only, nothing else is sent, so the rules decide.
-if (opt.sentence === 'jev' && !hasMeanings) opt.sentence = 'rules';
+// --unit=sentence-by-jev asks Jev where wrapped lines join; with regex terms only, nothing else is sent, so rules decide.
+if (opt.unit === 'sentence-by-jev' && !hasMeanings) opt.unit = 'sentence-by-rule';
 if (hasMeanings && !credential && !customUrl) die('SYS1GREP_API_KEY is not set. Export it or put it in ~/.config/sys1grep/.env');
 
 const levels = { loose: [0.3, 0.7], normal: [0.5, 0.5], strict: [0.7, 0.3] };
@@ -609,10 +611,11 @@ const parseSize = (s, label) => {
 const fmtSize = b => (b >= 1024 ** 3 ? `${(b / 1024 ** 3).toFixed(1)} GB` : b >= 1024 ** 2 ? `${(b / 1024 ** 2).toFixed(1)} MB` : `${Math.ceil(b / 1024)} KB`);
 const MAX_FILESIZE = parseSize(opt['max-filesize'] ?? '10M', '--max-filesize');
 const MAX_COST = Number(opt['max-cost']);
-if (opt.sentence !== undefined && !['jev', 'rules'].includes(opt.sentence)) die('--sentence must be jev or rules');
+if (!['line', 'zero', 'sentence-by-jev', 'sentence-by-rule'].includes(opt.unit)) die('--unit must be line, zero, sentence-by-jev, or sentence-by-rule');
 if (!['auto', 'always', 'never'].includes(opt.color)) die('--color must be auto, always or never');
 if (opt.gitlog && (opt.r || globalThis.SYS1GREP_GIT)) die('-g searches commits, not files: it cannot be combined with -r or git sys1grep');
-if (opt.gitlog) opt.z = true; // a commit is a record
+// --unit=zero is -z. -z also combines with --unit=sentence-by-*: each record is split into sentences.
+if (opt.unit === 'zero' || opt.gitlog) opt.z = true; // -g: a commit is a record
 // How much of one unit is sent, -M/--max-columns. A line rarely reaches 2000 characters; a commit message with
 // its body does. A unit over this is skipped outright (#58), not truncated: it is never sent and cannot match.
 const MAX_UNIT_CHARS = Number(opt['max-columns'] ?? (opt.z ? 8000 : 2000));
@@ -787,9 +790,9 @@ if (trace) {
     : `-t ${tPos}${optTag('t')}, -T ${tNeg}${optTag('T')}`;
   const options = [
     thresholds, `--chunk ${chunkLines}${optTag('chunk')}`, `-j ${opt.j}${optTag('j')}`,
-    opt.sentence !== undefined && `--sentence=${opt.sentence}${optTag('sentence')}`,
+    opt.unit.startsWith('sentence') && `--unit=${opt.unit}${optTag('unit')}`,
     opt.dedup && `--dedup${optTag('dedup')}`,
-    opt.z && `-z${opt.gitlog && optSrc('z') === null ? ' (-g)' : optTag('z')}`,
+    opt.z && `-z${opt.gitlog && optSrc('z') === null ? ' (-g)' : optTag('z') || optTag('unit')}`,
     `scope ${opt['auto-scope'] ? 'on' : 'off'}${optTag('auto-scope')}`,
     ...(opt.include ?? []).map(g => `--include=${g}`), ...(opt.exclude ?? []).map(g => `--exclude=${g}`),
     opt['changed-within'] && `--changed-within=${opt['changed-within']}`,
@@ -1014,7 +1017,7 @@ const addScope = (term, sc) => {
 const scoped = term => term.filter(l => l.kind === 'm' && !l.not); // the meanings that can scope their term
 const admitted = (term, file) => term.every(lit => lit.kind !== 's' || lit.admits(file));
 
-// The unit of judgement. Without -z it is a line; with -z it is a NUL-terminated record, which may
+// The unit of judgement. Default is a line; with -z (--unit=zero) it is a NUL-terminated record, which may
 // span several lines. Everything downstream works on an array of units, so only the terminator changes.
 const SEP = opt.z ? '\0' : '\n';
 
@@ -1165,13 +1168,13 @@ if (opt.interactive && !dry) {
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 // Scripts written without spaces between words (needed here for estimateTokens' CJK-aware pricing below, and
-// later for joining wrapped lines without adding a word space, --sentence).
+// later for joining wrapped lines without adding a word space, --unit=sentence-by-*).
 const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}\p{Script=Tibetan}ー、。]/u;
 // #58: how many of a request body's bytes are CJK script, for estimateTokens' CJK-aware pricing.
 const cjkBytesOf = text => Buffer.byteLength((text.match(new RegExp(CJK, 'gu')) ?? []).join(''));
 let usedTokens = 0, usedCost = 0, requestCount = 0, dedupTokens = 0; // dedupTokens: what --dedup's own questions cost
 let sentBytes = 0, sentCjkBytes = 0, sentRequests = 0; // #58 review: bytes/requests already sent for real (scope,
-// --dedup and --sentence=jev's judgeBreaks() all run before the chunk requests below are even built), so --max-cost's
+// --dedup and --unit=sentence-by-jev's judgeBreaks() all run before the chunk requests below are even built), so --max-cost's
 // own estimate counts them instead of only the chunks about to go out.
 // Jev bills input tokens; without a response they can only be estimated from the request bodies. Fitted on 7 requests
 // to Jev (English and Japanese, 1-3 questions a line, 2026-09-26): 650 a request + 0.21 a body byte, within -8%..+12%.
@@ -1182,7 +1185,7 @@ const estimateTokens = (requests, bytes, cjkBytes = 0) => Math.round(650 * reque
 let traced = 0, tracedQuestions = 0, tracedChars = 0, tracedBytes = 0, tracedCjkBytes = 0;
 const cut = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 // --dry-run / --verbose: one line per request, then its questions grouped by wording (line ids read Lnnn).
-// --dry-run answers every question no (0), which also decides what --dedup folds and where --sentence joins.
+// --dry-run answers every question no (0), which also decides what --dedup folds and where --unit=sentence-by-* joins.
 function show(state, questions, label) {
   const count = new Map();
   for (const q of Object.values(questions)) { const k = q.instructions.replace(/\bL\d{3}\b/g, 'Lnnn'); count.set(k, (count.get(k) ?? 0) + 1); }
@@ -1274,7 +1277,7 @@ function askToContinue(msg) {
   writeSync(tty, 'sys1grep: continue? [y/N] ');
   const buf = Buffer.alloc(256);
   if (!/^\s*y(es)?\s*$/i.test(buf.toString('utf8', 0, readSync(tty, buf)))) {
-    // #58 review: auto-scope (and, with --sentence=jev, judgeBreaks) can have sent real requests already by the
+    // #58 review: auto-scope (and, with --unit=sentence-by-jev, judgeBreaks) can have sent real requests already by the
     // time the guard asks, so "nothing sent" would be false; say what already went out instead.
     console.error(sentRequests ? `sys1grep: stopped; ${sentRequests} setup request${sentRequests === 1 ? '' : 's'} already sent` : 'sys1grep: nothing sent');
     process.exit(1);
@@ -1304,7 +1307,7 @@ if (opt.gitlog) {
   catch (e) { if (e.status == null) die(`git log: ${e.message}`); process.exit(2); } // git exited non-zero: it has said why
 }
 
-// --sentence: the unit is a sentence. Lines are joined as wrapped prose, except where a newline cannot be inside
+// --unit=sentence-by-*: the unit is a sentence. Lines are joined as wrapped prose, except where a newline cannot be inside
 // a sentence: at a blank line, next to structure characters (JSON, code), or before a list item, heading, quote or
 // number. Each joined piece is then split by Intl.Segmenter (Unicode UAX #29 sentence boundaries).
 const SENTENCES = new Intl.Segmenter(undefined, { granularity: 'sentence' });
@@ -1346,7 +1349,7 @@ function toSentences(lines, unitOf, baseOf, split = new Set()) { // split: break
 // Where the rules would join, a break still needs judging if a script without word spaces touches it and the line
 // does not end a sentence: in Japanese or Chinese, entries often end without 。, and joining leaves no trace of the
 // break. A line starting with closing punctuation continues the previous one (kinsoku), and so does a line
-// ending in 、. With --sentence=jev such breaks are asked, 30 lines per request, a yes/no per break. A break needs
+// ending in 、. With --unit=sentence-by-jev such breaks are asked, 30 lines per request, a yes/no per break. A break needs
 // p >= 0.7: real breaks measured 0.81 and up, while wraps a person made at a phrase boundary reach 0.5 to 0.6.
 const CLOSING = /^[。、，．」』）】〕！？]/;
 const needsJudging = (prev, next) => prev && next && !hardBreak(prev, next) && !/[。！？!?、，]$/.test(prev) && !CLOSING.test(next)
@@ -1371,7 +1374,7 @@ async function judgeBreaks(lines, file) { // -> Set of i where the break before 
 
 const execAt = (lit, text) => { lit.re.lastIndex = 0; return lit.re.exec(text); }; // reset: /re/g or /re/y would else carry state across units
 const sources = new Map(); // file -> the units printed (lines or records; sentences with -o); includes blank lines
-const spansOf = new Map(); // file -> spans of each sentence (--sentence only)
+const spansOf = new Map(); // file -> spans of each sentence (--unit=sentence-by-* only)
 // { file, no, text }: the units some term's regexes hold for (every unit when a term has no regex), blank ones
 // included; what the expression is evaluated over. A unit no term's regexes hold for can never match, so it is not
 // kept: an object per unit of a large file cost more than reading it (#79). unitCount: file -> units read.
@@ -1428,13 +1431,13 @@ for (const file of targets) {
 const runsOf = src => (opt.z
   ? src.map((rec, r) => { const ls = rec.split('\n'), starts = [0]; for (const l of ls) starts.push(starts.at(-1) + l.length + 1); return { lines: ls, unitOf: () => r + 1, baseOf: i => starts[i] }; })
   : [{ lines: src, unitOf: i => i + 1, baseOf: () => 0 }]);
-const runsByFile = new Map([...read].map(([file, src]) => [file, opt.sentence ? runsOf(src) : []]));
+const runsByFile = new Map([...read].map(([file, src]) => [file, opt.unit.startsWith('sentence') ? runsOf(src) : []]));
 const splits = new Map(); // run -> Set of breaks Jev judged to end an entry
-if (opt.sentence === 'jev') spin.set('judging where wrapped lines break (--sentence)');
+if (opt.unit === 'sentence-by-jev') spin.set('judging where wrapped lines break (--unit=sentence-by-jev)');
 // #50: a blob shared by several trees is judged once; the other labels' runs share its splits (keyed by blob id
 // + the run's index within its file, since identical content gives identical runs and questions), as the
 // matching above shares answers keyed by blob id + line number.
-if (opt.sentence === 'jev') {
+if (opt.unit === 'sentence-by-jev') {
   const rep = new Map(); // blob+run index -> Promise<Set>
   await Promise.all([...runsByFile].flatMap(([file, runs]) => runs.map((run, i) => {
     const blob = blobOfLabel.get(file);
@@ -1446,11 +1449,11 @@ if (opt.sentence === 'jev') {
     return job;
   })));
 }
-const unitName = opt.sentence ? 'sentences' : opt.z ? 'records' : 'lines';
+const unitName = opt.unit.startsWith('sentence') ? 'sentences' : opt.z ? 'records' : 'lines';
 for (const [file, src] of read) {
   sources.set(file, src);
   let units = src;
-  if (opt.sentence) {
+  if (opt.unit.startsWith('sentence')) {
     // With -z a record is a hard boundary, and lines inside it are joined like any wrapped prose.
     const sentences = runsByFile.get(file).flatMap(run => toSentences(run.lines, run.unitOf, run.baseOf, splits.get(run)));
     spansOf.set(file, sentences.map(u => u.spans));
@@ -1628,7 +1631,7 @@ async function evaluate(chunk) {
   chunk.forEach((l, i) => [...asksByUnit.get(l).keys()].forEach((text, k) => asksByUnit.get(l).set(text, answers[`${id(i)}_${k}`].noul)));
 }
 // #58: the cost of what is actually about to be sent (after the regex prefilter and --dedup grouping above),
-// PLUS the setup requests already sent for real above (auto-scope, --dedup, and --sentence=jev's judgeBreaks(),
+// PLUS the setup requests already sent for real above (auto-scope, --dedup, and --unit=sentence-by-jev's judgeBreaks(),
 // tallied in sentBytes/sentRequests as they went out, #58 review: they used to be missing from this estimate
 // entirely). Not gated on chunks.length (#58 review: an empty chunk set used to skip this whole check, silently,
 // even when the setup requests above already cost something).
@@ -1691,10 +1694,10 @@ for (const l of allLines) {
   if (!hits.has(l.file)) hits.set(l.file, new Map());
   hits.get(l.file).set(l.no, l);
 }
-// --sentence without -o prints the original lines (or records) a matching sentence touches, like grep prints
+// --unit=sentence-by-* without -o prints the original lines (or records) a matching sentence touches, like grep prints
 // lines. A unit keeps the probabilities of its first matching sentence; ranges mark the matching text in it.
 const ranges = new Map(); // file -> (unit -> [[from, to, sentence]]): where a matching sentence lies in the unit
-if (opt.sentence && !opt.o) for (const [file, h] of hits) {
+if (opt.unit.startsWith('sentence') && !opt.o) for (const [file, h] of hits) {
   const spans = spansOf.get(file), units = new Map(), marked = new Map();
   for (const [k, p] of [...h].sort((a, b) => a[0] - b[0])) for (const [u, a, b] of spans[k - 1]) {
     if (!units.has(u)) units.set(u, p);
@@ -1727,11 +1730,11 @@ const highlight = (text, sentences = [], matches = []) => {
   }
   return out;
 };
-const startNo = (file, k) => (opt.o && opt.sentence ? spansOf.get(file)[k - 1][0][0] : k); // -o: the unit where the sentence starts
+const startNo = (file, k) => (opt.o && opt.unit.startsWith('sentence') ? spansOf.get(file)[k - 1][0][0] : k); // -o: the unit where the sentence starts
 
-// -o without --sentence prints each regex match on a line of its own, as grep -o, and no context. A line that only
+// -o without --unit=sentence-by-* prints each regex match on a line of its own, as grep -o, and no context. A line that only
 // meanings matched has no matching part, so it prints whole.
-const partsOnly = opt.o && !opt.sentence;
+const partsOnly = opt.o && !opt.unit.startsWith('sentence');
 const after = partsOnly ? 0 : Number(opt.A ?? opt.C ?? 0), before = partsOnly ? 0 : Number(opt.B ?? opt.C ?? 0);
 // grep -r and git grep prefix file names even for a single file; -H / --no-filename decide it outright, the later one winning.
 const multi = opt['with-filename'] ?? (opt.r || asGit || targets.length > 1);
@@ -1834,7 +1837,7 @@ if (summarizer && !dry && matched && pipedBytes > SUMMARY_MAX) {
 }
 // Summary only when interactive; grep prints nothing to stderr when scripted.
 if (dry) {
-  const assumed = [opt.dedup && '--dedup', opt.sentence === 'jev' && '--sentence'].filter(Boolean);
+  const assumed = [opt.dedup && '--dedup', opt.unit === 'sentence-by-jev' && '--unit=sentence-by-jev'].filter(Boolean);
   const tokens = estimateTokens(traced, tracedBytes, tracedCjkBytes), price = customUrl ? '' : `, ~$${(tokens * 0.042 / 1e6).toFixed(6)}`;
   // #125 review: the size guard is gone (an oversized file is skipped outright above, not asked about); --dry-run
   // and -i show only the cost guard's verdict here, consistent with what a real run would ask.

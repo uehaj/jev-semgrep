@@ -113,6 +113,10 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   candidates too. One git process per repository and question.
 
 ### Changed
+- `--unit=line|zero|sentence-by-jev|sentence-by-rule` chooses the unit of judgement (#140). `--sentence` is gone:
+  `--sentence` / `--sentence=jev` is now `--unit=sentence-by-jev`, `--sentence=rules` is `--unit=sentence-by-rule`.
+  `-z` / `--null-data` stay, as `--unit=zero`, and still combine with the sentence units to split each record into
+  sentences.
 - `--sentence` colors the matching sentence bold yellow instead of bold red, so a regex match inside it stands out.
 
 ### Renamed

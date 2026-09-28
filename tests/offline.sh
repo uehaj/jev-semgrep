@@ -110,8 +110,8 @@ eq "$($J --color=always -e '/dog/' -a cat "$F")" "cat ${esc}[01;31mdog${esc}[0m"
 eq "$($J --color=always -e '/dog/' -a zebra -e cat "$F" | tail -1)" "cat dog" "--color: no color from a term that did not hold"
 eq "$($J --color=always -e cat -v '/dog/' "$F")" "cat" "--color: no color from a negated regex"
 printf 'The cat sat. A dog ran.\n' >"$tmp/s.txt"
-eq "$($J --sentence=rules --color=always -e cat -a '/sat/' "$tmp/s.txt")" "${esc}[01;33mThe cat ${esc}[0m${esc}[01;31msat${esc}[0m${esc}[01;33m.${esc}[0m A dog ran." "--sentence --color: the sentence yellow, the regex red"
-eq "$($J --sentence=rules -o --color=always -e cat -a '/sat/' "$tmp/s.txt")" "The cat ${esc}[01;31msat${esc}[0m." "--sentence -o: the sentence, its regex red"
+eq "$($J --unit=sentence-by-rule --color=always -e cat -a '/sat/' "$tmp/s.txt")" "${esc}[01;33mThe cat ${esc}[0m${esc}[01;31msat${esc}[0m${esc}[01;33m.${esc}[0m A dog ran." "--sentence --color: the sentence yellow, the regex red"
+eq "$($J --unit=sentence-by-rule -o --color=always -e cat -a '/sat/' "$tmp/s.txt")" "The cat ${esc}[01;31msat${esc}[0m." "--sentence -o: the sentence, its regex red"
 # -o without --sentence: each regex match on a line of its own (grep -o), no context; a meaning-only line whole
 eq "$($J -o -n -e '/a/' "$F" | tr '\n' '|')" "1:a|4:a|7:a|" "-o: regex matches"
 eq "$($J -o -n -e '/o/' -a '/owl/' "$F" | tr '\n' '|')" "7:owl|8:owl|" "-o: overlapping matches print once, the longest"
@@ -281,9 +281,17 @@ node -e 'const le = Buffer.from("﻿cat\ndog\n", "utf16le"); require("fs").write
 eq "$($J -n -e cat "$tmp/le.txt")" "1:cat" "UTF-16LE is read"
 eq "$($J -n -e dog "$tmp/be.txt")" "2:dog" "UTF-16BE is read"
 eq "$($J -z -c -e cat "$tmp/le.txt")" "1" "-z with UTF-16: no NUL character, so the file is one record, as in UTF-8"
-# --sentence=jev with regex terms only asks nothing: the rules join the lines
-printf '猫がいる\n犬もいる\n' >"$tmp/ja"   # unpunctuated Japanese: the breaks --sentence=jev would ask about
-reset; $J --sentence -c -e '/猫/' "$tmp/ja" >/dev/null; eq "$(stat count)" "0" "--sentence with regex terms only sends nothing"
+# --unit (#140): -z, --null-data and --unit=zero are one setting; -z bundles as in grep; -z splits records into sentences
+printf 'a cat. A dog.\000owl\000' >"$tmp/rec"
+eq "$($J -zc -e cat "$tmp/rec")" "1" "-zc bundles"
+eq "$($J --null-data -c -e cat "$tmp/rec")" "1" "--null-data is -z"
+eq "$($J --unit=zero -c -e cat "$tmp/rec")" "1" "--unit=zero is -z"
+eq "$($J -z --unit=sentence-by-rule -o -e cat "$tmp/rec")" "a cat." "-z --unit=sentence-by-rule: a record split into sentences"
+code 2 "--unit=bogus" -- $J --unit=bogus -e cat "$F"
+code 2 "--sentence is gone" -- $J --sentence -e cat "$F"
+# --unit=sentence-by-jev with regex terms only asks nothing: the rules join the lines
+printf '猫がいる\n犬もいる\n' >"$tmp/ja"   # unpunctuated Japanese: the breaks --unit=sentence-by-jev would ask about
+reset; $J --unit=sentence-by-jev -c -e '/猫/' "$tmp/ja" >/dev/null; eq "$(stat count)" "0" "--unit=sentence-by-jev with regex terms only sends nothing"
 
 # git sys1grep: tracked files only, pathspecs relative to the current directory, never stdin
 R="$tmp/repo" GS="$E SYS1GREP_URL=$base/v1 node $PWD/../git-sys1grep.mjs" SG="$PWD/../sys1grep.mjs"
@@ -320,7 +328,7 @@ G="$tmp/g50"
 mkdir -p "$G"
 (cd "$G" && git init -q -b main && git config user.email t@t && git config user.name t)
 printf 'cat\n' >"$G/base.txt"; printf 'cat\n' >"$G/removed.txt"
-printf '猫がいる\n犬もいる\n' >"$G/neko.txt" # unpunctuated Japanese: --sentence=jev asks about the wrap between its lines
+printf '猫がいる\n犬もいる\n' >"$G/neko.txt" # unpunctuated Japanese: --unit=sentence-by-jev asks about the wrap between its lines
 (cd "$G" && git add base.txt removed.txt neko.txt && git commit -q -m v1 && git tag v1)
 (cd "$G" && git commit -q --allow-empty -m v2 && git tag v2) # base.txt's blob is unchanged: shared with v1
 reset
@@ -332,7 +340,7 @@ echo "$out" | grep -qF 'sys1grep: file v1:base.txt: ' || fail "#50 (owner decisi
 echo "$out" | grep -qF 'sys1grep: file v1:neko.txt: ' || fail "#50 (owner decision 1): a <tree>'s glob pathspec reaches neko.txt: $out"
 echo "$out" | grep -qF 'sys1grep: file v1:removed.txt: ' || fail "#50 (owner decision 1): a <tree>'s glob pathspec reaches removed.txt: $out"
 reset
-eq "$(cd "$G" && $GS --chunk 1 --sentence -c -e '猫がいる' v1 v2 -- neko.txt | tr '\n' ' ')" "v1:neko.txt:2 v2:neko.txt:2 " "#50: --sentence=jev on a blob shared by two trees"
+eq "$(cd "$G" && $GS --chunk 1 --unit=sentence-by-jev -c -e '猫がいる' v1 v2 -- neko.txt | tr '\n' ' ')" "v1:neko.txt:2 v2:neko.txt:2 " "#50: --sentence=jev on a blob shared by two trees"
 eq "$(stat count)" "2" "#50: ...also asks its break-judging once, not once per tree (one break request, one match request)"
 # a symlink and a submodule in a tree are left out, as in the working tree
 (cd "$G" && ln -s base.txt link.txt && git add link.txt && git update-index --add --cacheinfo 160000,"$(git rev-parse HEAD)",fakesub && git commit -q -m v3 && git tag v3)
@@ -633,7 +641,7 @@ eq "$(cat "$tmp/sum.in")" "cat 1   (×3 like it)" "--summarize --dedup: a repres
 grep -q 'stands for N matching lines' "$tmp/sum.argv" || fail "--summarize --dedup: the prompt says what ×N is"
 $S --summarize -e cat "$tmp/dd.txt" >/dev/null; grep -q 'like it' "$tmp/sum.argv" && fail "--summarize without --dedup: no ×N in the prompt"
 printf 'The cat 1 sat. A dog ran.\nThe cat 2 sat.\nThe cat 3\nsat.\n' >"$tmp/dds.txt"
-$S --summarize --dedup --sentence=rules -n -e cat "$tmp/dds.txt" >/dev/null
+$S --summarize --dedup --unit=sentence-by-rule -n -e cat "$tmp/dds.txt" >/dev/null
 eq "$(tr '\n' '|' <"$tmp/sum.in")" "1:The cat 1 sat. A dog ran.   (×3 like it)|" "--summarize --dedup --sentence: one representative for sentences across lines"
 node -e "for (let i = 0; i < 3000; i++) console.log('cat ' + 'x'.repeat(80) + ' ' + i)" >"$tmp/big.txt"
 rm -f "$tmp/sum.in"; code 2 "--summarize over 200 KB" -- $S --summarize -e '/cat/' "$tmp/big.txt"
@@ -696,9 +704,9 @@ reset; code 1 "--max-filesize, --max-cost and -y in SYS1GREP_OPTS take effect" -
 # #58 review (blocker) / #125 review (item 2): --sentence=jev's judgeBreaks must never read an oversized file's
 # content; since the file is now skipped before it is ever opened, this holds regardless of ordering
 node -e "for (let i = 0; i < 50; i++) console.log('これはとても長い日本語の文章であり改行があいまいです' + i)" >"$tmp/cjk.txt"
-reset; $J --sentence --max-filesize 1K -e cat "$tmp/cjk.txt" >/dev/null 2>&1 || true
+reset; $J --unit=sentence-by-jev --max-filesize 1K -e cat "$tmp/cjk.txt" >/dev/null 2>&1 || true
 eq "$(stat count)" "0" "an oversized file is skipped before --sentence=jev's judgeBreaks ever reads it"
-$J --sentence --max-filesize 1K -e cat "$tmp/cjk.txt" 2>&1 >/dev/null | grep -q -- "$tmp/cjk.txt: skipped, .* is over --max-filesize=1K" || fail "the skip message names the CJK file too"
+$J --unit=sentence-by-jev --max-filesize 1K -e cat "$tmp/cjk.txt" 2>&1 >/dev/null | grep -q -- "$tmp/cjk.txt: skipped, .* is over --max-filesize=1K" || fail "the skip message names the CJK file too"
 
 # an oversized file under -r / auto-scope: the scope-narrowing request (meaning text only) still goes out, but the
 # file's own content is skipped, not read
