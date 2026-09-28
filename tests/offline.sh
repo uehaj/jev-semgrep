@@ -289,6 +289,25 @@ eq "$($J --unit=zero -c -e cat "$tmp/rec")" "1" "--unit=zero is -z"
 eq "$($J -z --unit=sentence-by-rule -o -e cat "$tmp/rec")" "a cat." "-z --unit=sentence-by-rule: a record split into sentences"
 code 2 "--unit=bogus" -- $J --unit=bogus -e cat "$F"
 code 2 "--sentence is gone" -- $J --sentence -e cat "$F"
+# --unit=function (#114): the fake matches the meaning in one line, and the whole function prints
+printf 'import x from "y";\n\nasync function retry(url) {\n  for (;;) {\n    await sleep(100); // backoff\n  }\n}\n\nconst parse = (s) => {\n  return s;\n};\n' >"$tmp/net.js"
+eq "$($J --unit=function -n -e backoff "$tmp/net.js" | tr '\n' '|')" "3:async function retry(url) {|4:  for (;;) {|5:    await sleep(100); // backoff|6:  }|7:}|" "--unit=function: the function's lines, no trailing blank"
+eq "$($J --unit=function -n -e '/import/' "$tmp/net.js" | nums)" "1 " "--unit=function: lines before the first function are one unit"
+printf 'def a():\n    pass\nclass B:\n    def m(self):\n        return 2\n' >"$tmp/m.py"
+eq "$($J --unit=function -n -e '/return/' "$tmp/m.py" | nums)" "4 5 " "--unit=function: a nested def in Python"
+eq "$(printf 'intro\n== one\nalpha\n== two\nbeta\n' | $J --unit=function -n -e '/beta/' | nums)" "5 " "--unit=function: no attribute, git's default rule"
+reset; $J --unit=function -e backoff "$tmp/net.js" >/dev/null; eq "$(stat count)" "1" "--unit=function: one request for three functions"
+$J --unit=function --dry-run -e backoff "$tmp/net.js" 2>&1 | grep -q "net.js: 3 functions, 3 to send" || fail "--unit=function: --dry-run counts functions"
+$J --unit=function --dry-run -e x "$F" | grep -q '^sys1grep: options: .*--unit=function, .*-M 8000, ' || fail "--unit=function: -M defaults to 8000"
+code 2 "--unit=function -z" -- $J --unit=function -z -e cat "$F"
+code 2 "--unit=function -o" -- $J --unit=function -o -e cat "$F"
+# diff=<driver> and diff.<driver>.xfuncname from git, as git grep -W; a bad regex falls back with a warning
+JF="$E SYS1GREP_URL=$base/v1 node $PWD/../sys1grep.mjs" FG="$tmp/fn-git"; mkdir -p "$FG" && git -C "$FG" init -q && printf '*.txt diff=notes\n' >"$FG/.gitattributes"
+printf 'intro\n== one\nalpha\n== two\nbeta\n' >"$FG/a.txt"
+git -C "$FG" config diff.notes.xfuncname '^==[[:space:]]'
+eq "$(cd "$FG" && $JF --unit=function -n -e '/beta/' a.txt | nums)" "4 5 " "--unit=function: xfuncname from git config, POSIX class"
+git -C "$FG" config diff.notes.xfuncname '^==('
+eq "$(cd "$FG" && $JF --unit=function -n -e '/beta/' a.txt 2>&1 | tr '\n' '|')" "sys1grep: diff.notes.xfuncname: Invalid regular expression: /^==(/: Unterminated group; using sys1grep's own rule|5:beta|" "--unit=function: a bad xfuncname warns and falls back"
 # --unit=sentence-by-jev with regex terms only asks nothing: the rules join the lines
 printf '猫がいる\n犬もいる\n' >"$tmp/ja"   # unpunctuated Japanese: the breaks --unit=sentence-by-jev would ask about
 reset; $J --unit=sentence-by-jev -c -e '/猫/' "$tmp/ja" >/dev/null; eq "$(stat count)" "0" "--unit=sentence-by-jev with regex terms only sends nothing"

@@ -217,7 +217,8 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                on ambiguous lines, not just speed
   -j N         concurrent requests (default 8)
   -n           print line numbers
-  --unit=UNIT  the unit of judgement: line (default), zero (NUL-terminated record), or sentence-by-jev / sentence-by-rule.
+  --unit=UNIT  the unit of judgement: line (default), zero (NUL-terminated record), sentence-by-jev / sentence-by-rule,
+               or function.
                -z / --null-data is --unit=zero, and also combines with sentence-by-*: each record is split into sentences
                  line (default): each line
                  zero: NUL-terminated record, may span several lines. Matching records are printed NUL-terminated
@@ -234,6 +235,10 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                The expression is evaluated per sentence. With -z each record is split on its own.
                Sentences sent together (--chunk) read each other as context, so a verdict can shift with where the
                chunks fall, and a sentence next to a match can match too
+                 function: judge each function; output is its lines. A function runs from a funcname line to the
+                   line before the next, as git grep -W: the diff=<driver> attribute and diff.<driver>.xfuncname
+                   pick the funcname lines, else sys1grep's rule for .js/.ts/.py, else a line starting with a
+                   letter, _ or $. -M defaults to 8000. Not with -z, -g or -o
   -o           print only what matched, one per line: each regex match, as grep -o (a line only meanings
                matched prints whole; no context). With --unit=sentence-by-*, the matching sentences; -n gives the
                line where the sentence starts, -c and -A/-B/-C count sentences
@@ -401,7 +406,7 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                判定も変わる
   -j N         同時リクエスト数 (既定 8)
   -n           行番号を付ける
-  --unit=UNIT  判定の単位: line (既定)、zero (NUL 終端レコード)、sentence-by-jev / sentence-by-rule
+  --unit=UNIT  判定の単位: line (既定)、zero (NUL 終端レコード)、sentence-by-jev / sentence-by-rule、function
                -z / --null-data は --unit=zero と同じ。sentence-by-* と併用すると、レコードごとに文に分ける
                line (既定): 行単位
                zero: NUL 終端のレコード。1 レコードが複数行でもよい。一致したレコードも NUL 終端で出力
@@ -418,6 +423,10 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                つなぐ。式は文ごとに評価する。-z ではレコードごとに文に分け、当たったレコードを出す。
                一緒に送る文 (--chunk) は互いを文脈として読むので、区切りの位置で判定が変わることがあり、
                当たった文の隣の文もつられて当たることがある
+               function: 関数ごとに判定し、当たった関数の行を出す。関数は関数名の行から次の関数名の行の前まで
+                 (git grep -W と同じ)。関数名の行は diff=<driver> 属性と diff.<driver>.xfuncname で決め、
+                 無ければ .js/.ts/.py は sys1grep の規則、それ以外は英字・_・$ で始まる行。-M の既定は 8000。
+                 -z・-g・-o とは併用できない
   -o           当たった部分だけを 1 行ずつ出す。正規表現の一致をそれぞれ出す (grep -o と同じ。意味だけで
                当たった行は行全体。前後の行は出さない)。--unit=sentence-by-* と併用すると当たった文を出し、
                -n は文が始まる行、-c と -A/-B/-C は文の数で数える
@@ -611,14 +620,16 @@ const parseSize = (s, label) => {
 const fmtSize = b => (b >= 1024 ** 3 ? `${(b / 1024 ** 3).toFixed(1)} GB` : b >= 1024 ** 2 ? `${(b / 1024 ** 2).toFixed(1)} MB` : `${Math.ceil(b / 1024)} KB`);
 const MAX_FILESIZE = parseSize(opt['max-filesize'] ?? '10M', '--max-filesize');
 const MAX_COST = Number(opt['max-cost']);
-if (!['line', 'zero', 'sentence-by-jev', 'sentence-by-rule'].includes(opt.unit)) die('--unit must be line, zero, sentence-by-jev, or sentence-by-rule');
+if (!['line', 'zero', 'sentence-by-jev', 'sentence-by-rule', 'function'].includes(opt.unit)) die('--unit must be line, zero, sentence-by-jev, sentence-by-rule, or function');
 if (!['auto', 'always', 'never'].includes(opt.color)) die('--color must be auto, always or never');
 if (opt.gitlog && (opt.r || globalThis.SYS1GREP_GIT)) die('-g searches commits, not files: it cannot be combined with -r or git sys1grep');
 // --unit=zero is -z. -z also combines with --unit=sentence-by-*: each record is split into sentences.
 if (opt.unit === 'zero' || opt.gitlog) opt.z = true; // -g: a commit is a record
+// A function's boundaries are lines of one file; -o would print a whole function as one "part".
+if (opt.unit === 'function' && (opt.z || opt.o)) die(`--unit=function cannot be combined with ${opt.gitlog ? '-g' : opt.z ? '-z' : '-o'}`);
 // How much of one unit is sent, -M/--max-columns. A line rarely reaches 2000 characters; a commit message with
-// its body does. A unit over this is skipped outright (#58), not truncated: it is never sent and cannot match.
-const MAX_UNIT_CHARS = Number(opt['max-columns'] ?? (opt.z ? 8000 : 2000));
+// its body, or a function, does. A unit over this is sent truncated to its first NUM characters (#125 review, item 9).
+const MAX_UNIT_CHARS = Number(opt['max-columns'] ?? (opt.z || opt.unit === 'function' ? 8000 : 2000));
 
 // #50: --cached (the index), --untracked (tracked plus untracked) and a <tree>... (a revision's tree, as
 // git grep) choose what git sys1grep searches instead of the working tree. git sys1grep sets this before
@@ -790,7 +801,7 @@ if (trace) {
     : `-t ${tPos}${optTag('t')}, -T ${tNeg}${optTag('T')}`;
   const options = [
     thresholds, `--chunk ${chunkLines}${optTag('chunk')}`, `-j ${opt.j}${optTag('j')}`,
-    opt.unit.startsWith('sentence') && `--unit=${opt.unit}${optTag('unit')}`,
+    !['line', 'zero'].includes(opt.unit) && `--unit=${opt.unit}${optTag('unit')}`,
     opt.dedup && `--dedup${optTag('dedup')}`,
     opt.z && `-z${opt.gitlog && optSrc('z') === null ? ' (-g)' : optTag(optSrc('z') !== null ? 'z' : 'unit')}`,
     `scope ${opt['auto-scope'] ? 'on' : 'off'}${optTag('auto-scope')}`,
@@ -1449,7 +1460,52 @@ if (opt.unit === 'sentence-by-jev') {
     return job;
   })));
 }
-const unitName = opt.unit.startsWith('sentence') ? 'sentences' : opt.z ? 'records' : 'lines';
+// --unit=function (#114): a function runs from a funcname line to the line before the next one, as git grep -W
+// finds it; lines before the first are one unit. The funcname rule is git's: the diff=<driver> attribute, then
+// diff.<driver>.xfuncname (or funcname) from git config, a POSIX ERE, one pattern per line, ! negating. A driver
+// with none configured (git's builtins live in its C source, GPL-2.0) or a file with no attribute takes FUNCNAMES
+// by driver or extension, else git's own default: a line starting with a letter, _ or $.
+// ponytail: only JavaScript and Python have a rule of their own; add one here, or diff=<driver> and xfuncname
+const FUNCNAMES = {
+  javascript: [{ re: /^(export\s+)?(default\s+)?(async\s+)?(function\b|class\b|(const|let|var)\s+[\w$]+\s*=\s*(async\b|function\b|\(|[\w$]+\s*=>))/ }],
+  python: [{ re: /^[ \t]*(async[ \t]+)?(def|class)[ \t]/ }],
+};
+const DRIVER_OF_EXT = { js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript', ts: 'javascript', mts: 'javascript', cts: 'javascript', tsx: 'javascript', py: 'python' };
+const DEFAULT_FUNCNAME = [{ re: /^[A-Za-z_$]/ }];
+const POSIX = { alpha: 'A-Za-z', digit: '0-9', alnum: 'A-Za-z0-9', upper: 'A-Z', lower: 'a-z', space: '\\s', blank: ' \\t', xdigit: '0-9A-Fa-f', punct: '!-\\/:-@\\[-`{-~' };
+const isFuncname = pats => line => { for (const { not, re } of pats) if (re.test(line)) return !not; return false; };
+const funcnamesOf = new Map(); // file -> patterns
+if (opt.unit === 'function') {
+  const git = (args, input) => { try { return execFileSync('git', args, { input, encoding: 'utf8', maxBuffer: Infinity, stdio: ['pipe', 'pipe', 'ignore'] }); } catch { return ''; } };
+  const configured = new Map(); // driver -> its patterns from git config
+  for (const kv of git(['config', '-z', '--get-regexp', '^diff\\..*\\.x?funcname$']).split('\0').filter(Boolean)) {
+    const [, driver, x, src] = /^diff\.(.*)\.(x?)funcname\n([\s\S]*)$/.exec(kv) ?? [];
+    if (driver === undefined || (configured.has(driver) && !x)) continue; // xfuncname wins over funcname
+    try {
+      configured.set(driver, src.split('\n').filter(Boolean).map(l => ({ not: l.startsWith('!'), re: new RegExp(l.replace(/^!/, '').replace(/\[:(\w+):\]/g, (m, c) => POSIX[c] ?? m)) })));
+    } catch (e) { console.error(`sys1grep: diff.${safe(driver)}.${x}funcname: ${safe(e.message)}; using sys1grep's own rule`); }
+  }
+  // A <tree>:path label is looked up by its path; stdin has none. Outside a repository every file has no attribute.
+  const files = [...read.keys()].filter(f => f !== '-');
+  const pathOf = f => { const t = trees.find(t => f.startsWith(`${t}:`)); return t ? f.slice(t.length + 1) : f; };
+  const attrs = git(['check-attr', '-z', '--stdin', 'diff'], files.map(pathOf).join('\0')).split('\0');
+  files.forEach((f, i) => {
+    const v = attrs[i * 3 + 2], driver = v && !['unspecified', 'set', 'unset'].includes(v) ? v : DRIVER_OF_EXT[/\.(\w+)$/.exec(pathOf(f))?.[1]];
+    funcnamesOf.set(f, configured.get(driver) ?? FUNCNAMES[driver] ?? DEFAULT_FUNCNAME);
+  });
+}
+// lines -> [{ text, spans }], one per function; a span covers a whole line, as toSentences' spans do part of one.
+const toFunctions = (lines, isName) => {
+  const out = [];
+  lines.forEach((line, i) => {
+    if (!out.length || isName(line)) out.push({ lines: [], spans: [] });
+    out.at(-1).lines.push(line);
+    out.at(-1).spans.push([i + 1, 0, line.length]);
+  });
+  // Blank lines before the next funcname line are judged with the function but not printed, as git grep -W.
+  return out.map(u => ({ text: u.lines.join('\n'), spans: u.spans.slice(0, u.lines.findLastIndex(l => l.trim()) + 1 || 1) }));
+};
+const unitName = opt.unit === 'function' ? 'functions' : opt.unit.startsWith('sentence') ? 'sentences' : opt.z ? 'records' : 'lines';
 for (const [file, src] of read) {
   sources.set(file, src);
   let units = src;
@@ -1459,6 +1515,10 @@ for (const [file, src] of read) {
     spansOf.set(file, sentences.map(u => u.spans));
     if (opt.o) sources.set(file, sentences.map(u => u.text));
     units = sentences.map(u => u.text);
+  } else if (opt.unit === 'function') {
+    const functions = toFunctions(src, isFuncname(funcnamesOf.get(file) ?? DEFAULT_FUNCNAME));
+    spansOf.set(file, functions.map(u => u.spans));
+    units = functions.map(u => u.text);
   }
   unitCount.set(file, units.length);
   // #125 review (item 9): -M/--max-columns bounds only what is sent (see requestOf() and judgeBreaks() below,
@@ -1695,9 +1755,10 @@ for (const l of allLines) {
   hits.get(l.file).set(l.no, l);
 }
 // --unit=sentence-by-* without -o prints the original lines (or records) a matching sentence touches, like grep prints
-// lines. A unit keeps the probabilities of its first matching sentence; ranges mark the matching text in it.
+// lines, and --unit=function the lines of a matching function. A unit keeps the probabilities of its first matching
+// sentence; ranges mark the matching text in it.
 const ranges = new Map(); // file -> (unit -> [[from, to, sentence]]): where a matching sentence lies in the unit
-if (opt.unit.startsWith('sentence') && !opt.o) for (const [file, h] of hits) {
+if ((opt.unit.startsWith('sentence') || opt.unit === 'function') && !opt.o) for (const [file, h] of hits) {
   const spans = spansOf.get(file), units = new Map(), marked = new Map();
   for (const [k, p] of [...h].sort((a, b) => a[0] - b[0])) for (const [u, a, b] of spans[k - 1]) {
     if (!units.has(u)) units.set(u, p);
@@ -1721,7 +1782,7 @@ function regexRanges(text, hit, from = 0, to = text.length) {
 const highlight = (text, sentences = [], matches = []) => {
   if (!color || !(sentences.length || matches.length)) return text;
   const style = new Array(text.length).fill(0);
-  for (const [a, b] of sentences) style.fill('01;33', a, b);
+  if (opt.unit !== 'function') for (const [a, b] of sentences) style.fill('01;33', a, b); // a whole function in yellow would say nothing
   for (const [a, b] of matches) style.fill('01;31', a, b);
   let out = '';
   for (let i = 0, j; i < text.length; i = j) {

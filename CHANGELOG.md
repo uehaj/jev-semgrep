@@ -6,6 +6,10 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
+- `--unit=function` judges each function and prints its lines (#114). A function runs from a funcname line to
+  the line before the next, as `git grep -W`: `diff=<driver>` and `diff.<driver>.xfuncname` pick the funcname
+  lines, else sys1grep's own rule for JavaScript/TypeScript and Python, else git's default (a line starting with a
+  letter, `_` or `$`). `-M` defaults to 8000; `-z`, `-g` and `-o` are refused.
 - Guards against generated and oversized input (#58, with the owner's decisions on #125's review applied). `-r`
   and `git sys1grep` now also skip generated files (`*.map`, `*.min.js`, `*.min.css`, `package-lock.json` and other
   lock files), named explicitly still searched. Every target is sized (`--max-filesize`, K/M/G, default 10M)

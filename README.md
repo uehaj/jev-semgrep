@@ -588,6 +588,38 @@ own. Sentences are cut by `Intl.Segmenter` ([Unicode UAX #29](https://unicode.or
 which splits at `.` `!` `?` `。` `！` `？` but also after abbreviations such as `Mr.`. Logs are not prose:
 consecutive log lines that start with a letter, such as `WARN ...` after `ERROR ...`, get joined.
 
+### One function at a time (`--unit=function`)
+
+In code the question is usually about a function ("retries on network failure"), and one line of it rarely
+says so. `--unit=function` judges each function and prints its lines, with `-n` giving file line numbers:
+
+```sh
+$ ./sys1grep -n --unit=function -e "retries on network failure" src/net.js
+src/net.js:3:async function fetchWithRetry(url) {
+src/net.js:4:  for (let i = 0; i < 5; i++) {
+src/net.js:5:    try { return await fetch(url); }
+src/net.js:6:    catch { await sleep(2 ** i * 100); }
+src/net.js:7:  }
+src/net.js:8:}
+```
+
+A function runs from a funcname line to the line before the next one, as `git grep -W` finds it; lines
+before the first funcname line are one unit, and blank lines at a function's end are not printed. The
+funcname lines are git's: the `diff=<driver>` attribute in `.gitattributes`, then `diff.<driver>.xfuncname`
+in git config. Without one, sys1grep has its own rule for JavaScript/TypeScript (a top-level `function`,
+`class`, or `const` / `let` / `var` bound to a function) and Python (`def` / `class`, nested ones too), and
+otherwise uses git's default: a line starting with a letter, `_` or `$`. git's own builtin drivers
+(`diff=python` and so on) are not read, so a driver without an `xfuncname` falls back the same way:
+
+```sh
+$ printf '*.go diff=golang\n' >> .gitattributes
+$ git config diff.golang.xfuncname '^(func|type)[[:space:]]'
+```
+
+`-M` defaults to 8000 characters here, as with `-z`; a longer function is judged on its first 8000.
+`--chunk` counts functions, `-A`/`-B`/`-C` and `-c` count lines, as with the sentence units. `-z`, `-g` and
+`-o` are refused.
+
 ### One line per template (`--dedup`)
 
 Cost is proportional to the text sent, and machine-generated logs are mostly one skeleton with a different
@@ -753,10 +785,11 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
                on ambiguous lines, not just speed
   -j N         concurrent requests (default 8)
   -n           print line numbers
-  --unit=UNIT  the unit of judgement: line (default), zero, sentence-by-jev or sentence-by-rule
+  --unit=UNIT  the unit of judgement: line (default), zero, sentence-by-jev, sentence-by-rule or function
   -z, --null-data  --unit=zero: judge NUL-terminated records instead of lines, and print them NUL-terminated (see "Records that span several lines" above);
                with --unit=sentence-by-*, each record is split into sentences
   --unit=sentence-by-jev|sentence-by-rule  judge each sentence instead of each line (see "One sentence at a time" above)
+  --unit=function  judge each function and print its lines (see "One function at a time" above)
   -o           with --unit=sentence-by-*, print only the matching sentences
   -p           print each meaning's probability at the end of the line
   --dry-run    send nothing; print the settings the search would run with (and their source, when not the
