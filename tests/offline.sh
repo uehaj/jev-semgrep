@@ -110,9 +110,9 @@ eq "$($J --color=always -e '/dog/' -a cat "$F")" "cat ${esc}[01;31mdog${esc}[0m"
 eq "$($J --color=always -e '/dog/' -a zebra -e cat "$F" | tail -1)" "cat dog" "--color: no color from a term that did not hold"
 eq "$($J --color=always -e cat -v '/dog/' "$F")" "cat" "--color: no color from a negated regex"
 printf 'The cat sat. A dog ran.\n' >"$tmp/s.txt"
-eq "$($J --unit=sentence-by-rule --color=always -e cat -a '/sat/' "$tmp/s.txt")" "${esc}[01;33mThe cat ${esc}[0m${esc}[01;31msat${esc}[0m${esc}[01;33m.${esc}[0m A dog ran." "--sentence --color: the sentence yellow, the regex red"
-eq "$($J --unit=sentence-by-rule -o --color=always -e cat -a '/sat/' "$tmp/s.txt")" "The cat ${esc}[01;31msat${esc}[0m." "--sentence -o: the sentence, its regex red"
-# -o without --sentence: each regex match on a line of its own (grep -o), no context; a meaning-only line whole
+eq "$($J --unit=sentence-by-rule --color=always -e cat -a '/sat/' "$tmp/s.txt")" "${esc}[01;33mThe cat ${esc}[0m${esc}[01;31msat${esc}[0m${esc}[01;33m.${esc}[0m A dog ran." "--unit=sentence-by-* --color: the sentence yellow, the regex red"
+eq "$($J --unit=sentence-by-rule -o --color=always -e cat -a '/sat/' "$tmp/s.txt")" "The cat ${esc}[01;31msat${esc}[0m." "--unit=sentence-by-* -o: the sentence, its regex red"
+# -o without --unit=sentence-by-*: each regex match on a line of its own (grep -o), no context; a meaning-only line whole
 eq "$($J -o -n -e '/a/' "$F" | tr '\n' '|')" "1:a|4:a|7:a|" "-o: regex matches"
 eq "$($J -o -n -e '/o/' -a '/owl/' "$F" | tr '\n' '|')" "7:owl|8:owl|" "-o: overlapping matches print once, the longest"
 eq "$($J -o -n -e cat "$F" | tr '\n' '|')" "1:cat|4:cat dog|" "-o: a meaning-only line prints whole"
@@ -340,7 +340,7 @@ echo "$out" | grep -qF 'sys1grep: file v1:base.txt: ' || fail "#50 (owner decisi
 echo "$out" | grep -qF 'sys1grep: file v1:neko.txt: ' || fail "#50 (owner decision 1): a <tree>'s glob pathspec reaches neko.txt: $out"
 echo "$out" | grep -qF 'sys1grep: file v1:removed.txt: ' || fail "#50 (owner decision 1): a <tree>'s glob pathspec reaches removed.txt: $out"
 reset
-eq "$(cd "$G" && $GS --chunk 1 --unit=sentence-by-jev -c -e '猫がいる' v1 v2 -- neko.txt | tr '\n' ' ')" "v1:neko.txt:2 v2:neko.txt:2 " "#50: --sentence=jev on a blob shared by two trees"
+eq "$(cd "$G" && $GS --chunk 1 --unit=sentence-by-jev -c -e '猫がいる' v1 v2 -- neko.txt | tr '\n' ' ')" "v1:neko.txt:2 v2:neko.txt:2 " "#50: --unit=sentence-by-jev on a blob shared by two trees"
 eq "$(stat count)" "2" "#50: ...also asks its break-judging once, not once per tree (one break request, one match request)"
 # a symlink and a submodule in a tree are left out, as in the working tree
 (cd "$G" && ln -s base.txt link.txt && git add link.txt && git update-index --add --cacheinfo 160000,"$(git rev-parse HEAD)",fakesub && git commit -q -m v3 && git tag v3)
@@ -642,7 +642,7 @@ grep -q 'stands for N matching lines' "$tmp/sum.argv" || fail "--summarize --ded
 $S --summarize -e cat "$tmp/dd.txt" >/dev/null; grep -q 'like it' "$tmp/sum.argv" && fail "--summarize without --dedup: no ×N in the prompt"
 printf 'The cat 1 sat. A dog ran.\nThe cat 2 sat.\nThe cat 3\nsat.\n' >"$tmp/dds.txt"
 $S --summarize --dedup --unit=sentence-by-rule -n -e cat "$tmp/dds.txt" >/dev/null
-eq "$(tr '\n' '|' <"$tmp/sum.in")" "1:The cat 1 sat. A dog ran.   (×3 like it)|" "--summarize --dedup --sentence: one representative for sentences across lines"
+eq "$(tr '\n' '|' <"$tmp/sum.in")" "1:The cat 1 sat. A dog ran.   (×3 like it)|" "--summarize --dedup --unit=sentence-by-*: one representative for sentences across lines"
 node -e "for (let i = 0; i < 3000; i++) console.log('cat ' + 'x'.repeat(80) + ' ' + i)" >"$tmp/big.txt"
 rm -f "$tmp/sum.in"; code 2 "--summarize over 200 KB" -- $S --summarize -e '/cat/' "$tmp/big.txt"
 [ ! -e "$tmp/sum.in" ] || fail "--summarize over 200 KB runs the summarizer"
@@ -701,11 +701,11 @@ $J --dry-run --max-cost 0 -e cat "$F" | grep -q 'over --max-cost 0, would ask' |
 reset; eq "$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS='--max-columns 3000' node ../sys1grep.mjs -n -e cat "$tmp/long.txt" | nums)" "1 2 " "--max-columns in SYS1GREP_OPTS"
 reset; code 1 "--max-filesize, --max-cost and -y in SYS1GREP_OPTS take effect" -- $E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS='--max-filesize 10K --max-cost 0 -y' node ../sys1grep.mjs -e cat "$tmp/huge.txt" </dev/null
 
-# #58 review (blocker) / #125 review (item 2): --sentence=jev's judgeBreaks must never read an oversized file's
+# #58 review (blocker) / #125 review (item 2): --unit=sentence-by-jev's judgeBreaks must never read an oversized file's
 # content; since the file is now skipped before it is ever opened, this holds regardless of ordering
 node -e "for (let i = 0; i < 50; i++) console.log('これはとても長い日本語の文章であり改行があいまいです' + i)" >"$tmp/cjk.txt"
 reset; $J --unit=sentence-by-jev --max-filesize 1K -e cat "$tmp/cjk.txt" >/dev/null 2>&1 || true
-eq "$(stat count)" "0" "an oversized file is skipped before --sentence=jev's judgeBreaks ever reads it"
+eq "$(stat count)" "0" "an oversized file is skipped before --unit=sentence-by-jev's judgeBreaks ever reads it"
 $J --unit=sentence-by-jev --max-filesize 1K -e cat "$tmp/cjk.txt" 2>&1 >/dev/null | grep -q -- "$tmp/cjk.txt: skipped, .* is over --max-filesize=1K" || fail "the skip message names the CJK file too"
 
 # an oversized file under -r / auto-scope: the scope-narrowing request (meaning text only) still goes out, but the
