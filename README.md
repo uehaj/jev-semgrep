@@ -4,6 +4,8 @@
 
 Background and design notes (Japanese): [Jevのキラーアプリ、「意味で探す grep」を作った](https://zenn.dev/uehaj/articles/jev-semgrep-grep-by-meaning) on Zenn.
 
+> **Renamed from semgrep (0.5.0).** The name collided with the static-analysis tool [Semgrep](https://semgrep.dev/), so from 0.5.0 this is **sys1grep** (System 1 + grep): npm package `@uehaj/sys1grep` (was `@uehaj/semgrep`), commands `sys1grep` / `git sys1grep`, environment `SYS1GREP_*`, config `~/.config/sys1grep/.env`. The old `SEMGREP_*` names and `~/.config/semgrep/.env` still work for one minor release, each use printing a deprecation line; 1.0.0 drops them. Details: [CHANGELOG](CHANGELOG.md#renamed). The Zenn article's URL keeps its old slug.
+
 A grep that finds lines by **what they mean**, not by regular expressions.
 Matching is done by **Jev**, the System One model from [TypeSafe AI](https://typesafe.ai/).
 Jev does not generate text. It answers typed questions with probabilities, so for every line
@@ -14,7 +16,7 @@ and applies a threshold.
 ./sys1grep -n -e "customer is angry or frustrated" tickets.txt
 ```
 
-[![sys1grep demo: a Japanese meaning finds refund requests in six languages; "asking for a refund" vs "about a refund"; -Q finds the answer](docs/demo.svg)](https://uehaj.github.io/jev-semgrep/)
+[![sys1grep demo: a Japanese meaning finds refund requests in six languages; "asking for a refund" vs "about a refund"; -Q finds the answer](docs/demo.svg)](https://uehaj.github.io/sys1grep/)
 
 <sub>▶ Click the demo, or open <a href="https://uehaj.github.io/sys1grep/">uehaj.github.io/sys1grep</a>, for the full demo on the landing page.</sub>
 
