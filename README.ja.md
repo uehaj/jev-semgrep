@@ -13,7 +13,7 @@ Jev は文章を生成せず、typed な質問に確率だけを返すモデル�
 ./sys1grep -n -e "顧客が怒っている、または不満を持っている" tickets.txt
 ```
 
-[![sys1grep のデモ: 日本語の意味で 6 言語の返金要求を探す / 「返金について」と「返金を求めている」の違い / -Q で答えを探す](docs/demo.svg)](https://uehaj.github.io/sys1grep/)
+[![sys1grep のデモ: 日本語の意味で 6 言語の返金要求を探す / 「返金について」と「返金を求めている」の違い / -Q で答えを探す](docs/demo.svg)](https://uehaj.github.io/jev-semgrep/)
 
 <sub>▶ デモをクリックするか <a href="https://uehaj.github.io/sys1grep/">uehaj.github.io/sys1grep</a> を開くと、ランディングページで全編のデモが見られます。</sub>
 
