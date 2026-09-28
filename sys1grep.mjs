@@ -792,7 +792,7 @@ if (trace) {
     thresholds, `--chunk ${chunkLines}${optTag('chunk')}`, `-j ${opt.j}${optTag('j')}`,
     opt.unit.startsWith('sentence') && `--unit=${opt.unit}${optTag('unit')}`,
     opt.dedup && `--dedup${optTag('dedup')}`,
-    opt.z && `-z${opt.gitlog && optSrc('z') === null ? ' (-g)' : optTag('z') || optTag('unit')}`,
+    opt.z && `-z${opt.gitlog && optSrc('z') === null ? ' (-g)' : optTag(optSrc('z') !== null ? 'z' : 'unit')}`,
     `scope ${opt['auto-scope'] ? 'on' : 'off'}${optTag('auto-scope')}`,
     ...(opt.include ?? []).map(g => `--include=${g}`), ...(opt.exclude ?? []).map(g => `--exclude=${g}`),
     opt['changed-within'] && `--changed-within=${opt['changed-within']}`,
