@@ -14,7 +14,7 @@ and applies a threshold.
 ./sys1grep -n -e "customer is angry or frustrated" tickets.txt
 ```
 
-[![sys1grep demo: a Japanese meaning finds refund requests in six languages; "asking for a refund" vs "about a refund"; -Q finds the answer](docs/demo.svg)](https://uehaj.github.io/sys1grep/)
+[![sys1grep demo: a Japanese meaning finds refund requests in six languages; "asking for a refund" vs "about a refund"; -Q finds the answer](docs/demo.svg)](https://uehaj.github.io/jev-semgrep/)
 
 <sub>▶ Click the demo, or open <a href="https://uehaj.github.io/sys1grep/">uehaj.github.io/sys1grep</a>, for the full demo on the landing page.</sub>
 
