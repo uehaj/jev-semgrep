@@ -917,7 +917,7 @@ reset; out=$(asking "$JI -i --max-cost 0 -l -e cat '$F'" n)
 eq "$(stat count)" "0" "-i with the guard's verdict, n: nothing sent"
 echo "$out" | grep -q '^sys1grep: options: .*--max-cost 0' || fail "-i shows the limits in the options line: $out"
 echo "$out" | grep -q 'over --max-cost 0, would ask' || fail "-i shows the cost guard's verdict: $out"
-reset; out=$(onpty "$JI -i --max-filesize 10K -l -e cat '$tmp/huge.txt'; echo rc=\$?")
+reset; out=$(onpty "$JI -i --max-filesize 10K -l -e cat '$tmp/huge.txt'; echo rc=\$?" </dev/null)
 echo "$out" | grep -q -- "$tmp/huge.txt: skipped, .* is over --max-filesize=10K" || fail "-i shows the file being skipped, not a guard question: $out"
 case "$out" in *'[y/N]'*) fail "-i asks nothing more once the only target is skipped: $out" ;; esac
 echo "$out" | grep -q 'rc=1' || fail "-i on a skipped-only run: exit 1 (no match), not asked: $out"
