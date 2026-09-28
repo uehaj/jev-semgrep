@@ -607,8 +607,8 @@ A function runs from a funcname line to the line before the next one, as `git gr
 before the first funcname line are one unit, and blank lines at a function's end are not printed. The
 funcname lines are git's: the `diff=<driver>` attribute in `.gitattributes`, then `diff.<driver>.xfuncname`
 in git config. Without one, sys1grep has its own rule for JavaScript/TypeScript (a top-level `function`,
-`class`, or `const` / `let` / `var` bound to a function) and Python (`def` / `class`, nested ones too), and
-otherwise uses git's default: a line starting with a letter, `_` or `$`. git's own builtin drivers
+`class`, or `const` / `let` / `var` bound to a function) and Python (`def` / `class`, nested ones too); a decorator line (`@retry`) starts
+the function it decorates. Otherwise it uses git's default: a line starting with a letter, `_` or `$`. git's own builtin drivers
 (`diff=python` and so on) are not read, so a driver without an `xfuncname` falls back the same way:
 
 ```sh

@@ -1467,12 +1467,16 @@ if (opt.unit === 'sentence-by-jev') {
 // by driver or extension, else git's own default: a line starting with a letter, _ or $.
 // ponytail: only JavaScript and Python have a rule of their own; add one here, or diff=<driver> and xfuncname
 const FUNCNAMES = {
-  javascript: [{ re: /^(export\s+)?(default\s+)?(async\s+)?(function\b|class\b|(const|let|var)\s+[\w$]+\s*=\s*(async\b|function\b|\(|[\w$]+\s*=>))/ }],
-  python: [{ re: /^[ \t]*(async[ \t]+)?(def|class)[ \t]/ }],
+  javascript: [{ re: /^@|^(export\s+)?(default\s+)?(async\s+)?(function\b|class\b|(const|let|var)\s+[\w$]+\b[^=]*(=>[^=]*)*=\s*(async\b|function\b|\(|[\w$]+\s*=>))/ }], // a type annotation may hold =>
+  python: [{ re: /^[ \t]*(@|(async[ \t]+)?(def|class)[ \t])/ }], // a decorator starts its function
 };
 const DRIVER_OF_EXT = { js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript', ts: 'javascript', mts: 'javascript', cts: 'javascript', tsx: 'javascript', py: 'python' };
 const DEFAULT_FUNCNAME = [{ re: /^[A-Za-z_$]/ }];
-const POSIX = { alpha: 'A-Za-z', digit: '0-9', alnum: 'A-Za-z0-9', upper: 'A-Z', lower: 'a-z', space: '\\s', blank: ' \\t', xdigit: '0-9A-Fa-f', punct: '!-\\/:-@\\[-`{-~' };
+const POSIX = { alpha: 'A-Za-z', digit: '0-9', alnum: 'A-Za-z0-9', upper: 'A-Z', lower: 'a-z', space: '\\s', blank: ' \\t', xdigit: '0-9A-Fa-f', punct: '!-\\/:-@\\[-`{-~', print: ' -~', graph: '!-~', cntrl: '\\x00-\\x1f\\x7f' };
+// funcname is a BRE: \( \) \{ \} \| \+ \? are its operators and the bare characters literal, the other way round from ERE.
+// ponytail: the swap ignores bracket expressions, where a BRE's ( or { would wrongly gain a backslash
+const fromBre = src => src.replace(/\\?[(){}|+?]/g, c => (c.length === 2 ? c[1] : `\\${c}`));
+const fromPosix = src => src.replace(/\[:(\w+):\]/g, (m, c) => { if (!POSIX[c]) throw new Error(`unknown class [:${c}:]`); return POSIX[c]; });
 const isFuncname = pats => line => { for (const { not, re } of pats) if (re.test(line)) return !not; return false; };
 const funcnamesOf = new Map(); // file -> patterns
 if (opt.unit === 'function') {
@@ -1482,23 +1486,28 @@ if (opt.unit === 'function') {
     const [, driver, x, src] = /^diff\.(.*)\.(x?)funcname\n([\s\S]*)$/.exec(kv) ?? [];
     if (driver === undefined || (configured.has(driver) && !x)) continue; // xfuncname wins over funcname
     try {
-      configured.set(driver, src.split('\n').filter(Boolean).map(l => ({ not: l.startsWith('!'), re: new RegExp(l.replace(/^!/, '').replace(/\[:(\w+):\]/g, (m, c) => POSIX[c] ?? m)) })));
+      configured.set(driver, src.split('\n').filter(Boolean).map(l => ({ not: l.startsWith('!'), re: new RegExp(fromPosix((x ? String : fromBre)(l.replace(/^!/, '')))) })));
     } catch (e) { console.error(`sys1grep: diff.${safe(driver)}.${x}funcname: ${safe(e.message)}; using sys1grep's own rule`); }
   }
   // A <tree>:path label is looked up by its path; stdin has none. Outside a repository every file has no attribute.
   const files = [...read.keys()].filter(f => f !== '-');
   const pathOf = f => { const t = trees.find(t => f.startsWith(`${t}:`)); return t ? f.slice(t.length + 1) : f; };
-  const attrs = git(['check-attr', '-z', '--stdin', 'diff'], files.map(pathOf).join('\0')).split('\0');
+  // One call for all; git stops at a path outside the repository, and then each file is asked from its own directory.
+  // ponytail: one git per file in that case; group by repository if many files outside it get slow
+  let attrs = git(['check-attr', '-z', '--stdin', 'diff'], files.map(pathOf).join('\0')).split('\0');
+  if (attrs.length < files.length * 3) attrs = files.flatMap(f => git(['-C', dirname(resolve(pathOf(f))), 'check-attr', '-z', 'diff', '--', resolve(pathOf(f))]).split('\0').slice(0, 3).concat(['', '', '']).slice(0, 3));
   files.forEach((f, i) => {
-    const v = attrs[i * 3 + 2], driver = v && !['unspecified', 'set', 'unset'].includes(v) ? v : DRIVER_OF_EXT[/\.(\w+)$/.exec(pathOf(f))?.[1]];
-    funcnamesOf.set(f, configured.get(driver) ?? FUNCNAMES[driver] ?? DEFAULT_FUNCNAME);
+    const v = attrs[i * 3 + 2], driver = v && !['unspecified', 'set', 'unset'].includes(v) ? v : undefined;
+    const ext = DRIVER_OF_EXT[/\.(\w+)$/.exec(pathOf(f))?.[1]]; // a driver with no rule of either kind falls back to the extension
+    funcnamesOf.set(f, configured.get(driver) ?? FUNCNAMES[driver] ?? FUNCNAMES[ext] ?? DEFAULT_FUNCNAME);
   });
 }
 // lines -> [{ text, spans }], one per function; a span covers a whole line, as toSentences' spans do part of one.
 const toFunctions = (lines, isName) => {
   const out = [];
   lines.forEach((line, i) => {
-    if (!out.length || isName(line)) out.push({ lines: [], spans: [] });
+    // a decorator (Python, TypeScript) or annotation line starts its function; the def or class after it continues it
+    if (!out.length || (isName(line) && !/^\s*@/.test(lines[i - 1]))) out.push({ lines: [], spans: [] });
     out.at(-1).lines.push(line);
     out.at(-1).spans.push([i + 1, 0, line.length]);
   });
@@ -1613,12 +1622,13 @@ const templateKey = (text, kept, fold) => {
 // other labels holding it share its answers (the same Map, keyed by blob id + line number, as --dedup shares
 // a template's below). This holds even without --dedup, since identical content gives identical questions.
 let sent = lines;
+const rules = [], ruleId = file => (opt.unit !== 'function' ? '' : (rules.includes(funcnamesOf.get(file)) || rules.push(funcnamesOf.get(file)), rules.indexOf(funcnamesOf.get(file))));
 if (blobOfLabel.size) {
   const rep = new Map(), out = [];
   for (const l of sent) {
     const blob = blobOfLabel.get(l.file);
     if (blob === undefined) { out.push(l); continue; } // a working-tree / untracked / stdin line: nothing shared
-    const key = `${blob}\0${l.no}`;
+    const key = `${blob}\0${l.no}\0${ruleId(l.file)}`; // --unit=function: the same blob can split differently by name
     if (rep.has(key)) asksByUnit.set(l, asksByUnit.get(rep.get(key)));
     else { rep.set(key, l); out.push(l); }
   }
@@ -1807,7 +1817,7 @@ const EOL = opt.gitlog ? '\n' : summarizer && opt.z ? '\n\n' : SEP; // -g: each 
 // --summarize --dedup (#98): a representative stands for its template, as it did for Jev: members share its answers
 // (the same Map), so each Map is piped once, with how many matching units it stands for: sentences, not the lines
 // they touch, so a sentence over two lines counts once.
-const likeIt = new Map(), pipedUnits = new Set(); // answer Map -> Set of the matching units sharing it
+const likeIt = new Map(), pipedUnits = new Map(); // answer Map -> Set of the matching units sharing it; answer Map -> the unit piped for it
 if (summarizer && opt.dedup) for (const h of hits.values()) for (const p of h.values()) {
   const g = asksByUnit.get(p);
   likeIt.set(g, (likeIt.get(g) ?? new Set()).add(p));
@@ -1825,8 +1835,10 @@ for (const file of opt.quiet || dry ? [] : targets) {
   let last = 0; // last line number already printed for this file
   for (const no of [...h.keys()].sort((a, b) => a - b)) {
     const group = likeIt.size ? asksByUnit.get(h.get(no)) : null;
-    if (group && pipedUnits.has(group)) continue;
-    pipedUnits.add(group);
+    // the representative's other lines (a sentence or function over several) still pipe; other members do not
+    const firstLine = !pipedUnits.has(group);
+    if (group && !firstLine && pipedUnits.get(group) !== h.get(no)) continue;
+    pipedUnits.set(group, h.get(no));
     const from = Math.max(no - before, last + 1), to = Math.min(no + after, src.length);
     if ((after || before) && lastPrinted && (lastPrinted[0] !== file || from > last + 1)) write(`${paint(36, '--')}\n`);
     for (let k = from; k <= to; k++) {
@@ -1837,7 +1849,7 @@ for (const file of opt.quiet || dry ? [] : targets) {
       const text = src[k - 1], sentences = ranges.get(file)?.get(k);
       const matches = !p ? [] : sentences ? sentences.flatMap(([a, b, s]) => regexRanges(text, s, a, b)) : regexRanges(text, p);
       // Only data records carry the NUL terminator, as in grep -z; file names and counts stay on newlines.
-      const n = p && group && k === no ? likeIt.get(group).size : 0, like = n > 1 ? `   (×${n} like it)` : '';
+      const n = p && group && k === no && firstLine ? likeIt.get(group).size : 0, like = n > 1 ? `   (×${n} like it)` : '';
       if (partsOnly && matches.length) {
         let end = -1; // a match overlapping the last one printed is skipped; a skipped one does not hide later ones
         for (const [a, b] of matches) if (a >= end) { write(prefix + paint('01;31', text.slice(a, b)) + tail + like + EOL); end = b; }

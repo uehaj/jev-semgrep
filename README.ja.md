@@ -590,7 +590,7 @@ src/net.js:8:}
 関数は、関数名の行から次の関数名の行の前までです（`git grep -W` と同じ）。最初の関数名の行より前の行は 1 つの単位に
 なり、関数の末尾の空行は出力しません。関数名の行は git と同じく、`.gitattributes` の `diff=<driver>` 属性と、git config の
 `diff.<driver>.xfuncname` で決めます。無ければ、JavaScript/TypeScript（トップレベルの `function`・`class`、関数を
-代入する `const` / `let` / `var`）と Python（入れ子も含む `def` / `class`）は sys1grep の規則を使い、それ以外は git の既定
+代入する `const` / `let` / `var`）と Python（入れ子も含む `def` / `class`）は sys1grep の規則を使い（デコレータの行 `@retry` から関数が始まる）、それ以外は git の既定
 （英字・`_`・`$` で始まる行）を使います。git 組み込みのドライバ（`diff=python` など）は読まないので、`xfuncname` の無い
 ドライバも同じように扱います。
 
