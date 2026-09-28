@@ -48,7 +48,7 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   at the limit, so an oversized one is skipped without being inflated in full.
 - `--verbose` / `--dry-run` print the settings the search ran with, before the per-file lines: the endpoint and
   model, the key (the variable or option name only, never its value), `SYS1GREP_OPTS` (when set), the effective
-  thresholds / `--chunk` / `-j` / `--sentence` / `--dedup` / `-z` / scope on-or-off / `--include` / `--exclude` /
+  thresholds / `--chunk` / `-j` / `--unit` / `--dedup` / `-z` / scope on-or-off / `--include` / `--exclude` /
   `--changed-within` / #58's `-M` / `--max-filesize` / `--max-cost` / `-y`, and, with `--summarize`, its TOOL and model (the TOOL's own default when unset), the key of a URL TOOL (by name) and whether `--summarize-prompt` is set. Each is marked with its source when it did not
   come from the command line: `(default)`, `(SYS1GREP_OPTS)`, `(ENV_NAME)`, or `(ENV_NAME, ~/.config/sys1grep/.env)`.
   `-i`'s preview shows the same lines (#90).
@@ -92,7 +92,7 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   and never when stderr is not a terminal, so scripts see exactly what they saw before.
 - On a terminal, a regex term's matches are in grep's match color (bold red): every match on the line, for the terms
   that held, never a negated regex.
-- `-o` without `--sentence` prints each regex match on a line of its own, as `grep -o`, with no context. A line only
+- `-o` without `--unit=sentence-by-*` prints each regex match on a line of its own, as `grep -o`, with no context. A line only
   meanings matched prints whole. Before, `-o` without `--sentence` was ignored.
 - The `--dry-run` summary line (also shown by `-i`) estimates the input tokens and, for TypeSafe itself, the price:
   `…, 2315 chars, ~3178 input tokens, ~$0.000133; nothing sent`. The estimate is 650 tokens a request plus 0.21 a
@@ -113,7 +113,11 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   candidates too. One git process per repository and question.
 
 ### Changed
-- `--sentence` colors the matching sentence bold yellow instead of bold red, so a regex match inside it stands out.
+- `--unit=line|zero|sentence-by-jev|sentence-by-rule` chooses the unit of judgement (#140). `--sentence` is gone:
+  `--sentence` / `--sentence=jev` is now `--unit=sentence-by-jev`, `--sentence=rules` is `--unit=sentence-by-rule`.
+  `-z` / `--null-data` stay, as `--unit=zero`, and still combine with the sentence units to split each record into
+  sentences.
+- `--unit=sentence-by-*` colors the matching sentence bold yellow instead of bold red, so a regex match inside it stands out.
 
 ### Renamed
 `semgrep` collided with the trademarked static-analysis tool [Semgrep](https://semgrep.dev/) (#93).

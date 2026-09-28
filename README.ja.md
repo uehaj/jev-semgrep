@@ -122,8 +122,7 @@ top-k か質問ごとの閾値調整が要ります。また索引を作らず�
 その項の意味を尋ねられるので、意味の前に安い正規表現を置くと、費用も待ち時間も下がります。行が送られるのは、
 どれかの項の正規表現がすべて当たったときだけです（正規表現の無い項はどの行にも当たる扱い）。そのため
 `-e '/re/' -a A -e B` では、`re` を含まない行も送られ、`B` だけを尋ねられます。正規表現項だけの式は何も
-送りません。ただし `--sentence`（既定の `=jev`）は折り返しの切れ目を Jev に尋ねるので、送らずに済ませたい
-ときは `--sentence=rules` を使います。`/…/flags` の形をしていないものは今まで通り意味です。`-e '/etc 以下のファイルを変更している'`
+送りません。`--unit=sentence-by-jev` でも、そのときは折り返しのつなぎ方を規則だけで決めます。`/…/flags` の形をしていないものは今まで通り意味です。`-e '/etc 以下のファイルを変更している'`
 （閉じる `/` が無い）は影響を受けません。本当に `/` で始まり `/` で終わる意味は、正規表現と誤認されない
 よう先頭にスペースを置けます。
 
@@ -517,15 +516,15 @@ $ git log -z --format='%h %s %b' | ./sys1grep -z -n -e "ユーザーに見える
 ファイル名 (`-l`) と件数 (`-c`) は grep と同じく改行のままです。`-z` のとき `-n` はレコード番号、
 `-A` / `-B` / `-C` は前後のレコード数、`--chunk` は 1 リクエストのレコード数を数えます。
 
-### 1 文ずつ判定する (`--sentence`)
+### 1 文ずつ判定する (`--unit=sentence-by-*`)
 
-`--sentence` を付けると、行ではなく文ごとに判定します。出力は grep と同じく行のままです。当たった文がかかる
+`--unit=sentence-by-jev`（または後述の `sentence-by-rule`）を付けると、行ではなく文ごとに判定します。出力は grep と同じく行のままです。当たった文がかかる
 行をすべて出し、端末では文の部分を太字の黄で強調します（その中の正規表現の一致は grep と同じ太字の赤）。文に分ける前に折り返した行をつなぐので、
 複数行にまたがる文も 1 文として判定します。[`tests/prose.txt`](tests/prose.txt) には、折り返した英語と日本語の
 段落が入っています。
 
 ```sh
-$ ./sys1grep -n --sentence -e "the author admits they made a mistake" tests/prose.txt
+$ ./sys1grep -n --unit=sentence-by-jev -e "the author admits they made a mistake" tests/prose.txt
 1:I should have checked the input
 2:before shipping, and that was my
 3:mistake. Next time I will add a test
@@ -537,14 +536,14 @@ $ ./sys1grep -n --sentence -e "the author admits they made a mistake" tests/pros
 端末で意味を 2 つ渡し、`-C 3` で前後も出すと、文がどこで始まりどこで終わるかが色で分かります。3 行目と 9 行目は、当たった文の
 終わりまでだけ色が付き、4〜7 行目は文脈行（`-`）です:
 
-![--sentence -C 3 --color: 当たった文が太字の黄になる。3 行目は mistake. まで、9 行目は 返金してほしいです。 まで。4〜7 行目は文脈行](docs/sentence.svg)
+![--unit=sentence-by-jev -C 3 --color: 当たった文が太字の黄になる。3 行目は mistake. まで、9 行目は 返金してほしいです。 まで。4〜7 行目は文脈行](docs/sentence.svg)
 
 `-o` を付けると、当たった文だけを 1 行ずつ出します。`grep -o` が一致した部分だけを出すのと同じです。
 `-n` は文が始まる行の番号になります。日本語は空白を入れずにつなぎます。単語の間に空白を置かない
 中国語・タイ語・ラオ語・クメール語・ミャンマー語・チベット語も同様です。
 
 ```sh
-$ ./sys1grep -n -o --sentence -e "the author admits they made a mistake" -e "customer is asking for a refund" tests/prose.txt
+$ ./sys1grep -n -o --unit=sentence-by-jev -e "the author admits they made a mistake" -e "customer is asking for a refund" tests/prose.txt
 1:I should have checked the input before shipping, and that was my mistake.
 8:先週買った掃除機が初日から動かないので返金してほしいです。
 ```
@@ -552,19 +551,19 @@ $ ./sys1grep -n -o --sentence -e "the author admits they made a mistake" -e "cus
 `-o` なしでは、`-c` と `-A` / `-B` / `-C` はいつもどおり行で数えます。`-o` 付きでは文で数えます。
 `-z` と併用すると、レコードごとに文に分け、当たったレコードをまるごと出します。
 
-Jev は長い行の中からでも当たる文を自分で見つけるので、判定の精度のために `--sentence` を使う必要はありません。
+Jev は長い行の中からでも当たる文を自分で見つけるので、判定の精度のために `--unit=sentence-by-jev` を使う必要はありません。
 どの文が当たったかを見たいとき、`-o` で文そのものが欲しいとき、AND を 1 つの文の中で成り立たせたいときに
 使います。式は文ごとに評価されます。そのため、`-v X` だけの式では「X でない文を 1 つでも含む行」がすべて出ます。
-行全体として X でないものを探すなら、`--sentence` を付けずに使います。
+行全体として X でないものを探すなら、`--unit` を `line` のままにします。
 
 日本語や中国語では、チャットの発言、問い合わせ、メモの 1 行など、`。` で終わらない 1 行 1 件のデータがよくあります。
-これをつなぐと、別々の項目が 1 つの「文」になってしまいます。そこで既定（`--sentence`、`--sentence=jev` と同じ）では、
+これをつなぐと、別々の項目が 1 つの「文」になってしまいます。そこで `--unit=sentence-by-jev` では、
 単語の間に空白を置かない文字に接する、句点の無い改行について、Jev に「この改行は文や項目の終わりか、文の途中の
 折り返しか」を聞きます。30 行を 1 リクエストにまとめて改行ごとに yes/no を聞き、0.7 以上なら行をつなぎません。
-[`tests/corpus.txt`](tests/corpus.txt) では、これで日本語の問い合わせ 4 件が 1 件ずつに分かれ、`--sentence` でも
+[`tests/corpus.txt`](tests/corpus.txt) では、これで日本語の問い合わせ 4 件が 1 件ずつに分かれ、`--unit=sentence-by-jev` でも
 行単位の検索と同じ返金の要求（14 行目と 18 行目）が見つかります。規則だけでは問い合わせがつながり、18 行目を
 取りこぼしていました。追加のリクエストの費用は、意味を 1 つ増やすのと同じくらいです。避けたいときは
-`--sentence=rules` を使います。英語どうしの改行は聞きません。つないでも空白が残り、ピリオドで文が切れるためです。
+`--unit=sentence-by-rule` を使います。英語どうしの改行は聞きません。つないでも空白が残り、ピリオドで文が切れるためです。
 
 改行が文の途中になりえないところでは、行をつなぎません。空行、括弧や `;` に接する改行（JSON やコード）、
 `-` `*` `+` `#` `>` `"` や数字で始まる行（箇条書き、見出し、引用、番号、日時）の前です。そのため JSONL は
@@ -595,7 +594,7 @@ Jev に聞き、その種類はまとめません（上の 2 リクエストの�
 値を何も残さずにまとめた場合の実測では、43,071 行のシステムログが 550 テンプレート（バイト数で 1.2%）に、
 `install.log` が 21.1% に縮みました。Claude Code のトランスクリプト（jsonl）は 56.8% までしか縮みません。
 機械が吐くログ向けの機能で、散文には共通の骨格がなく、時刻を読む意味ではほとんど縮みません。
-`-z` や `--sentence` では、行ではなくレコードや文をまとめます。
+`-z` や `--unit=sentence-by-*` では、行ではなくレコードや文をまとめます。
 
 検索後の集計行には、まとめたことで浮いた分が `(2 folded by --dedup, ~235 input tokens / ~$0.000010 saved, 21%)`
 のように出ます（上の例）。まとめた行を別のリクエストとして送った場合の推定値から、値の種類を聞いたリクエストの費用を引いた
@@ -736,9 +735,11 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
                判定も変わる
   -j N         同時リクエスト数 (既定 8)
   -n           行番号を付ける
-  -z, --null-data  行ではなく NUL 終端のレコードごとに判定し、NUL 終端で出力する (前述の「複数行にまたがるレコード」を参照)
-  --sentence[=HOW] 行ではなく文ごとに判定する。HOW は jev (既定) か rules (前述の「1 文ずつ判定する」を参照)
-  -o           --sentence と併用し、当たった文だけを出す
+  --unit=UNIT  判定の単位: line (既定)、zero、sentence-by-jev、sentence-by-rule
+  -z, --null-data  --unit=zero。行ではなく NUL 終端のレコードごとに判定し、NUL 終端で出力する (前述の「複数行にまたがるレコード」を参照)。
+               --unit=sentence-by-* と併用すると、レコードごとに文に分ける
+  --unit=sentence-by-jev|sentence-by-rule  行ではなく文ごとに判定する (前述の「1 文ずつ判定する」を参照)
+  -o           --unit=sentence-by-* と併用し、当たった文だけを出す
   -p           各意味の確率を行末に表示 (閾値調整用)
   --dry-run    何も送らず、この検索が使う設定 (コマンドラインでなければその出どころも)・検索するファイル・
                各リクエストとその質問を表示
@@ -837,14 +838,14 @@ fmt -w 100000 essay.txt | sys1grep -n -e "the author admits they made a mistake"
 
 出力の 1 行が 1 段落になり、`-n` は元のファイルではなく `fmt` の出力の行番号になります。`fmt` は日本語の行をつなぐとき
 間に空白を入れますが、Jev の判定には響きません。折り返しをまたぐ文を判定したいだけなら、どちらも要りません。
-`--sentence` が行をつないで文に分けます。
+`--unit=sentence-by-jev` が行をつないで文に分けます。
 
 ### 会話記録の JSONL を、発言 1 件ずつ判定したい
 
 `jq` で本文を取り出し、発言ごとに NUL で終えてから、`-z` でレコードとして判定します。
 
 ```sh
-jq -j '.content + "\u0000"' chat.jsonl | sys1grep -z -n --sentence -e "the customer is asking for a refund" | tr '\0' '\n'
+jq -j '.content + "\u0000"' chat.jsonl | sys1grep -z -n --unit=sentence-by-jev -e "the customer is asking for a refund" | tr '\0' '\n'
 ```
 
 `.content` は、本文が入っている場所に合わせて書き換えてください。発言 1 件が 1 レコードになるので、文が次の話者の

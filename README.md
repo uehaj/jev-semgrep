@@ -134,8 +134,7 @@ as a plain regex, with no request at all. It prefilters its AND term: only the l
 ever ask that term's meanings, so a cheap regex in front of a meaning cuts both the bill and the wait. A line is sent
 only if some term's regexes all hold for it (a term with no regex holds for every line), so with
 `-e '/re/' -a A -e B` a line without `re` is still sent, asked `B` only. A query of regex terms alone
-sends nothing, except that `--sentence` (`=jev`, the default) still asks Jev where wrapped lines
-break; use `--sentence=rules` to stay offline. Anything that isn't shaped like `/…/flags` is still a meaning, so
+sends nothing, even with `--unit=sentence-by-jev`: the rules alone then decide where wrapped lines join. Anything that isn't shaped like `/…/flags` is still a meaning, so
 `-e '/etc 以下のファイルを変更している'` (no closing `/`) is unaffected; a meaning that really starts
 and ends with `/` can be written with a leading space to dodge the regex reading.
 
@@ -531,15 +530,15 @@ Matching records are printed NUL-terminated too, so pipe them through `tr '\0' '
 File names (`-l`) and counts (`-c`) stay on newlines, as they do in grep. With `-z`, `-n` numbers records,
 `-A` / `-B` / `-C` count neighbouring records, and `--chunk` counts records per request.
 
-### One sentence at a time (`--sentence`)
+### One sentence at a time (`--unit=sentence-by-*`)
 
-`--sentence` judges each sentence instead of each line. The output is still lines, as in grep: every line a
+`--unit=sentence-by-jev` (or `sentence-by-rule`, below) judges each sentence instead of each line. The output is still lines, as in grep: every line a
 matching sentence touches is printed, and on a terminal the sentence itself is in bold yellow (a regex match inside it, in grep's bold red).
 Wrapped lines are joined before splitting, so a sentence that runs over several lines is judged as one.
 [`tests/prose.txt`](tests/prose.txt) wraps an English paragraph and a Japanese one:
 
 ```sh
-$ ./sys1grep -n --sentence -e "the author admits they made a mistake" tests/prose.txt
+$ ./sys1grep -n --unit=sentence-by-jev -e "the author admits they made a mistake" tests/prose.txt
 1:I should have checked the input
 2:before shipping, and that was my
 3:mistake. Next time I will add a test
@@ -551,14 +550,14 @@ The sentence starts on line 1 and ends at `mistake.` on line 3; only that part i
 On a terminal, with both meanings and `-C 3` for context, the colors show where each sentence starts and ends
 inside a line: lines 3 and 9 are colored only up to the end of the matching sentence, and lines 4-7 are context (`-`):
 
-![--sentence -C 3 --color: the matching sentences in bold yellow, up to mistake. on line 3 and 返金してほしいです。 on line 9; lines 4 to 7 as context](docs/sentence.svg)
+![--unit=sentence-by-jev -C 3 --color: the matching sentences in bold yellow, up to mistake. on line 3 and 返金してほしいです。 on line 9; lines 4 to 7 as context](docs/sentence.svg)
 
 `-o` prints only the matching sentences, one per line, as `grep -o` prints only the matching part.
 `-n` then gives the line where the sentence starts. Japanese is joined without a space, as are Chinese,
 Thai, Lao, Khmer, Myanmar and Tibetan, which do not put spaces between words:
 
 ```sh
-$ ./sys1grep -n -o --sentence -e "the author admits they made a mistake" -e "customer is asking for a refund" tests/prose.txt
+$ ./sys1grep -n -o --unit=sentence-by-jev -e "the author admits they made a mistake" -e "customer is asking for a refund" tests/prose.txt
 1:I should have checked the input before shipping, and that was my mistake.
 8:先週買った掃除機が初日から動かないので返金してほしいです。
 ```
@@ -566,20 +565,20 @@ $ ./sys1grep -n -o --sentence -e "the author admits they made a mistake" -e "cus
 Without `-o`, `-c` counts lines and `-A` / `-B` / `-C` count lines, as usual. With `-o` they count sentences.
 With `-z`, each record is split on its own and matching records are printed whole.
 
-Jev finds a matching sentence inside a long line on its own, so `--sentence` is not needed for accuracy.
+Jev finds a matching sentence inside a long line on its own, so `--unit=sentence-by-jev` is not needed for accuracy.
 Use it to see which sentence matched, to get the sentences with `-o`, and when AND should hold within one
 sentence: the expression is evaluated per sentence. For the same reason `-v X` alone prints every line
-with at least one sentence that is not X; to find lines that are not X as a whole, leave `--sentence` off.
+with at least one sentence that is not X; to find lines that are not X as a whole, leave `--unit` at `line`.
 
 Japanese and Chinese entries often end without `。`: a chat message, a support ticket, a memo line. Joining
-them would glue separate entries into one "sentence". So by default (`--sentence`, the same as
-`--sentence=jev`) sys1grep asks Jev about each unpunctuated break next to a script written without word
+them would glue separate entries into one "sentence". So with
+`--unit=sentence-by-jev` sys1grep asks Jev about each unpunctuated break next to a script written without word
 spaces: "does this line break end a sentence or entry, or is it a wrap inside a sentence?" It sends 30 lines
 per request with one yes/no per break, and keeps the lines apart when the answer is 0.7 or more. On
 [`tests/corpus.txt`](tests/corpus.txt) this keeps the four one-line Japanese tickets apart, so
-`--sentence` finds the same refund requests (lines 14 and 18) as a line-by-line search, where the rules alone
+`--unit=sentence-by-jev` finds the same refund requests (lines 14 and 18) as a line-by-line search, where the rules alone
 merged the tickets and missed line 18. The extra requests cost about as much as one more meaning; use
-`--sentence=rules` to skip them. Breaks between English lines are never asked: joining them keeps a space,
+`--unit=sentence-by-rule` to skip them. Breaks between English lines are never asked: joining them keeps a space,
 and the full stop still ends the sentence.
 
 Where a newline cannot be inside a sentence, lines are not joined: at a blank line, next to brackets or
@@ -612,7 +611,7 @@ could change a match, and those kinds are kept apart (one of the two requests ab
 Measured on real logs, with nothing kept: a 43,071-line system log folds into 550 templates (1.2% of the
 bytes), `install.log` to 21.1%, a Claude Code transcript (jsonl) only to 56.8%. It is for machine-generated
 logs; prose has no shared skeleton, and a meaning that reads a timestamp folds almost nothing. With `-z` or
-`--sentence` the records or sentences fold instead of lines.
+`--unit=sentence-by-*` the records or sentences fold instead of lines.
 
 After a search, the summary line says what the folding saved: `(2 folded by --dedup, ~235 input tokens /
 ~$0.000010 saved, 21%)` above. It estimates what the folded lines would have cost as requests of their own and subtracts
@@ -754,9 +753,11 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
                on ambiguous lines, not just speed
   -j N         concurrent requests (default 8)
   -n           print line numbers
-  -z, --null-data  judge NUL-terminated records instead of lines, and print them NUL-terminated (see "Records that span several lines" above)
-  --sentence[=HOW] judge each sentence instead of each line; HOW is jev (default) or rules (see "One sentence at a time" above)
-  -o           with --sentence, print only the matching sentences
+  --unit=UNIT  the unit of judgement: line (default), zero, sentence-by-jev or sentence-by-rule
+  -z, --null-data  --unit=zero: judge NUL-terminated records instead of lines, and print them NUL-terminated (see "Records that span several lines" above);
+               with --unit=sentence-by-*, each record is split into sentences
+  --unit=sentence-by-jev|sentence-by-rule  judge each sentence instead of each line (see "One sentence at a time" above)
+  -o           with --unit=sentence-by-*, print only the matching sentences
   -p           print each meaning's probability at the end of the line
   --dry-run    send nothing; print the settings the search would run with (and their source, when not the
                command line), each file searched and each request with its questions
@@ -860,14 +861,14 @@ fmt -w 100000 essay.txt | sys1grep -n -e "the author admits they made a mistake"
 
 Each output line is then a whole paragraph, and `-n` counts the lines of `fmt`'s output, not of the file.
 `fmt` puts a space where it joins two Japanese lines; Jev reads through it. To judge sentences across
-wrapped lines you need neither: `--sentence` already joins them.
+wrapped lines you need neither: `--unit=sentence-by-jev` already joins them.
 
 ### How do I search a JSONL chat log one message at a time?
 
 Take the text out with `jq` and end each message with NUL, then judge records with `-z`:
 
 ```sh
-jq -j '.content + "\u0000"' chat.jsonl | sys1grep -z -n --sentence -e "the customer is asking for a refund" | tr '\0' '\n'
+jq -j '.content + "\u0000"' chat.jsonl | sys1grep -z -n --unit=sentence-by-jev -e "the customer is asking for a refund" | tr '\0' '\n'
 ```
 
 Adjust `.content` to where your log keeps the text. Each message becomes one record, so a sentence never
