@@ -180,7 +180,8 @@ to the narrowest:
   its AND term's meanings. Blank lines are never sent. Only the first `-M`/`--max-columns` characters of a line
   (default 2000, 8000 with `-z`) are sent: it is still searched and judged, just not past that cutoff.
 - **How many times.** [`--dedup`](#one-line-per-template---dedup) judges one line per template: lines that
-  differ only in ids, numbers, times or paths share one answer.
+  differ only in ids, numbers, times or paths share one answer. `auto`/`always`/`never`, off by default for
+  now: a hint says when `--dedup=auto` would pay.
 - **Check before paying.** `--dry-run` sends nothing and prints the settings the search would run with, the
   files, how many lines each would send and every request with its questions. Its last line estimates the input
   tokens and, for TypeSafe itself, the price (`~3178 input tokens, ~$0.000133`; within about 10%). `-i` shows the
@@ -627,6 +628,19 @@ id or number in it. `--dedup` masks ids, hashes, numbers, dates and times, paths
 the result, sends one line per group and reuses its answer for the rest. What is sent is that line's
 original text, and every line is printed as itself:
 
+`--dedup` takes `auto`, `always` or `never`; a bare `--dedup` is `--dedup=always`. **Default is `never`, for
+now** (#143): `auto` is held back until real-run stats say it should be the default. Every run still
+estimates locally, before anything is sent, what folding every kind (the best case) would save, and prints
+one stderr hint when that is worth at least twice the cost of `--dedup`'s own question:
+
+```
+$ sys1grep -e "a request failed" app.log
+sys1grep: 2040 units fold to at most 31 templates; --dedup=auto would save ~68 requests (~44k tokens)
+```
+
+`--dedup=auto` asks and folds only when that estimate says it pays; a file that barely repeats sends every
+line, asking nothing extra. `--verbose` / `--dry-run` print the decision and its numbers for every value.
+
 ```sh
 $ ./sys1grep --dedup -n -e "a request failed" app.log
 1:worker request 3fa9c1e27b failed: connection reset
@@ -805,7 +819,8 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
   --max-cost=USD  price the input about to be sent; over it (default 1), ask to continue on the terminal; -y
                answers yes without asking; no terminal and the limit exceeded is exit 2, unchanged by -q
                (scripts pass -y); -i already asks unconditionally and earlier, so this does not ask again
-  --dedup      judge one line per template and reuse its answer for the rest (see "One line per template" above)
+  --dedup[=auto|always|never]  judge one line per template and reuse its answer for the rest (default never,
+               for now; see "One line per template" above)
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are
                green at or above the positive threshold, red below the negative one,

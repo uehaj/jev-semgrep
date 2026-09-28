@@ -115,8 +115,17 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 - Auto-scope from git (#46): in a repository a time goes by commits (uncommitted files by their mtime), and git
   states (uncommitted, staged, untracked, this branch, not pushed, mine) and the 30 most active authors are
   candidates too. One git process per repository and question.
+- `--dedup=auto` (#143): before anything is sent, `--dedup` locally estimates the best case (every kind
+  folded) and, when folding would save at least twice the cost of its own question, asks and folds; otherwise
+  it sends every unit, asking nothing extra. `--verbose` / `--dry-run` print the decision and its numbers
+  (units, templates, requests, tokens) for every `--dedup` value.
 
 ### Changed
+- `--dedup` takes `auto`, `always` or `never` (#143); a bare `--dedup` is `--dedup=always`, unchanged from
+  before. **Default is `never` for now**, kept off until real-run stats say `auto` should be the default; a
+  run that would have paid to fold prints one stderr hint naming `--dedup=auto` (not with `-q`, gated like the
+  summary line). `--dedup` no longer being a boolean flag, `--no-dedup` is now an error, like any other
+  string option's `--no-` form (`--no-level`, `--no-unit`).
 - `--unit=line|zero|sentence-by-jev|sentence-by-rule` chooses the unit of judgement (#140). `--sentence` is gone:
   `--sentence` / `--sentence=jev` is now `--unit=sentence-by-jev`, `--sentence=rules` is `--unit=sentence-by-rule`.
   `-z` / `--null-data` stay, as `--unit=zero`, and still combine with the sentence units to split each record into
