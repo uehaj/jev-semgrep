@@ -1467,7 +1467,7 @@ if (opt.unit === 'sentence-by-jev') {
 // by driver or extension, else git's own default: a line starting with a letter, _ or $.
 // ponytail: only JavaScript and Python have a rule of their own; add one here, or diff=<driver> and xfuncname
 const FUNCNAMES = {
-  javascript: [{ re: /^@|^(export\s+)?(default\s+)?(async\s+)?(function\b|class\b|(const|let|var)\s+[\w$]+\b[^=]*(=>[^=]*)*=\s*(async\b|function\b|\(|[\w$]+\s*=>))/ }], // a type annotation may hold =>
+  javascript: [{ re: /^@|^(export\s+)?(default\s+)?(async\s+)?(function\b|class\b|(const|let|var)\s+[\w$]+[^=]*(=>[^=]*)*=\s*(async\b|function\b|\(|[\w$]+\s*=>))/ }], // a type annotation may hold =>
   python: [{ re: /^[ \t]*(@|(async[ \t]+)?(def|class)[ \t])/ }], // a decorator starts its function
 };
 const DRIVER_OF_EXT = { js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript', ts: 'javascript', mts: 'javascript', cts: 'javascript', tsx: 'javascript', py: 'python' };
@@ -1506,8 +1506,9 @@ if (opt.unit === 'function') {
 const toFunctions = (lines, isName) => {
   const out = [];
   lines.forEach((line, i) => {
-    // a decorator (Python, TypeScript) or annotation line starts its function; the def or class after it continues it
-    if (!out.length || (isName(line) && !/^\s*@/.test(lines[i - 1]))) out.push({ lines: [], spans: [] });
+    // a decorator line (Python, TypeScript: a funcname line of their rules) starts its function; the def after it continues it
+    // ponytail: a decorator over several lines (@retry(\n times=3\n)) still splits from its def
+    if (!out.length || (isName(line) && !(/^\s*@/.test(lines[i - 1]) && isName(lines[i - 1])))) out.push({ lines: [], spans: [] });
     out.at(-1).lines.push(line);
     out.at(-1).spans.push([i + 1, 0, line.length]);
   });
