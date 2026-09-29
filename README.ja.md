@@ -4,7 +4,7 @@
 
 背景と設計の解説: [Jevのキラーアプリ、「意味で探す grep」を作った（Zenn）](https://zenn.dev/uehaj/articles/jev-semgrep-grep-by-meaning)
 
-> **semgrep から改名しました（0.5.0）。** 理由は 2 つです。1 つは、静的解析ツール [Semgrep](https://semgrep.dev/) の商標と名前が衝突すること。もう 1 つは、このツールがもともと Jev 専用ではなく、System 1 モデル全般を対象にしていることです。TypeSafe AI が Jev の後に出す、Jev の名を持たないモデルにも対応したいです :)。そこで 0.5.0 から **sys1grep**（System 1 + grep）になりました。npm パッケージは `@uehaj/sys1grep`（旧 `@uehaj/semgrep`）、コマンドは `sys1grep` / `git sys1grep`、環境変数は `SYS1GREP_*`、設定ファイルは `~/.config/sys1grep/.env` です。旧 `SEMGREP_*` と `~/.config/semgrep/.env` は 1 マイナーリリースの間は読み、使うたびに非推奨の 1 行を出します（1.0.0 で廃止）。詳細は [CHANGELOG](CHANGELOG.md#renamed)。Zenn 記事の URL は旧 slug のままです。
+> **semgrep から改名しました（0.5.0）。** 理由は 2 つです。1 つは、静的解析ツール [Semgrep](https://semgrep.dev/) の商標と名前が衝突すること。もう 1 つは、このツールがもともと Jev 専用ではなく、System 1 モデル全般を対象にしていることです。TypeSafe AI が Jev の後に Jev 以外の名前で出すかもしれないモデルにも対応したいです :)。そこで 0.5.0 から **sys1grep**（System 1 + grep）になりました。npm パッケージは `@uehaj/sys1grep`（旧 `@uehaj/semgrep`）、コマンドは `sys1grep` / `git sys1grep`、環境変数は `SYS1GREP_*`、設定ファイルは `~/.config/sys1grep/.env` です。旧 `SEMGREP_*` と `~/.config/semgrep/.env` は 1 マイナーリリースの間は読み、使うたびに非推奨の 1 行を出します（1.0.0 で廃止）。詳細は [CHANGELOG](CHANGELOG.md#renamed)。Zenn 記事の URL は旧 slug のままです。
 
 正規表現ではなく **意味** で行を探す grep です。
 判定には [TypeSafe AI](https://typesafe.ai/) の System One モデル **Jev** を使います。
