@@ -14,7 +14,8 @@ Run `npm run test:offline` after every change to `sys1grep.mjs`; run `npm test` 
 - The fake scores a line 0.9 when it contains the meaning verbatim, `N` when the line also carries `@N`, else 0.05.
   It understands the judging question (`Does line L000 match the meaning: "…"?`) and the auto-scope question
   (`Does the meaning "…" restrict its matches to …?`: 0.9 when the meaning carries `@s:KEY` for that question's
-  key, e.g. `@s:l_python`); change both together.
+  key, e.g. `@s:l_python`) and the rank question (`Is result R000 relevant to: …?`: `N` when the result carries
+  `@rN`, else 0.5); change them together.
 - `offline.sh` unsets the key variables and points `HOME` at a temp dir, so no real key reaches the fake.
 - Tune auto-scope (question wording, threshold) on `scope-corpus.tsv` only. Once you have tuned on
   `scope-holdout.tsv`, write a new holdout blind (without reading the code or the corpora).

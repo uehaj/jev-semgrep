@@ -745,6 +745,32 @@ node -e "for (let i = 0; i < 3000; i++) console.log('cat ' + [...String(i % 300)
 $S --summarize --dedup --chunk 100 -e cat "$tmp/bigdd.txt" 2>&1 >/dev/null | grep -q '^sys1grep: --summarize: 3000 matching lines as 300 representatives ([0-9]* KB) are more than the 200 KB to summarize; narrow the expression$' || fail "--summarize --dedup over 200 KB: $($S --summarize --dedup --chunk 100 -e cat "$tmp/bigdd.txt" 2>&1 >/dev/null)"
 $S --summarize --dry-run -e cat "$F" | grep -q '^sys1grep: summarize: .* (stops over 200 KB)$' || fail "--dry-run shows the limit"
 
+# --rank (#118): results best first under a numbered header. The fake scores a result @rN (else 0.5), a line @N.
+printf '%s\n' 'cat @0.6 @r0.9' dog dog dog 'cat @0.8 @r0.3' bird 'cat @0.7' >"$tmp/rk.txt"
+eq "$($J -n --rank=match -e cat "$tmp/rk.txt" | tr '\n' '|')" "1.|5:cat @0.8 @r0.3||2.|7:cat @0.7||3.|1:cat @0.6 @r0.9|" "--rank=match: by the match probability"
+reset; eq "$($J -n --rank -e cat "$tmp/rk.txt" | tr '\n' '|')" "1.|1:cat @0.6 @r0.9||2.|7:cat @0.7||3.|5:cat @0.8 @r0.3|" "--rank is --rank=jev: by Jev's answer on the result"
+eq "$(stat count) $(stat asked)" "2 10" "--rank=jev: one more request, one question per result"
+eq "$($J -n --rank=match -C1 -e cat "$tmp/rk.txt" | tr '\n' '|')" "1.|4-dog|5:cat @0.8 @r0.3|6-bird|7:cat @0.7||2.|1:cat @0.6 @r0.9|2-dog|" "--rank -C: touching context is one result, scored by its best match"
+eq "$($J -n --rank -C1 -e cat "$tmp/rk.txt" | tr '\n' '|')" "1.|1:cat @0.6 @r0.9|2-dog||2.|4-dog|5:cat @0.8 @r0.3|6-bird|7:cat @0.7|" "--rank=jev -C: the result's text is asked"
+eq "$($J --rank -p --color=never -e cat "$tmp/rk.txt" | head -2 | tr '\n' '|')" "$(printf '1. [0.90]|cat @0.6 @r0.9\t[0.60]|')" "--rank -p: the score on the header"
+cp "$tmp/rk.txt" "$tmp/rk2.txt"; printf 'cat @r0.95\n' >>"$tmp/rk2.txt"
+eq "$($J --rank -e cat "$tmp/rk.txt" "$tmp/rk2.txt" | head -2 | tr '\n' '|')" "1. $tmp/rk2.txt|$tmp/rk2.txt:cat @r0.95|" "--rank: the file on the header with several"
+eq "$($J -l --rank -e cat "$tmp/rk.txt" "$tmp/rk2.txt" | tr '\n' ' ')" "$tmp/rk2.txt $tmp/rk.txt " "-l --rank: files by their best result"
+$J --verbose --rank -e cat -v dog -Q owl "$tmp/rk.txt" 2>&1 >/dev/null | grep -qF 'Is result R000 relevant to: "cat", or answers to "owl"?' || fail "--rank asks about the positive meanings: $($J --verbose --rank -e cat -v dog -Q owl "$tmp/rk.txt" 2>&1 >/dev/null)"
+$J --dry-run --rank -e cat "$tmp/rk.txt" | grep -q '^sys1grep: rank: at most 7 results, ~1 request after the search' || fail "--dry-run --rank: $($J --dry-run --rank -e cat "$tmp/rk.txt")"
+out=$(asking "$JI -i --rank -e cat '$tmp/rk.txt'" n)
+echo "$out" | grep -q 'sys1grep: rank: at most 7 results' || fail "-i --rank shows the bound: $out"
+echo "$out" | grep -q 'then a question per result? \[y/N\]' || fail "-i --rank says the results are asked: $out"
+eq "$($J --rank --dedup -e cat "$tmp/dd.txt" | tr '\n' '|')" "1.|cat 1   (×3 like it)|" "--rank --dedup: a representative is one result"
+$S --summarize --rank -n -e cat "$tmp/rk.txt" >/dev/null
+eq "$(tr '\n' '|' <"$tmp/sum.in")" "1.|1:cat @0.6 @r0.9||2.|7:cat @0.7||3.|5:cat @0.8 @r0.3|" "--summarize --rank: the summarizer gets the ranked results"
+for o in -c -o -q; do code 2 "--rank with $o" -- $J --rank $o -e cat "$tmp/rk.txt"; done
+code 2 "--rank, regex only" -- $J --rank -e /cat/ "$tmp/rk.txt"
+code 2 "--rank, negated meanings only" -- $J --rank -v cat "$tmp/rk.txt"
+code 2 "--rank=nope" -- $J --rank=nope -e cat "$tmp/rk.txt"
+code 2 "--rank in SYS1GREP_OPTS" -- $E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS=--rank node ../sys1grep.mjs -e cat "$tmp/rk.txt"
+eq "$($J -n -e cat "$tmp/rk.txt" | nums)" "1 5 7 " "without --rank: file order"
+
 # #58 / #125 review (item 9, owner 2026-09-27): -M/--max-columns bounds only what is *sent*, as before this PR: a
 # unit past it is truncated to the first NUM characters, still searched and judged on that truncated text, not
 # skipped. A meaning inside the truncated part still matches; one whose only occurrence is past the cutoff does
@@ -1029,7 +1055,7 @@ case $out in *'summarizingwithclaude'*'033[KSUMMARY'*) ;; *) fail "spinner while
 # --help: exit 0, Japanese by locale, lists the options
 code 0 "--help" -- $E LANG=C node ../sys1grep.mjs --help
 eq "$($E LANG=C node ../sys1grep.mjs -h | head -1 | cut -c1-15)" "usage: sys1grep" "-h"
-for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename' '--summarize' '--summarize-prompt' '--summarize-format' '-M' '--max-filesize' '--max-cost' '-y, --yes'; do
+for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename' '--summarize' '--summarize-prompt' '--summarize-format' '-M' '--max-filesize' '--max-cost' '-y, --yes' '--rank'; do
   $E LANG=C node ../sys1grep.mjs --help | grep -q -- "$o" || fail "--help lacks $o"
 done
 $E LANG=C node ../sys1grep.mjs --help | grep -q 'grep by meaning' || fail "--help in English"
