@@ -339,6 +339,8 @@ printf 'def a():\n    pass\n@retry(times=3)\ndef b():\n    request()\n' >"$tmp/d
 eq "$($J --unit=function -n -e '/retry/' "$tmp/d.py" | nums)" "3 4 5 " "--unit=function: a decorator starts its def"
 printf 'def a():\n    pass\n@cache\n@retry(\n    times=3,\n)\ndef b():\n    request()\ndef c():\n    pass\n' >"$tmp/d2.py"
 eq "$($J --unit=function -n -e '/times/' "$tmp/d2.py" | nums)" "3 4 5 6 7 8 " "--unit=function: stacked decorators over several lines stay with their def"
+printf '@wrap(\nfunction () {}\n)\nclass C {}\nclass D {}\n' >"$tmp/d.ts"
+eq "$($J --unit=function -n -e '/wrap/' "$tmp/d.ts" | nums)" "1 2 3 4 " "--unit=function: a function in a decorator's arguments does not close it"
 printf 'function a() {}\nexport const b: () => number = () => 2;\n' >"$tmp/a.ts"
 eq "$($J --unit=function -n -e '/=> 2/' "$tmp/a.ts" | nums)" "2 " "--unit=function: an arrow function with a type annotation"
 printf 'function a() {}\nconst $ = () => 2;\n' >"$tmp/d.js"
@@ -360,6 +362,8 @@ git -C "$FG" config diff.notes.xfuncname '^==[[:nope:]]'
 eq "$(cd "$FG" && $JF --unit=function -n -e '/beta/' a.txt 2>&1 | head -1)" "sys1grep: diff.notes.xfuncname: unknown class [:nope:]; using sys1grep's own rule" "--unit=function: an unknown POSIX class warns"
 git -C "$FG" config --unset diff.notes.xfuncname; git -C "$FG" config diff.notes.funcname '^==\( \)'
 eq "$(cd "$FG" && $JF --unit=function -n -e '/beta/' a.txt | nums)" "4 5 " "--unit=function: funcname is a BRE"
+printf '@one\n body1\n@two\n body2\n' >"$FG/b.txt"; git -C "$FG" config diff.notes.funcname '^@'
+eq "$(cd "$FG" && $JF --unit=function -n -e '/body1/' b.txt | nums)" "1 2 " "--unit=function: an @ rule from git config is not a decorator"
 git -C "$FG" config --unset diff.notes.funcname
 git -C "$FG" config diff.notes.xfuncname '^==('
 eq "$(cd "$FG" && $JF --unit=function -n -e '/beta/' a.txt 2>&1 | tr '\n' '|')" "sys1grep: diff.notes.xfuncname: Invalid regular expression: /^==(/: Unterminated group; using sys1grep's own rule|5:beta|" "--unit=function: a bad xfuncname warns and falls back"

@@ -1522,15 +1522,17 @@ if (opt.unit === 'function') {
   });
 }
 // lines -> [{ text, spans }], one per function; a span covers a whole line, as toSentences' spans do part of one.
-const toFunctions = (lines, isName) => {
+const toFunctions = (lines, isName, decorators) => {
   const out = [];
-  // A decorator line (Python, TypeScript: a funcname line of their rules) starts its function, which stays open through
-  // the decorator's own lines and any stacked ones until its def or class. ponytail: brackets are not counted
-  let open = false;
+  // decorators (sys1grep's own JavaScript and Python rules, which take an @ line as a funcname line): a decorator line
+  // starts its function, which stays open through the decorator's arguments (inside brackets nothing is a funcname)
+  // and any stacked decorators, until its def or class. ponytail: brackets inside strings are counted too
+  let open = false, depth = 0;
   lines.forEach((line, i) => {
-    const name = isName(line), decorator = name && /^\s*@/.test(line);
+    const name = depth <= 0 && isName(line), decorator = decorators && name && /^\s*@/.test(line);
     if (!out.length || (name && !open)) { out.push({ lines: [], spans: [] }); open = decorator; }
     else if (name && !decorator) open = false;
+    depth = open ? depth + (line.match(/[([{]/g) ?? []).length - (line.match(/[)\]}]/g) ?? []).length : 0;
     out.at(-1).lines.push(line);
     out.at(-1).spans.push([i + 1, 0, line.length]);
   });
@@ -1548,7 +1550,7 @@ for (const [file, src] of read) {
     if (opt.o) sources.set(file, sentences.map(u => u.text));
     units = sentences.map(u => u.text);
   } else if (opt.unit === 'function') {
-    const functions = toFunctions(src, isFuncname(funcnamesOf.get(file) ?? DEFAULT_FUNCNAME));
+    const functions = toFunctions(src, isFuncname(funcnamesOf.get(file) ?? DEFAULT_FUNCNAME), Object.values(FUNCNAMES).includes(funcnamesOf.get(file)));
     spansOf.set(file, functions.map(u => u.spans));
     units = functions.map(u => u.text);
   }
