@@ -337,6 +337,8 @@ printf 'def a():\n    pass\nclass B:\n    def m(self):\n        return 2\n' >"$t
 eq "$($J --unit=function -n -e '/return/' "$tmp/m.py" | nums)" "4 5 " "--unit=function: a nested def in Python"
 printf 'def a():\n    pass\n@retry(times=3)\ndef b():\n    request()\n' >"$tmp/d.py"
 eq "$($J --unit=function -n -e '/retry/' "$tmp/d.py" | nums)" "3 4 5 " "--unit=function: a decorator starts its def"
+printf 'def a():\n    pass\n@cache\n@retry(\n    times=3,\n)\ndef b():\n    request()\ndef c():\n    pass\n' >"$tmp/d2.py"
+eq "$($J --unit=function -n -e '/times/' "$tmp/d2.py" | nums)" "3 4 5 6 7 8 " "--unit=function: stacked decorators over several lines stay with their def"
 printf 'function a() {}\nexport const b: () => number = () => 2;\n' >"$tmp/a.ts"
 eq "$($J --unit=function -n -e '/=> 2/' "$tmp/a.ts" | nums)" "2 " "--unit=function: an arrow function with a type annotation"
 printf 'function a() {}\nconst $ = () => 2;\n' >"$tmp/d.js"

@@ -1524,10 +1524,13 @@ if (opt.unit === 'function') {
 // lines -> [{ text, spans }], one per function; a span covers a whole line, as toSentences' spans do part of one.
 const toFunctions = (lines, isName) => {
   const out = [];
+  // A decorator line (Python, TypeScript: a funcname line of their rules) starts its function, which stays open through
+  // the decorator's own lines and any stacked ones until its def or class. ponytail: brackets are not counted
+  let open = false;
   lines.forEach((line, i) => {
-    // a decorator line (Python, TypeScript: a funcname line of their rules) starts its function; the def after it continues it
-    // ponytail: a decorator over several lines (@retry(\n times=3\n)) still splits from its def
-    if (!out.length || (isName(line) && !(/^\s*@/.test(lines[i - 1]) && isName(lines[i - 1])))) out.push({ lines: [], spans: [] });
+    const name = isName(line), decorator = name && /^\s*@/.test(line);
+    if (!out.length || (name && !open)) { out.push({ lines: [], spans: [] }); open = decorator; }
+    else if (name && !decorator) open = false;
     out.at(-1).lines.push(line);
     out.at(-1).spans.push([i + 1, 0, line.length]);
   });
