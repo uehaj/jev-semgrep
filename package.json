@@ -39,6 +39,7 @@
     "test:offline": "sh tests/offline.sh",
     "judge": "node --no-warnings --env-file-if-exists=.env tests/judge.mts",
     "scope-eval": "node tests/scope-eval.mjs",
+    "skill-eval": "bash tests/skill-eval/run.sh",
     "release": "sh scripts/release.sh"
   }
 }
