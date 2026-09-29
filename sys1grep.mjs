@@ -1874,7 +1874,6 @@ const partsOnly = opt.o && !opt.unit.startsWith('sentence');
 const after = partsOnly ? 0 : Number(opt.A ?? opt.C ?? 0), before = partsOnly ? 0 : Number(opt.B ?? opt.C ?? 0);
 // grep -r and git grep prefix file names even for a single file; -H / --no-filename decide it outright, the later one winning.
 const multi = opt['with-filename'] ?? (opt.r || asGit || targets.length > 1);
-let lastPrinted = null; // [file, line number]; used to print -- between context groups
 // --summarize collects the lines instead; -z's NULs become blank lines there, since an LLM reads text.
 const piped = [];
 const write = summarizer ? s => piped.push(s) : s => process.stdout.write(s);
@@ -1887,6 +1886,7 @@ if (summarizer && willFold) for (const h of hits.values()) for (const p of h.val
   const g = asksByUnit.get(p);
   likeIt.set(g, (likeIt.get(g) ?? new Set()).add(p));
 }
+const results = []; // { file, rows: what prints, texts: its units' text, hits: its matching units, score }
 for (const file of opt.quiet || dry ? [] : targets) {
   if (!sources.has(file)) continue;
   const h = hits.get(file);
@@ -1895,9 +1895,9 @@ for (const file of opt.quiet || dry ? [] : targets) {
   // --verbose: the scopes that let this file through, once per file with a match (#104)
   const via = opt.verbose && !named(file) ? [...new Set(expr.filter(t => admitted(t, file)).flatMap(t => t.flatMap(l => (l.kind === 's' ? l.names : []))))] : [];
   if (via.length) console.error(`sys1grep: ${safe(file)}: searched by scope ${via.map(safe).join(', ')}`);
-  if (opt.l) { console.log(paint(35, file)); continue; }
+  if (opt.l && !opt.rank) { console.log(paint(35, file)); continue; }
   const src = sources.get(file);
-  let last = 0; // last line number already printed for this file
+  let last = 0, lastHit = null; // the last line number already printed for this file, and its hit
   for (const no of [...h.keys()].sort((a, b) => a - b)) {
     const group = likeIt.size ? asksByUnit.get(h.get(no)) : null;
     // the representative's other lines (a sentence or function over several) still pipe; other members do not
@@ -1905,7 +1905,11 @@ for (const file of opt.quiet || dry ? [] : targets) {
     if (group && !firstLine && pipedUnits.get(group) !== h.get(no)) continue;
     pipedUnits.set(group, h.get(no));
     const from = Math.max(no - before, last + 1), to = Math.min(no + after, src.length);
-    if ((after || before) && lastPrinted && (lastPrinted[0] !== file || from > last + 1)) write(`${paint(36, '--')}\n`);
+    // A result (#118) is what -- separates: a match and its context, joined by any context that touches it; without
+    // context one match, the lines of one sentence or function together.
+    if (!(results.at(-1)?.file === file && from === last + 1 && (after || before || h.get(no) === lastHit)))
+      results.push({ file, rows: [], texts: [], hits: new Set() });
+    const r = results.at(-1);
     for (let k = from; k <= to; k++) {
       const p = h.get(k);
       const sep = paint(36, p ? ':' : '-');
@@ -1917,13 +1921,16 @@ for (const file of opt.quiet || dry ? [] : targets) {
       const n = p && group && k === no && firstLine ? likeIt.get(group).size : 0, like = n > 1 ? `   (×${n} like it)` : '';
       if (partsOnly && matches.length) {
         let end = -1; // a match overlapping the last one printed is skipped; a skipped one does not hide later ones
-        for (const [a, b] of matches) if (a >= end) { write(prefix + paint('01;31', text.slice(a, b)) + tail + like + EOL); end = b; }
-      } else write(prefix + highlight(text, sentences, matches) + tail + like + EOL);
+        for (const [a, b] of matches) if (a >= end) { r.rows.push(prefix + paint('01;31', text.slice(a, b)) + tail + like + EOL); end = b; }
+      } else r.rows.push(prefix + highlight(text, sentences, matches) + tail + like + EOL);
+      r.texts.push(text);
+      if (p) r.hits.add(p);
     }
     last = Math.max(last, to);
-    lastPrinted = [file, to];
+    lastHit = h.get(no);
   }
 }
+if (!opt.rank) results.forEach((r, i) => { if (i && (after || before)) write(`${paint(36, '--')}\n`); r.rows.forEach(write); });
 // No match sends nothing to the summarizer. It writes its answer straight to stdout; failing, it has said why on stderr.
 let summaryFailed = false;
 const pipedBytes = Buffer.byteLength(piped.join(''));
