@@ -672,6 +672,8 @@ $ sys1grep -r -n --summarize -e "API キーをファイルから読んでいる"
 - `-n`・`-A/-B/-C`・`-p`・ファイル名は表示どおりに渡し、色は付けません。一致がなければ何も渡しません（終了コード 1）。
 - `SYS1GREP_SUMMARIZER` は値を付けない `--summarize` の TOOL を、`SYS1GREP_SUMMARIZER_MODEL` はそのモデルを決めます。
 - `-q`・`-l`・`-c` は行を出さないので、一緒には使えません。
+- `SYS1GREP_OPTS` に書くとすべての検索を要約するので、一致した行は毎回 TOOL の提供元へも送られます。
+  1 回だけ止めるには `--no-summarize` を付けます。
 - 答えはプレーンテキストです。何も言わなければ LLM は Markdown で書き、端末では雑音になるので、plain を頼みます。
   `--summarize-format=markdown` か `=html` でそれらを頼めます（`… --summarize-format=html … > summary.html`）。
   答えは確かめずにそのまま表示します。`SYS1GREP_OPTS` に書けば常用の設定になり、`--summarize` が無いときは無視します。
@@ -705,6 +707,34 @@ OpenAI 互換サーバ全般です。3 つとも `SYS1GREP_SUMMARIZER_MODEL` が
 `SYS1GREP_SUMMARIZER_API_KEY` は URL の TOOL にだけ `Authorization: Bearer` として送られます
 （Jev 用の `SYS1GREP_API_KEY` は送りません）。`OLLAMA_HOST` で ollama 側のホストを変えられます
 （`ollama` CLI 自体と同じ）。
+
+### 良いものから順に出す (`--rank`)
+
+一致は grep と同じくファイル順に出ます。多いときは `--rank` で、結果を良いものから順に、番号付きの見出しの下に
+出せます。結果とは一致とその `-A/-B/-C` の行で、文脈が接する一致は 1 つの結果になります。
+
+```sh
+$ sys1grep -n -C1 --rank -e "返金を断られた" tickets/
+1. tickets/b.txt
+tickets/b.txt-2-注文番号 1234、2026-08-01 注文。
+tickets/b.txt:3:注文から 30 日を過ぎているため、返金はお受けできません。
+tickets/b.txt-4-サポートまでご連絡ください。
+
+2. tickets/a.txt
+tickets/a.txt-11-注文番号 88 が届きました。
+tickets/a.txt:12:返金のご依頼を受け付けました。
+tickets/a.txt-13-確認いたします。
+```
+
+- `--rank` は `--rank=jev` です。検索の後、各結果（行と文脈をまとめて）が否定でない意味に関係するかを Jev に
+  聞きます。結果ごとに質問が 1 つ増え、1 リクエストに `--chunk` 個まとめます。どんな結果があるかは検索の後で
+  しか分からないので、`--dry-run` / `-i` は上限を出します。
+- `--rank=match` は結果の中で最も高い一致の確率で並べ、リクエストを送りません。1 行ずつの yes/no の答えなので、
+  はっきりした一致どうしは近い値になり、文脈も読みません。
+- `-p` は見出しに点数を付けます（`1. [0.96] tickets/b.txt`）。`-l` は最良の結果の順にファイル名を出します。
+- `--summarize` には順位どおりに渡します。`--dedup` では代表 1 つが 1 つの結果です。
+- 意味が要ります（正規表現・`!`・`-v` だけでは並べられない）。`-c`・`-o`・`-q` とは併用できません。
+  `--no-rank` はそれより前の `--rank`（`SYS1GREP_OPTS` のものなど）を取り消します。
 
 ## Claude Code から使う
 
@@ -803,6 +833,8 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
                (スクリプトからは -y)。-i は無条件かつこれより前に聞くので二重には聞かない
   --dedup[=auto|always|never]  テンプレートごとに 1 行だけ判定し、その答えを残りにも使う (当面の既定は never。
                前述の「テンプレートごとに 1 行だけ判定する」を参照)
+  --rank[=jev|match]  結果 (一致とその文脈) を良いものから順に番号付きの見出しの下に出す。jev (値なしの
+               --rank) は各結果を Jev に聞き、match は最も高い一致の確率で並べる (前述の「良いものから順に出す」を参照)。--no-rank でファイル順
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
                否定側の閾値未満を赤、あいだを黄で表示。NO_COLOR にも従う

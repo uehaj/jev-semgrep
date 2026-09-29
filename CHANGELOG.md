@@ -6,6 +6,17 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
+- `--rank[=jev|match]` prints the results best first, each under a numbered header (`1. FILE`, `1. [SCORE] FILE`
+  with `-p`), a blank line between them (#118). A result is a match with its `-A/-B/-C` lines; matches whose
+  context touches are one. `--rank` is `--rank=jev`: after the search Jev is asked, one question per result,
+  whether the result is relevant to the meanings that are not negated; `--rank=match` sorts by the result's
+  highest match probability, with no request. `-l` lists files by their best result, `--summarize` gets the
+  results ranked, and with `--dedup` a representative is one result. `--dry-run` / `-i` show an upper bound on
+  the extra requests. It needs a meaning, and is refused with `-c`, `-o` and `-q`; `--no-rank` turns off an
+  earlier one.
+- `--no-summarize` turns off an earlier `--summarize`, and `SYS1GREP_OPTS` now takes `--summarize` and `--rank`
+  (both used to be refused there, having no `--no-` form to undo them for `-l` / `-c`). A `--summarize` in
+  `SYS1GREP_OPTS` sends every search's matches to TOOL's provider too.
 - `--unit=function` judges each function and prints its lines (#114). A function runs from a funcname line to
   the line before the next, as `git grep -W`: `diff=<driver>` and `diff.<driver>.xfuncname` pick the funcname
   lines, else sys1grep's own rule for JavaScript/TypeScript and Python, else git's default (a line starting with a

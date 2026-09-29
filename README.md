@@ -691,6 +691,8 @@ $0.094 to $0.013, with the same answer (#69). It pays when the answer sits in a 
 - `-n`, `-A/-B/-C`, `-p` and file names go in as they would print; colors never do. No match runs nothing (exit 1).
 - `SYS1GREP_SUMMARIZER` picks the TOOL of a bare `--summarize`, `SYS1GREP_SUMMARIZER_MODEL` its model.
 - `-q`, `-l` and `-c` print no lines, so they cannot be combined with it.
+- In `SYS1GREP_OPTS` it summarizes every search, so every match goes to TOOL's provider too;
+  `--no-summarize` turns it off for one search.
 - The answer is plain text: an LLM that is not told writes Markdown, noise on a terminal, so plain is asked for.
   `--summarize-format=markdown` or `=html` asks for those instead (`… --summarize-format=html … > summary.html`).
   The answer prints as it comes, unchecked. In `SYS1GREP_OPTS` it is a standing preference, ignored without `--summarize`.
@@ -724,6 +726,34 @@ CLI: the matching lines never leave the machine a second time. A plain `http(s):
 OpenAI-compatible server. All three need `SYS1GREP_SUMMARIZER_MODEL`: none has a default model.
 `SYS1GREP_SUMMARIZER_API_KEY` goes as `Authorization: Bearer` to a URL TOOL only (never `SYS1GREP_API_KEY`,
 which is Jev's). `OLLAMA_HOST` moves ollama's host, as it does for the `ollama` CLI itself.
+
+### Best first (`--rank`)
+
+Matches print in file order, as grep prints them. With many, `--rank` prints the results best first, each under a
+numbered header. A result is a match with its `-A/-B/-C` lines; matches whose context touches are one result.
+
+```sh
+$ sys1grep -n -C1 --rank -e "the refund was refused" tickets/
+1. tickets/b.txt
+tickets/b.txt-2-Order #1234, placed 2026-08-01.
+tickets/b.txt:3:Your refund was declined: the order is older than 30 days.
+tickets/b.txt-4-Please contact support.
+
+2. tickets/a.txt
+tickets/a.txt-11-Order #88 arrived.
+tickets/a.txt:12:Refund request received.
+tickets/a.txt-13-We will check it.
+```
+
+- `--rank` is `--rank=jev`: after the search, Jev is asked of each result, lines and context together, whether it
+  is relevant to the meanings that are not negated. One more question per result, `--chunk` results to a request;
+  `--dry-run` / `-i` show an upper bound, since which results there are is known only after the search.
+- `--rank=match` sorts by each result's highest match probability, with no request. It is the answer to a yes/no
+  question on one line, so clear matches sit close together, and the context is not read.
+- `-p` puts the score on the header (`1. [0.96] tickets/b.txt`). `-l` lists the files by their best result.
+- `--summarize` gets the results in ranked order; with `--dedup` a representative is one result.
+- It needs a meaning (a regex, `!` or `-v` alone ranks nothing), and cannot be combined with `-c`, `-o` or `-q`.
+  `--no-rank` turns off an earlier one, from `SYS1GREP_OPTS` say.
 
 ## Use it from Claude Code
 
@@ -823,6 +853,8 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
                (scripts pass -y); -i already asks unconditionally and earlier, so this does not ask again
   --dedup[=auto|always|never]  judge one line per template and reuse its answer for the rest (default never,
                for now; see "One line per template" above)
+  --rank[=jev|match]  print the results (a match with its context) best first, under numbered headers; jev
+               (bare --rank) asks Jev of each result, match sorts by its best match probability (see "Best first"); --no-rank: file order
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are
                green at or above the positive threshold, red below the negative one,
