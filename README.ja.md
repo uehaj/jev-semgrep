@@ -672,6 +672,8 @@ $ sys1grep -r -n --summarize -e "API キーをファイルから読んでいる"
 - `-n`・`-A/-B/-C`・`-p`・ファイル名は表示どおりに渡し、色は付けません。一致がなければ何も渡しません（終了コード 1）。
 - `SYS1GREP_SUMMARIZER` は値を付けない `--summarize` の TOOL を、`SYS1GREP_SUMMARIZER_MODEL` はそのモデルを決めます。
 - `-q`・`-l`・`-c` は行を出さないので、一緒には使えません。
+- `SYS1GREP_OPTS` に書くとすべての検索を要約するので、一致した行は毎回 TOOL の提供元へも送られます。
+  1 回だけ止めるには `--no-summarize` を付けます。
 - 答えはプレーンテキストです。何も言わなければ LLM は Markdown で書き、端末では雑音になるので、plain を頼みます。
   `--summarize-format=markdown` か `=html` でそれらを頼めます（`… --summarize-format=html … > summary.html`）。
   答えは確かめずにそのまま表示します。`SYS1GREP_OPTS` に書けば常用の設定になり、`--summarize` が無いときは無視します。
@@ -732,6 +734,7 @@ tickets/a.txt-13-確認いたします。
 - `-p` は見出しに点数を付けます（`1. [0.96] tickets/b.txt`）。`-l` は最良の結果の順にファイル名を出します。
 - `--summarize` には順位どおりに渡します。`--dedup` では代表 1 つが 1 つの結果です。
 - 意味が要ります（正規表現・`!`・`-v` だけでは並べられない）。`-c`・`-o`・`-q` とは併用できません。
+  `--no-rank` はそれより前の `--rank`（`SYS1GREP_OPTS` のものなど）を取り消します。
 
 ## Claude Code から使う
 
@@ -831,7 +834,7 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
   --dedup[=auto|always|never]  テンプレートごとに 1 行だけ判定し、その答えを残りにも使う (当面の既定は never。
                前述の「テンプレートごとに 1 行だけ判定する」を参照)
   --rank[=jev|match]  結果 (一致とその文脈) を良いものから順に番号付きの見出しの下に出す。jev (値なしの
-               --rank) は各結果を Jev に聞き、match は最も高い一致の確率で並べる (前述の「良いものから順に出す」を参照)
+               --rank) は各結果を Jev に聞き、match は最も高い一致の確率で並べる (前述の「良いものから順に出す」を参照)。--no-rank でファイル順
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
                否定側の閾値未満を赤、あいだを黄で表示。NO_COLOR にも従う

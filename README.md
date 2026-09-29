@@ -691,6 +691,8 @@ $0.094 to $0.013, with the same answer (#69). It pays when the answer sits in a 
 - `-n`, `-A/-B/-C`, `-p` and file names go in as they would print; colors never do. No match runs nothing (exit 1).
 - `SYS1GREP_SUMMARIZER` picks the TOOL of a bare `--summarize`, `SYS1GREP_SUMMARIZER_MODEL` its model.
 - `-q`, `-l` and `-c` print no lines, so they cannot be combined with it.
+- In `SYS1GREP_OPTS` it summarizes every search, so every match goes to TOOL's provider too;
+  `--no-summarize` turns it off for one search.
 - The answer is plain text: an LLM that is not told writes Markdown, noise on a terminal, so plain is asked for.
   `--summarize-format=markdown` or `=html` asks for those instead (`… --summarize-format=html … > summary.html`).
   The answer prints as it comes, unchecked. In `SYS1GREP_OPTS` it is a standing preference, ignored without `--summarize`.
@@ -751,6 +753,7 @@ tickets/a.txt-13-We will check it.
 - `-p` puts the score on the header (`1. [0.96] tickets/b.txt`). `-l` lists the files by their best result.
 - `--summarize` gets the results in ranked order; with `--dedup` a representative is one result.
 - It needs a meaning (a regex, `!` or `-v` alone ranks nothing), and cannot be combined with `-c`, `-o` or `-q`.
+  `--no-rank` turns off an earlier one, from `SYS1GREP_OPTS` say.
 
 ## Use it from Claude Code
 
@@ -851,7 +854,7 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
   --dedup[=auto|always|never]  judge one line per template and reuse its answer for the rest (default never,
                for now; see "One line per template" above)
   --rank[=jev|match]  print the results (a match with its context) best first, under numbered headers; jev
-               (bare --rank) asks Jev of each result, match sorts by its best match probability (see "Best first")
+               (bare --rank) asks Jev of each result, match sorts by its best match probability (see "Best first"); --no-rank: file order
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are
                green at or above the positive threshold, red below the negative one,

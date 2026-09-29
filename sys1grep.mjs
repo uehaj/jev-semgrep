@@ -50,8 +50,12 @@ const { TYPESAFE_API_KEY } = process.env;
 
 // A bare --color means --color=auto (as in grep); parseArgs cannot express an optional value, so fill it in first.
 // --no-filename is grep's name for --no-with-filename, --null-data grep's name for -z.
+// --no-rank / --no-summarize: parseArgs negates booleans only, so they become a value no argument can hold (a NUL),
+// cleared below; the later one wins, as for any option.
+const OFF = '\0';
 const fill = a => (a === '--color' ? '--color=auto' : a === '--null-data' ? '-z' : a === '--no-filename' ? '--no-with-filename'
-  : a === '--summarize' ? `--summarize=${SYS1GREP_SUMMARIZER || 'claude'}` : a === '--dedup' ? '--dedup=always' : a === '--rank' ? '--rank=jev' : a);
+  : a === '--summarize' ? `--summarize=${SYS1GREP_SUMMARIZER || 'claude'}` : a === '--dedup' ? '--dedup=always' : a === '--rank' ? '--rank=jev'
+  : a === '--no-rank' ? `--rank=${OFF}` : a === '--no-summarize' ? `--summarize=${OFF}` : a);
 const OPTIONS = {
   e: { type: 'string', multiple: true },
   a: { type: 'string', multiple: true },
@@ -110,9 +114,8 @@ let optsInteractive = false; // -i from SYS1GREP_OPTS: a script without a termin
 try {
   const { tokens: t } = parseArgs({ args: defaults, options: OPTIONS, allowPositionals: true, allowNegative: true, tokens: true });
   optsInteractive = t.some(k => k.name === 'interactive' && !k.rawName.startsWith('--no-'));
-  // --summarize has no --no- form to turn it off again for -l / -c: SYS1GREP_SUMMARIZER picks its TOOL instead.
-  const bad = t.find(k => k.kind !== 'option' || ['e', 'a', 'v', 'question', 'summarize', 'rank', 'cached', 'untracked'].includes(k.name));
-  if (bad) die(`SYS1GREP_OPTS: ${bad.kind !== 'option' ? `'${bad.value ?? '--'}' is not an option` : bad.name === 'summarize' ? '--summarize is not allowed (set SYS1GREP_SUMMARIZER to pick its TOOL)' : bad.name === 'rank' ? '--rank is not allowed (it has no --no- form to turn it off for -c)' : ['cached', 'untracked'].includes(bad.name) ? `--${bad.name} is not allowed (what is searched goes on the command line)` : `${bad.name.length > 1 ? '--' : '-'}${bad.name} is not allowed (meanings go on the command line)`}`);
+  const bad = t.find(k => k.kind !== 'option' || ['e', 'a', 'v', 'question', 'cached', 'untracked'].includes(k.name));
+  if (bad) die(`SYS1GREP_OPTS: ${bad.kind !== 'option' ? `'${bad.value ?? '--'}' is not an option` : ['cached', 'untracked'].includes(bad.name) ? `--${bad.name} is not allowed (what is searched goes on the command line)` : `${bad.name.length > 1 ? '--' : '-'}${bad.name} is not allowed (meanings go on the command line)`}`);
 } catch (e) { die(`SYS1GREP_OPTS: ${e.message}`); }
 const { values: opt, positionals: files, tokens } = parseArgs({
   args: [...defaults, ...process.argv.slice(2).map(fill)],
@@ -121,6 +124,7 @@ const { values: opt, positionals: files, tokens } = parseArgs({
   allowNegative: true,
   tokens: true,
 });
+for (const k of ['rank', 'summarize']) if (opt[k] === OFF) delete opt[k];
 // --verbose / --dry-run (#90): where a parsed option's value came from. null: never set (caller says "default").
 // '': the command line (no source shown, as for any setting not from an env var or SYS1GREP_OPTS). 'SYS1GREP_OPTS':
 // its last token is one of the `defaults` this run prepended.
@@ -288,7 +292,8 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                Jev is asked whether each result is relevant to the meanings that are not negated, one more
                question per result (--chunk results a request); match: the result's highest match probability,
                no request. -l: files by their best result. --summarize gets the results ranked; with --dedup a
-               representative is one result. Needs a meaning; not with -c, -o, -q, nor in SYS1GREP_OPTS
+               representative is one result. Needs a meaning; not with -c, -o, -q
+  --no-rank    turn off an earlier --rank (from SYS1GREP_OPTS, say): file order again
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                regex matches are in grep's match color (bold red), matching sentences in bold yellow;
                file and line number use grep's colors; with -p, probabilities are green at or above
@@ -303,8 +308,10 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                URL need SYS1GREP_SUMMARIZER_MODEL: none has a default model. The matching lines are sent a second
                time, to TOOL's provider (nowhere a second time with ollama, lmstudio or a local URL). No match runs
                nothing (exit 1); TOOL failing is exit 2. Not with -q, -l, -c.
+               In SYS1GREP_OPTS it is the default for every search, so every match goes to TOOL's provider too.
                With --dedup, each template's representative goes once, marked (×N like it). Over 200 KB nothing
                is sent to TOOL (exit 2): narrow the expression or add --dedup
+  --no-summarize  turn off an earlier --summarize (from SYS1GREP_OPTS, say): the lines print again
   --summarize-prompt=TEXT  the user's own instruction, added after the fixed one in --summarize's system
                prompt (how long, what to focus on, ...). Needs --summarize; empty TEXT is the same as none
   --summarize-format=FORMAT  plain (default: no Markdown) / markdown / html, asked of TOOL; its answer prints as
@@ -486,7 +493,8 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                1 つの結果になる。jev (値なしの --rank): 検索の後、各結果が否定でない意味に関係するかを Jev に
                聞く。結果ごとに質問が 1 つ増える (1 リクエストに --chunk 個)。match: 結果の中で最も高い
                一致の確率。リクエストなし。-l: 最良の結果の順にファイル名。--summarize には順位どおりに渡す。
-               --dedup では代表 1 つが 1 つの結果。意味が要る。-c・-o・-q とは併用できず、SYS1GREP_OPTS にも書けない
+               --dedup では代表 1 つが 1 つの結果。意味が要る。-c・-o・-q とは併用できない
+  --no-rank    それより前の --rank (SYS1GREP_OPTS のものなど) を取り消し、ファイル順に戻す
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                正規表現の一致は grep の一致の色 (太字の赤)、当たった文は太字の黄。
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
@@ -500,8 +508,10 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                ollama・lmstudio・URL は SYS1GREP_SUMMARIZER_MODEL が要る (既定モデルが無い)。
                一致した行は TOOL の提供元へもう一度送られる (ollama・lmstudio・ローカル URL ならどこへも送られない)。
                一致がなければ何も渡さない (終了コード 1)。TOOL が失敗したら 2。-q・-l・-c とは併用できない。
+               SYS1GREP_OPTS に書くとすべての検索の既定になり、一致した行は毎回 TOOL の提供元へも送られる。
                --dedup ではテンプレートごとに代表を 1 回だけ、(×N like it) を付けて渡す。200 KB を超えたら
                TOOL には何も渡さない (終了コード 2)。式を絞るか --dedup を付ける
+  --no-summarize  それより前の --summarize (SYS1GREP_OPTS のものなど) を取り消し、行をそのまま出す
   --summarize-prompt=TEXT  --summarize のシステムプロンプトに、固定の指示に続けて足すユーザー自身の指示
                (長さ・観点など)。--summarize が要る。空の TEXT は指定しないのと同じ
   --summarize-format=FORMAT  plain (既定。Markdown なし) / markdown / html を TOOL に頼む。答えは確かめずに
@@ -859,7 +869,8 @@ if (trace) {
   ].filter(Boolean);
   trace(`options: ${options.join(', ')}`);
   if (summarizer) {
-    const bare = process.argv.slice(2).includes('--summarize');
+    const raw = [...SYS1GREP_OPTS.split(/\s+/), ...process.argv.slice(2)].filter(a => a === '--summarize' || a.startsWith('--summarize='));
+    const bare = raw.at(-1) === '--summarize';
     const toolTag = bare ? ` (${envSUMMARIZER.name ? envLabel(envSUMMARIZER.name) : 'default'})` : '';
     // The model: SYS1GREP_SUMMARIZER_MODEL, else claude's haiku, else llm's / pi's own default (the HTTP servers
     // have none and died above without one). The summarizer key, like Jev's, by name only, and only for a URL TOOL,
@@ -869,7 +880,7 @@ if (trace) {
     const keyTag = Array.isArray(summarizer) || !/^https?:\/\//.test(opt.summarize) ? ''
       : envSUMMARIZER_API_KEY.name ? `, key ${envSUMMARIZER_API_KEY.name}${keyFileTag(envSUMMARIZER_API_KEY.name)}` : ', key none (no auth header sent)';
     const promptTag = opt['summarize-prompt'] ? `, --summarize-prompt${optTag('summarize-prompt')}` : '';
-    trace(`summarize: ${opt.summarize}${toolTag}, model ${summModel}${keyTag}${promptTag}`);
+    trace(`summarize: ${opt.summarize}${toolTag}${optTag('summarize')}, model ${summModel}${keyTag}${promptTag}`);
     trace(`summarize: ${Array.isArray(summarizer) ? summarizer.map(a => (/^[\w./=:-]+$/.test(a) ? a : JSON.stringify(a))).join(' ')
       : `POST ${summarizer.url} model=${summarizer.model}`} (stops over ${SUMMARY_MAX / 1024} KB)`);
   }

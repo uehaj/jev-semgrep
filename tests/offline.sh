@@ -708,7 +708,13 @@ for f in rtf constructor toString __proto__; do code 2 "--summarize-format=$f" -
 code 2 "--summarize-format without --summarize" -- $S --summarize-format=markdown -e cat "$F"
 code 2 "SYS1GREP_SUMMARIZER=unknown" -- env SYS1GREP_SUMMARIZER=nope $S --summarize -e cat "$F"
 code 2 "--summarize, claude not on PATH" -- $E PATH=/usr/bin:/bin SYS1GREP_URL=$base/v1 "$(command -v node)" ../sys1grep.mjs --summarize -e cat "$F"
-code 2 "--summarize in SYS1GREP_OPTS" -- $E PATH=$tmp/bin:$PATH SYS1GREP_OPTS=--summarize SYS1GREP_URL=$base/v1 node ../sys1grep.mjs -e cat "$F"
+eq "$($E PATH=$tmp/bin:$PATH SUM=$tmp/sum SYS1GREP_OPTS=--summarize SYS1GREP_URL=$base/v1 node ../sys1grep.mjs -e cat "$F")" "SUMMARY" "--summarize in SYS1GREP_OPTS"
+eq "$($E PATH=$tmp/bin:$PATH SYS1GREP_OPTS=--summarize SYS1GREP_URL=$base/v1 node ../sys1grep.mjs --no-summarize -c -e cat "$F")" "2" "--no-summarize turns SYS1GREP_OPTS's off"
+eq "$($S --summarize --no-summarize -n -e cat "$F" | nums)" "1 4 " "--no-summarize after --summarize: the lines"
+eq "$($S --no-summarize --summarize -e cat "$F")" "SUMMARY" "--summarize after --no-summarize wins"
+code 2 "--summarize-prompt with --no-summarize" -- $S --summarize --no-summarize --summarize-prompt=x -e cat "$F"
+code 2 "--summarize= (empty)" -- $S --summarize= -e cat "$F"
+reset
 eq "$(stat count)" "0" "--summarize errors send nothing"
 rm -f "$tmp/sum.in"; $S --summarize --dry-run -e cat "$F" | grep -q '^sys1grep: summarize: claude -p --model haiku --tools "" .*--system-prompt "Summarize' || fail "--dry-run shows the summarizer"
 [ ! -e "$tmp/sum.in" ] || fail "--dry-run runs the summarizer"
@@ -768,7 +774,11 @@ for o in -c -o -q; do code 2 "--rank with $o" -- $J --rank $o -e cat "$tmp/rk.tx
 code 2 "--rank, regex only" -- $J --rank -e /cat/ "$tmp/rk.txt"
 code 2 "--rank, negated meanings only" -- $J --rank -v cat "$tmp/rk.txt"
 code 2 "--rank=nope" -- $J --rank=nope -e cat "$tmp/rk.txt"
-code 2 "--rank in SYS1GREP_OPTS" -- $E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS=--rank node ../sys1grep.mjs -e cat "$tmp/rk.txt"
+eq "$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS=--rank=match node ../sys1grep.mjs -n -e cat "$tmp/rk.txt" | head -1)" "1." "--rank in SYS1GREP_OPTS"
+eq "$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS=--rank node ../sys1grep.mjs --no-rank -c -e cat "$tmp/rk.txt")" "3" "--no-rank turns SYS1GREP_OPTS's off"
+eq "$($J -n --rank --no-rank -e cat "$tmp/rk.txt" | nums)" "1 5 7 " "--no-rank after --rank: file order"
+eq "$($J -n --no-rank --rank=match -e cat "$tmp/rk.txt" | head -2 | tr '\n' '|')" "1.|5:cat @0.8 @r0.3|" "--rank after --no-rank wins"
+code 2 "--rank= (empty)" -- $J --rank= -e cat "$tmp/rk.txt"
 eq "$($J -n -e cat "$tmp/rk.txt" | nums)" "1 5 7 " "without --rank: file order"
 
 # #58 / #125 review (item 9, owner 2026-09-27): -M/--max-columns bounds only what is *sent*, as before this PR: a
@@ -1055,7 +1065,7 @@ case $out in *'summarizingwithclaude'*'033[KSUMMARY'*) ;; *) fail "spinner while
 # --help: exit 0, Japanese by locale, lists the options
 code 0 "--help" -- $E LANG=C node ../sys1grep.mjs --help
 eq "$($E LANG=C node ../sys1grep.mjs -h | head -1 | cut -c1-15)" "usage: sys1grep" "-h"
-for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename' '--summarize' '--summarize-prompt' '--summarize-format' '-M' '--max-filesize' '--max-cost' '-y, --yes' '--rank'; do
+for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename' '--summarize' '--summarize-prompt' '--summarize-format' '-M' '--max-filesize' '--max-cost' '-y, --yes' '--rank' '--no-rank' '--no-summarize'; do
   $E LANG=C node ../sys1grep.mjs --help | grep -q -- "$o" || fail "--help lacks $o"
 done
 $E LANG=C node ../sys1grep.mjs --help | grep -q 'grep by meaning' || fail "--help in English"
