@@ -1526,13 +1526,15 @@ const toFunctions = (lines, isName, decorators) => {
   const out = [];
   // decorators (sys1grep's own JavaScript and Python rules, which take an @ line as a funcname line): a decorator line
   // starts its function, which stays open through the decorator's arguments (inside brackets nothing is a funcname)
-  // and any stacked decorators, until its def or class. ponytail: brackets inside strings are counted too
+  // and any stacked decorators, until its def or class. Brackets in a one-line string literal do not count.
+  // ponytail: a string over several lines (triple quotes, template literals) still counts its brackets
   let open = false, depth = 0;
   lines.forEach((line, i) => {
     const name = depth <= 0 && isName(line), decorator = decorators && name && /^\s*@/.test(line);
     if (!out.length || (name && !open)) { out.push({ lines: [], spans: [] }); open = decorator; }
     else if (name && !decorator) open = false;
-    depth = open ? depth + (line.match(/[([{]/g) ?? []).length - (line.match(/[)\]}]/g) ?? []).length : 0;
+    const code = line.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, '');
+    depth = open ? depth + (code.match(/[([{]/g) ?? []).length - (code.match(/[)\]}]/g) ?? []).length : 0;
     out.at(-1).lines.push(line);
     out.at(-1).spans.push([i + 1, 0, line.length]);
   });

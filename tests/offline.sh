@@ -341,6 +341,8 @@ printf 'def a():\n    pass\n@cache\n@retry(\n    times=3,\n)\ndef b():\n    requ
 eq "$($J --unit=function -n -e '/times/' "$tmp/d2.py" | nums)" "3 4 5 6 7 8 " "--unit=function: stacked decorators over several lines stay with their def"
 printf '@wrap(\nfunction () {}\n)\nclass C {}\nclass D {}\n' >"$tmp/d.ts"
 eq "$($J --unit=function -n -e '/wrap/' "$tmp/d.ts" | nums)" "1 2 3 4 " "--unit=function: a function in a decorator's arguments does not close it"
+printf '@tag("(")\ndef a():\n    pass\ndef b():\n    target()\n' >"$tmp/d3.py"
+eq "$($J --unit=function -n -e '/target/' "$tmp/d3.py" | nums)" "4 5 " "--unit=function: a bracket in a decorator's string does not count"
 printf 'function a() {}\nexport const b: () => number = () => 2;\n' >"$tmp/a.ts"
 eq "$($J --unit=function -n -e '/=> 2/' "$tmp/a.ts" | nums)" "2 " "--unit=function: an arrow function with a type annotation"
 printf 'function a() {}\nconst $ = () => 2;\n' >"$tmp/d.js"
