@@ -14,6 +14,10 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   results ranked, and with `--dedup` a representative is one result. `--dry-run` / `-i` show an upper bound on
   the extra requests. It needs a meaning, and is refused with `-c`, `-o` and `-q`; `--no-rank` turns off an
   earlier one.
+- `--format=plain|markdown|html` shapes `--rank`'s output: sys1grep writes a `## N. FILE` heading and a fenced block
+  per result, or one HTML document with a `<section>` (`<h2>`, `<pre>`) per result, escaped and uncolored. With
+  `--summarize` it is asked of TOOL, as `--summarize-format` was. Anywhere else it is an error on the command line
+  and unused in `SYS1GREP_OPTS`.
 - `--no-summarize` turns off an earlier `--summarize`, and `SYS1GREP_OPTS` now takes `--summarize` and `--rank`
   (both used to be refused there, having no `--no-` form to undo them for `-l` / `-c`). A `--summarize` in
   `SYS1GREP_OPTS` sends every search's matches to TOOL's provider too.
@@ -142,6 +146,9 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   `-z` / `--null-data` stay, as `--unit=zero`, and still combine with the sentence units to split each record into
   sentences.
 - `--unit=sentence-by-*` colors the matching sentence bold yellow instead of bold red, so a regex match inside it stands out.
+
+### Removed
+- `--summarize-format` (#122) is replaced by `--format`; using it is an error naming `--format`.
 
 ### Renamed
 `semgrep` collided with the trademarked static-analysis tool [Semgrep](https://semgrep.dev/) (#93).
