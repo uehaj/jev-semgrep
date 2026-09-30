@@ -695,7 +695,7 @@ $0.094 to $0.013, with the same answer (#69). It pays when the answer sits in a 
   `--no-summarize` turns it off for one search.
 - The answer is plain text: an LLM that is not told writes Markdown, noise on a terminal, so plain is asked for.
   `--format=markdown` or `=html` asks for those instead (`… --format=html … > summary.html`).
-  The answer prints as it comes, unchecked. In `SYS1GREP_OPTS` it is a standing preference, ignored without `--summarize`.
+  The answer prints as it comes, unchecked. In `SYS1GREP_OPTS` it is a standing preference, ignored without `--summarize` or `--rank`.
 - With `--dedup`, the TOOL gets what Jev got: each template's representative once, marked `(×N like it)`,
   not every line its answer was reused for.
 - More than 200 KB (about 50k tokens) is not sent at all: exit 2, with the size, before the TOOL is paid.

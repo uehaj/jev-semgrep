@@ -805,6 +805,14 @@ echo "$out" | grep -qxF '<section><h2>1.</h2><pre>1:cat &lt;b&gt;&amp;amp;' || f
 case $out in *"$esc"*) fail "--rank --format=html: no colors" ;; esac
 eq "$(echo "$out" | grep -c '</pre></section>')" "2" "--rank --format=html: a section per result"
 code 2 "--format=html with -l --rank" -- $J -l --rank --format=html -e cat "$tmp/rkf.txt"
+eq "$($J --rank --format=html -e zebra "$tmp/rkf.txt")" "" "--rank --format=html, no match: nothing"
+eq "$($J --dry-run --rank --format=html -e cat "$tmp/rkf.txt" | grep -c doctype)" "0" "--dry-run --rank --format=html: no document"
+printf 'cat one\0dog\0cat two\0' >"$tmp/rkz"
+eq "$($J -z --rank=match --format=markdown -e cat "$tmp/rkz" | head -4 | tr '\n' '|')" '## 1.||```|cat one|' "--rank -z --format=markdown: a record ends in one newline"
+eq "$($J -z --rank=match --format=markdown -e cat "$tmp/rkz" | sed -n 5p)" '```' "--rank -z --format=markdown: no blank line after it"
+cp "$tmp/rkf.txt" "$tmp/a_*b.txt"
+eq "$($J -H --rank=match --format=markdown -e cat "$tmp/a_*b.txt" | head -1)" "## 1. $(printf '%s' "$tmp/a_*b.txt" | sed 's/[_*]/\\&/g')" "--rank --format=markdown: the heading is escaped"
+eq "$($J -e cat -- --summarize-format 2>&1 | grep -c 'was removed' || true)" "0" "a file named --summarize-format is not the option"
 $S --summarize --rank --format=html -n -e cat "$tmp/rk.txt" >/dev/null
 eq "$(head -1 "$tmp/sum.in")" "1." "--summarize --rank --format=html: the lines stay plain"
 grep -q 'one complete HTML document' "$tmp/sum.argv" || fail "--summarize --rank --format=html: asked of TOOL"

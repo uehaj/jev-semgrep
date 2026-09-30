@@ -100,6 +100,7 @@ const OPTIONS = {
   summarize: { type: 'string' }, // pipe what would print to this LLM CLI and print its answer instead
   'summarize-prompt': { type: 'string' }, // the user's own instruction, added after the fixed one
   format: { type: 'string', default: 'plain' }, // plain / markdown / html: --rank's output, or asked of the summarizer
+  'summarize-format': { type: 'string' }, // removed (--format): parsed only to say so
   // the API settings, each overriding its environment variable
   'sys1-model': { type: 'string' }, // SYS1GREP_MODEL
   'sys1-url': { type: 'string' }, // SYS1GREP_URL
@@ -109,7 +110,6 @@ const OPTIONS = {
 };
 // SYS1GREP_OPTS holds default options only: no meanings, no files, no --. It goes in front of the arguments, so the
 // command line wins (a later value counts; --no-X clears a flag).
-if ([...SYS1GREP_OPTS.split(/\s+/), ...process.argv.slice(2)].some(a => /^--summarize-format(=|$)/.test(a))) die('--summarize-format was removed; use --format', false);
 const defaults = SYS1GREP_OPTS.split(/\s+/).filter(Boolean).map(fill);
 let optsInteractive = false; // -i from SYS1GREP_OPTS: a script without a terminal is told where it came from
 try {
@@ -125,6 +125,7 @@ const { values: opt, positionals: files, tokens } = parseArgs({
   allowNegative: true,
   tokens: true,
 });
+if (opt['summarize-format'] !== undefined) die('--summarize-format was removed; use --format', false);
 for (const k of ['rank', 'summarize']) if (opt[k] === OFF) delete opt[k];
 // --verbose / --dry-run (#90): where a parsed option's value came from. null: never set (caller says "default").
 // '': the command line (no source shown, as for any setting not from an env var or SYS1GREP_OPTS). 'SYS1GREP_OPTS':
@@ -1932,7 +1933,7 @@ const multi = opt['with-filename'] ?? (opt.r || asGit || targets.length > 1);
 // --summarize collects the lines instead; -z's NULs become blank lines there, since an LLM reads text.
 const piped = [];
 const write = summarizer ? s => piped.push(s) : s => process.stdout.write(s);
-const EOL = opt.gitlog ? '\n' : (summarizer || outFormat !== 'plain') && opt.z ? '\n\n' : SEP; // -g: each commit ends in a newline, so a blank line between
+const EOL = opt.gitlog || outFormat !== 'plain' ? '\n' : summarizer && opt.z ? '\n\n' : SEP; // -g: each commit ends in a newline, so a blank line between
 // --summarize --dedup (#98): a representative stands for its template, as it did for Jev: members share its answers
 // (the same Map), so each Map is piped once, with how many matching units it stands for: sentences, not the lines
 // they touch, so a sentence over two lines counts once.
@@ -2013,9 +2014,9 @@ if (opt.rank) {
   if (opt.l) for (const f of new Set(results.map(r => r.file))) console.log(paint(35, f));
   else {
     const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-    if (outFormat === 'html') write(`<!doctype html>\n<meta charset="utf-8">\n<title>sys1grep: ${esc(termsSaid(false))}</title>\n`);
+    if (outFormat === 'html' && results.length) write(`<!doctype html>\n<meta charset="utf-8">\n<title>sys1grep: ${esc(termsSaid(false))}</title>\n`);
     results.forEach((r, i) => {
-      const head = `${i + 1}.${opt.p ? ` [${paintProb(r.score)}]` : ''}${multi ? ` ${paint(35, r.file)}` : ''}`, body = r.rows.join('');
+      const head = `${i + 1}.${opt.p ? ` [${paintProb(r.score)}]` : ''}${multi ? ` ${paint(35, outFormat === 'markdown' ? r.file.replace(/[\\`*_[\]#<>|]/g, '\\$&') : r.file)}` : ''}`, body = r.rows.join('');
       // Markdown: a fence longer than any run of backticks in the lines, so none of them closes it
       const fence = '`'.repeat(Math.max(3, ...(body.match(/`+/g) ?? []).map(b => b.length + 1)));
       write(outFormat === 'html' ? `<section><h2>${esc(head)}</h2><pre>${esc(body)}</pre></section>\n`
