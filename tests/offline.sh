@@ -798,12 +798,25 @@ eq "$($J -n --rank=match --format=markdown -e cat "$tmp/rkf.txt")" "## 1.
 \`\`\`\`" "--rank --format=markdown: a fence longer than any in the lines"
 eq "$($J -n -H -p --rank=match --format=markdown -e cat "$tmp/rkf.txt" | head -1)" "## 1. [0.90] $tmp/rkf.txt" "--rank --format=markdown: the header as a heading"
 out=$($J -n --rank=match --format=html --color=always -e cat "$tmp/rkf.txt")
-eq "$(echo "$out" | head -3)" '<!doctype html>
-<meta charset="utf-8">
-<title>sys1grep: &quot;cat&quot;</title>' "--rank --format=html: a whole document"
-echo "$out" | grep -qF '<pre>1:cat &lt;b&gt;&amp;amp;' || fail "--rank --format=html: escaped, in <pre>: $out"
+eq "$(echo "$out" | head -1)$(echo "$out" | tail -1)" '<!doctype html></html>' "--rank --format=html: a whole document"
+eq "$(echo "$out" | grep -c '<!doctype html>')" "1" "--rank --format=html: one document"
+echo "$out" | grep -qF '<title>sys1grep: &quot;cat&quot;</title>' || fail "--rank --format=html: the title: $out"
+echo "$out" | grep -qF '>1:cat &lt;b&gt;&amp;amp;' || fail "--rank --format=html: escaped: $out"
 case $out in *"$esc"*) fail "--rank --format=html: no colors" ;; esac
-eq "$(echo "$out" | grep -c '</pre></section>')" "2" "--rank --format=html: a section per result"
+eq "$(echo "$out" | grep -c '<article class="result">')" "2" "--rank --format=html: an article per result"
+echo "$out" | grep -qF '<span class="score"></span>' || fail "--rank --format=html: no score without -p: $out"
+echo "$out" | grep -qF 'style="--s:90"' || fail "--rank --format=html: the meter gets the score: $out"
+eq "$($J -p --rank=match --format=html -e cat "$tmp/rkf.txt" | grep -c '<span class="score">0.90</span>')" "2" "--rank --format=html -p: the score"
+for t in ../templates/*.html; do
+  o=$($J -H --rank=match --format=html --template="$(basename "$t" .html)" -e cat "$tmp/rkf.txt" "$tmp/rk.txt")
+  case $o in *http://*|*https://*|*src=*|*@import*|*'url('*) fail "$t reaches outside the file: $o" ;; esac
+  echo "$o" | grep -q '<meta name="viewport"' || fail "$t: no viewport meta"
+  echo "$o" | grep -q '<html lang="en">' || fail "$t: no lang"
+  echo "$o" | grep -qF ">$tmp/rk.txt<" || fail "$t: no file names"
+done
+eq "$($J --rank=match --format=html --template=print -e cat "$tmp/rkf.txt" | grep -c '@page')" "1" "--template=print picks print"
+eq "$($J --rank=match --format=html -e cat "$tmp/rkf.txt" | grep -c '@page' || true)" "0" "the default is not print"
+eq "$($J --rank=match --format=html --template=terminal -e cat "$tmp/rkf.txt" | grep -c 'content="dark"')" "1" "--template=terminal picks terminal"
 code 2 "--format=html with -l --rank" -- $J -l --rank --format=html -e cat "$tmp/rkf.txt"
 eq "$($J --rank --format=html -e zebra "$tmp/rkf.txt")" "" "--rank --format=html, no match: nothing"
 eq "$($J --dry-run --rank --format=html -e cat "$tmp/rkf.txt" | grep -c doctype)" "0" "--dry-run --rank --format=html: no document"
