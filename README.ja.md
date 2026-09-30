@@ -675,8 +675,8 @@ $ sys1grep -r -n --summarize -e "API キーをファイルから読んでいる"
 - `SYS1GREP_OPTS` に書くとすべての検索を要約するので、一致した行は毎回 TOOL の提供元へも送られます。
   1 回だけ止めるには `--no-summarize` を付けます。
 - 答えはプレーンテキストです。何も言わなければ LLM は Markdown で書き、端末では雑音になるので、plain を頼みます。
-  `--summarize-format=markdown` か `=html` でそれらを頼めます（`… --summarize-format=html … > summary.html`）。
-  答えは確かめずにそのまま表示します。`SYS1GREP_OPTS` に書けば常用の設定になり、`--summarize` が無いときは無視します。
+  `--format=markdown` か `=html` でそれらを頼めます（`… --format=html … > summary.html`）。
+  答えは確かめずにそのまま表示します。`SYS1GREP_OPTS` に書けば常用の設定になり、`--summarize` も `--rank` も無いときは無視します。
 - `--dedup` では、Jev に送ったものと同じく、テンプレートごとの代表を 1 回だけ `(×N like it)` を付けて渡します。
   答えを使い回したすべての行は渡しません。
 - 200 KB（約 5 万トークン）を超えるときは何も渡さず、大きさを示して終了コード 2 で止まります。TOOL の費用がかかる前です。
@@ -689,7 +689,7 @@ $ sys1grep -r -n --summarize --summarize-prompt="3 行以内で。どのファ�
     -e "API キーをファイルから読んでいる" .
 ```
 
-`--summarize` が要ります。空の TEXT は指定しないのと同じです。`--summarize-format` の文より後に置くので、TEXT で書式を上書きできます。
+`--summarize` が要ります。空の TEXT は指定しないのと同じです。`--format` の文より後に置くので、TEXT で書式を上書きできます。
 
 他の TOOL:
 
@@ -732,6 +732,8 @@ tickets/a.txt-13-確認いたします。
 - `--rank=match` は結果の中で最も高い一致の確率で並べ、リクエストを送りません。1 行ずつの yes/no の答えなので、
   はっきりした一致どうしは近い値になり、文脈も読みません。
 - `-p` は見出しに点数を付けます（`1. [0.96] tickets/b.txt`）。`-l` は最良の結果の順にファイル名を出します。
+- `--format=markdown` は結果ごとに `## 1. tickets/b.txt` の見出しとコードブロックを、`--format=html` は結果ごとに
+  `<h2>` と `<pre>` の `<section>` を並べた 1 つの HTML 文書を書きます。行は表示どおりで、エスケープし、色は付けません。
 - `--summarize` には順位どおりに渡します。`--dedup` では代表 1 つが 1 つの結果です。
 - 意味が要ります（正規表現・`!`・`-v` だけでは並べられない）。`-c`・`-o`・`-q` とは併用できません。
   `--no-rank` はそれより前の `--rank`（`SYS1GREP_OPTS` のものなど）を取り消します。
