@@ -5,10 +5,11 @@
 //   -e / -Q terms are OR'd; -a / -v attach AND / AND NOT to the preceding term: (A and B and not C) or D.
 //   A leading ! negates just that meaning: -e A -e '!B' is A or not B.
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { existsSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync, writeSync } from 'node:fs';
+import { constants, copyFileSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, statSync, writeSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { format, parseArgs } from 'node:util';
 
 // Node 20 colors console.error red on a terminal (22 does not): stderr gets exactly what sys1grep writes.
@@ -100,6 +101,8 @@ const OPTIONS = {
   summarize: { type: 'string' }, // pipe what would print to this LLM CLI and print its answer instead
   'summarize-prompt': { type: 'string' }, // the user's own instruction, added after the fixed one
   format: { type: 'string', default: 'plain' }, // plain / markdown / html: --rank's output, or asked of the summarizer
+  template: { type: 'string' }, // --rank --format=html's document: a NAME under the templates dirs, or a file; list: the names
+  'install-templates': { type: 'boolean', default: false }, // copy the bundled templates to ~/.config/sys1grep/templates
   'summarize-format': { type: 'string' }, // removed (--format): parsed only to say so
   // the API settings, each overriding its environment variable
   'sys1-model': { type: 'string' }, // SYS1GREP_MODEL
@@ -556,6 +559,35 @@ if (opt.help) {
   console.log(locale.startsWith('ja') ? HELP_JA : HELP_EN);
   process.exit(0);
 }
+// --rank --format=html's document. A template is an HTML file split by <!--result--> and <!--/result--> into the
+// head, the part repeated per result, and the tail. A user's copy under ~/.config wins over the bundled one.
+const USER_TEMPLATES = `${homedir()}/.config/sys1grep/templates`, BUNDLED_TEMPLATES = fileURLToPath(new URL('templates', import.meta.url));
+const templateNames = dir => (existsSync(dir) ? readdirSync(dir).filter(f => /^[A-Za-z0-9_-]+\.html$/.test(f)).map(f => f.slice(0, -5)) : []);
+if (opt.template === 'list') {
+  const user = new Set(templateNames(USER_TEMPLATES));
+  for (const name of [...new Set([...user, ...templateNames(BUNDLED_TEMPLATES)])].sort()) console.log(user.has(name) ? `${name} (user)` : name);
+  process.exit(0);
+}
+if (opt['install-templates']) {
+  mkdirSync(USER_TEMPLATES, { recursive: true });
+  for (const name of templateNames(BUNDLED_TEMPLATES)) {
+    const to = `${USER_TEMPLATES}/${name}.html`;
+    // COPYFILE_EXCL: the file there may be the user's edited copy
+    try { copyFileSync(`${BUNDLED_TEMPLATES}/${name}.html`, to, constants.COPYFILE_EXCL); console.log(`copied ${to}`); }
+    catch (e) { if (e.code !== 'EEXIST') throw e; console.log(`kept ${to}`); }
+  }
+  process.exit(0);
+}
+const parseTemplate = (text, where) => {
+  const open = '<!--result-->', close = '<!--/result-->', times = m => text.split(m).length - 1;
+  for (const m of [open, close]) if (times(m) !== 1) throw new Error(`template ${where}: ${times(m) ? `${m} appears ${times(m)} times` : `no ${m}`}; it needs one ${open} ... ${close} around the part repeated per result`);
+  const [head, rest] = text.split(open);
+  if (!rest.includes(close)) throw new Error(`template ${where}: ${close} comes before ${open}`);
+  const [item, tail] = rest.split(close);
+  return { head, item, tail };
+};
+const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const fillPart = (part, vars) => part.replace(/\{\{(\w+)\}\}/g, (m, k) => (Object.hasOwn(vars, k) ? esc(String(vars[k])) : m));
 
 const customUrl = opt['sys1-url'] || SYS1GREP_URL;
 const apiUrl = customUrl || 'https://api.typesafe.ai/v1/systemone';
@@ -809,6 +841,16 @@ const globRe = o => g => {
   try { return new RegExp(`^${g.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.').replace(/\[!/g, '[^')}$`); }
   catch { die(`--${o}: '${g}' is not a valid glob (an unclosed [ ?)`); }
 };
+const templateName = opt.template ?? (process.env.SYS1GREP_TEMPLATE || 'default');
+let template = null;
+if (opt.rank && !opt.l && !summarizer && opt.format === 'html') {
+  const tried = /^[A-Za-z0-9_-]+$/.test(templateName) ? [USER_TEMPLATES, BUNDLED_TEMPLATES].map(d => `${d}/${templateName}.html`)
+    : templateName.includes('/') || templateName.endsWith('.html') ? [templateName]
+    : die(`--template: '${templateName}' is neither a NAME (letters, digits, _ and -) nor a file (containing / or ending in .html)`);
+  const where = tried.find(f => existsSync(f));
+  if (!where) die(`--template=${templateName}: no such template (tried ${tried.join(', ')})`, false);
+  try { template = parseTemplate(readFileSync(where, 'utf8'), where); } catch (e) { die(e.message, false); }
+} else if (optSrc('template') === '') die('--template needs --rank --format=html (without -l or --summarize)');
 const includes = (opt.include ?? []).map(globRe('include')), excludes = (opt.exclude ?? []).map(globRe('exclude'));
 for (const [o, gs] of [['include', opt.include], ['exclude', opt.exclude]]) for (const g of gs ?? [])
   if (g.includes('/')) console.error(`sys1grep: warning: --${o}='${g}' has a /, but globs match the file name only, not the path, so it matches no file`);
@@ -2013,14 +2055,17 @@ if (opt.rank) {
   results.sort((a, b) => b.score - a.score); // stable: ties keep file order
   if (opt.l) for (const f of new Set(results.map(r => r.file))) console.log(paint(35, f));
   else {
-    const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-    if (outFormat === 'html' && results.length) write(`<!doctype html>\n<meta charset="utf-8">\n<title>sys1grep: ${esc(termsSaid(false))}</title>\n`);
-    results.forEach((r, i) => {
+    if (outFormat === 'html' && results.length) {
+      const doc = { title: `sys1grep: ${termsSaid(false)}`, query: termsSaid(false), count: results.length };
+      write(fillPart(template.head, doc));
+      results.forEach((r, i) => write(fillPart(template.item, { rank: i + 1, score: opt.p ? r.score.toFixed(2) : '',
+        score_pct: Math.round(Math.min(1, Math.max(0, r.score)) * 100), file: multi ? r.file : '', lines: r.rows.join('') })));
+      write(fillPart(template.tail, doc));
+    } else results.forEach((r, i) => {
       const head = `${i + 1}.${opt.p ? ` [${paintProb(r.score)}]` : ''}${multi ? ` ${paint(35, outFormat === 'markdown' ? r.file.replace(/[\\`*_[\]#<>|]/g, '\\$&') : r.file)}` : ''}`, body = r.rows.join('');
       // Markdown: a fence longer than any run of backticks in the lines, so none of them closes it
       const fence = '`'.repeat(Math.max(3, ...(body.match(/`+/g) ?? []).map(b => b.length + 1)));
-      write(outFormat === 'html' ? `<section><h2>${esc(head)}</h2><pre>${esc(body)}</pre></section>\n`
-        : outFormat === 'markdown' ? `${i ? '\n' : ''}## ${head}\n\n${fence}\n${body}${fence}\n`
+      write(outFormat === 'markdown' ? `${i ? '\n' : ''}## ${head}\n\n${fence}\n${body}${fence}\n`
         : `${i ? '\n' : ''}${head}\n${body}`);
     });
   }

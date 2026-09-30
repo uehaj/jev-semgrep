@@ -12,7 +12,7 @@ trap 'kill $fake 2>/dev/null; wait $fake 2>/dev/null || true; rm -rf "$tmp"' EXI
 i=0; while [ ! -s "$tmp/port" ]; do i=$((i + 1)); [ $i -lt 200 ] || { echo "FAIL: fake-jev did not start" >&2; exit 1; }; sleep 0.05; done
 base="http://127.0.0.1:$(cat "$tmp/port")"
 # No key from the environment, and a HOME and cwd without .env, so nothing real is read or sent
-E="env -u SYS1GREP_API_KEY -u SEMGREP_API_KEY -u TYPESAFE_API_KEY -u SYS1GREP_MODEL -u SEMGREP_MODEL -u SEMGREP_URL -u SEMGREP_SUMMARIZER -u SEMGREP_SUMMARIZER_MODEL -u SYS1GREP_SUMMARIZER_API_KEY -u SEMGREP_SUMMARIZER_API_KEY -u OLLAMA_HOST -u NO_COLOR -u LC_ALL -u LC_MESSAGES HOME=$tmp SYS1GREP_OPTS="
+E="env -u SYS1GREP_API_KEY -u SYS1GREP_TEMPLATE -u SEMGREP_API_KEY -u TYPESAFE_API_KEY -u SYS1GREP_MODEL -u SEMGREP_MODEL -u SEMGREP_URL -u SEMGREP_SUMMARIZER -u SEMGREP_SUMMARIZER_MODEL -u SYS1GREP_SUMMARIZER_API_KEY -u SEMGREP_SUMMARIZER_API_KEY -u OLLAMA_HOST -u NO_COLOR -u LC_ALL -u LC_MESSAGES HOME=$tmp SYS1GREP_OPTS="
 J="$E SYS1GREP_URL=$base/v1 node ../sys1grep.mjs"
 stat() { curl -s "$base" | node -pe "JSON.parse(require('fs').readFileSync(0)).$1"; }
 reset() { curl -s "$base/reset" >/dev/null; }
@@ -801,7 +801,7 @@ out=$($J -n --rank=match --format=html --color=always -e cat "$tmp/rkf.txt")
 eq "$(echo "$out" | head -3)" '<!doctype html>
 <meta charset="utf-8">
 <title>sys1grep: &quot;cat&quot;</title>' "--rank --format=html: a whole document"
-echo "$out" | grep -qxF '<section><h2>1.</h2><pre>1:cat &lt;b&gt;&amp;amp;' || fail "--rank --format=html: escaped, in <pre>: $out"
+echo "$out" | grep -qF '<pre>1:cat &lt;b&gt;&amp;amp;' || fail "--rank --format=html: escaped, in <pre>: $out"
 case $out in *"$esc"*) fail "--rank --format=html: no colors" ;; esac
 eq "$(echo "$out" | grep -c '</pre></section>')" "2" "--rank --format=html: a section per result"
 code 2 "--format=html with -l --rank" -- $J -l --rank --format=html -e cat "$tmp/rkf.txt"
@@ -816,6 +816,43 @@ eq "$($J -e cat -- --summarize-format 2>&1 | grep -c 'was removed' || true)" "0"
 $S --summarize --rank --format=html -n -e cat "$tmp/rk.txt" >/dev/null
 eq "$(head -1 "$tmp/sum.in")" "1." "--summarize --rank --format=html: the lines stay plain"
 grep -q 'one complete HTML document' "$tmp/sum.argv" || fail "--summarize --rank --format=html: asked of TOOL"
+
+# --template (#158): a document split by <!--result--> / <!--/result-->, looked up under ~/.config then the package
+TH="$tmp/th"; ut="$TH/.config/sys1grep/templates"; mkdir -p "$ut"
+H="$E HOME=$TH SYS1GREP_URL=$base/v1 node ../sys1grep.mjs"
+printf '%s\n' 'cat <script>x</script> & {{rank}}' 'dog' 'cat two' >"$tmp/tp1.txt"; printf '%s\n' 'cat three' >"$tmp/tp2.txt"
+printf '%s' 'T={{title}}|Q={{query}}|N={{count}}|X={{nope}}<!--result-->[{{rank}} {{score}} {{score_pct}} {{file}}:{{lines}}]<!--/result-->END' >"$tmp/plain.html"
+eq "$($H -n -p --rank=match --format=html --template="$tmp/plain.html" -e cat "$tmp/tp1.txt" | tr '\t' ' ')" 'T=sys1grep: &quot;cat&quot;|Q=&quot;cat&quot;|N=2|X={{nope}}[1 0.90 90 :1:cat &lt;script&gt;x&lt;/script&gt; &amp; {{rank}} [0.90]
+][2 0.90 90 :3:cat two [0.90]
+]END' "--template=FILE: placeholders filled and escaped, the result's text never expanded, an unknown one kept"
+eq "$($H --rank=match --format=html --template="$tmp/plain.html" -e cat "$tmp/tp1.txt" "$tmp/tp2.txt" | head -1 | cut -d'[' -f2)" "1  90 $tmp/tp1.txt:$tmp/tp1.txt:cat &lt;script&gt;x&lt;/script&gt; &amp; {{rank}}" "--template: {{file}} with several files, {{score}} empty without -p"
+eq "$($H --rank=match --format=html --template="$tmp/plain.html" -e zebra "$tmp/tp1.txt")" "" "--template, no match: nothing"
+printf '%s' 'mine<!--result-->{{rank}}<!--/result-->' >"$ut/default.html"
+eq "$($H --rank=match --format=html -e cat "$tmp/tp1.txt")" "mine12" "a user template wins over the bundled one of its name"
+eq "$($E HOME=$TH SYS1GREP_URL=$base/v1 SYS1GREP_TEMPLATE="$tmp/plain.html" node ../sys1grep.mjs --rank=match --format=html -e cat "$tmp/tp1.txt" | head -c 5)" "T=sys" "SYS1GREP_TEMPLATE picks the template"
+eq "$($E HOME=$TH SYS1GREP_URL=$base/v1 SYS1GREP_TEMPLATE=none node ../sys1grep.mjs -c -e cat "$tmp/tp1.txt")" "2" "SYS1GREP_TEMPLATE outside --rank --format=html: unused"
+eq "$($H --template=list | tr '\n' ' ')" "$(ls ../templates | sed 's/\.html$//' | sed 's/^default$/default (user)/' | tr '\n' ' ')" "--template=list: every name, the user's marked"
+code 0 "--template=list with no key or meaning" -- $E HOME=$TH node ../sys1grep.mjs --template=list
+rm "$ut/default.html"
+code 2 "--template=NAME not found" -- $H --rank --format=html --template=nosuch -e cat "$tmp/tp1.txt"
+eq "$($H --rank --format=html --template=nosuch -e cat "$tmp/tp1.txt" 2>&1)" "sys1grep: --template=nosuch: no such template (tried $ut/nosuch.html, $(cd ../templates && pwd -P)/nosuch.html)" "--template not found names every path tried, the user's first"
+code 2 "--template=FILE not found" -- $H --rank --format=html --template="$tmp/none.html" -e cat "$tmp/tp1.txt"
+for bad in 'a<!--/result-->b' 'a<!--result-->b' 'a<!--/result-->b<!--result-->c' 'a<!--result-->b<!--result-->c<!--/result-->d'; do
+  printf '%s' "$bad" >"$tmp/bad.html"
+  code 2 "template '$bad'" -- $H --rank --format=html --template="$tmp/bad.html" -e cat "$tmp/tp1.txt"
+  $H --rank --format=html --template="$tmp/bad.html" -e cat "$tmp/tp1.txt" 2>&1 | grep -qF "template $tmp/bad.html: " || fail "a broken template is named: '$bad'"
+done
+reset; code 2 "--template with --format=markdown" -- $H --rank --format=markdown --template=default -e cat "$tmp/tp1.txt"
+eq "$(stat count)" "0" "--template with --format=markdown sends nothing"
+code 2 "--template without --rank" -- $H --format=html --template=default -e cat "$tmp/tp1.txt"
+code 2 "--template with -l" -- $H -l --rank --format=html --template=default -e cat "$tmp/tp1.txt"
+code 2 "--template=a.b (neither a name nor a file)" -- $H --rank --format=html --template=a.b -e cat "$tmp/tp1.txt"
+IH="$tmp/ih"; bundled=$(ls ../templates | wc -l | tr -d ' ')
+eq "$($E HOME=$IH node ../sys1grep.mjs --install-templates | grep -c "^copied $IH/.config/sys1grep/templates/[a-z]*\.html$")" "$bundled" "--install-templates copies each bundled template"
+eq "$(cat "$IH/.config/sys1grep/templates/default.html")" "$(cat ../templates/default.html)" "--install-templates: the bundled file, as it is"
+echo edited >"$IH/.config/sys1grep/templates/default.html"
+eq "$($E HOME=$IH node ../sys1grep.mjs --install-templates | grep -c '^kept ')" "$bundled" "--install-templates again: every file kept"
+eq "$(cat "$IH/.config/sys1grep/templates/default.html")" "edited" "--install-templates never overwrites an edited file"
 
 # #58 / #125 review (item 9, owner 2026-09-27): -M/--max-columns bounds only what is *sent*, as before this PR: a
 # unit past it is truncated to the first NUM characters, still searched and judged on that truncated text, not
