@@ -320,10 +320,18 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
   --summarize-prompt=TEXT  the user's own instruction, added after the fixed one in --summarize's system
                prompt (how long, what to focus on, ...). Needs --summarize; empty TEXT is the same as none
   --format=FORMAT  plain (default) / markdown / html. With --rank, sys1grep writes the results itself: markdown a
-               ## heading and a fenced block per result, html one document with a <section> (<h2>, <pre>) per
-               result, escaped, uncolored. With --summarize it is asked of TOOL instead (plain: no Markdown), and its
+               ## heading and a fenced block per result, html one document from --template, escaped,
+               uncolored. With --summarize it is asked of TOOL instead (plain: no Markdown), and its
                answer prints as it comes, unchecked; before --summarize-prompt's TEXT, which can override it. Needs
                --rank (not with -l) or --summarize, except in SYS1GREP_OPTS. (It replaces --summarize-format.)
+  --template=NAME  the document --rank --format=html writes (default: SYS1GREP_TEMPLATE, else default):
+               ~/.config/sys1grep/templates/NAME.html, else the bundled one (default, print, terminal); a
+               value with / or ending in .html is a file. Placeholders: {{title}} {{query}} {{count}}, and
+               between <!--result--> and <!--/result--> (repeated per result) {{rank}} {{score}} (with -p)
+               {{score_pct}} (0-100) {{file}} (with several files) {{lines}}; each is filled in escaped.
+               --template=list prints the names, (user) marking your own
+  --install-templates  copy the bundled templates to ~/.config/sys1grep/templates to edit; an existing
+               file is kept
   --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
                the API settings, overriding SYS1GREP_MODEL, SYS1GREP_URL, SYS1GREP_API_KEY below.
                A key on the command line shows up in ps and shell history; prefer ~/.config/sys1grep/.env
@@ -342,6 +350,7 @@ Environment (read from the environment, else from ~/.config/sys1grep/.env; ./.en
                      ollama, lmstudio and a URL
   SYS1GREP_SUMMARIZER_API_KEY  sent as Authorization: Bearer to a --summarize=URL server only (never
                      SYS1GREP_API_KEY, which is Jev's)
+  SYS1GREP_TEMPLATE   --template's default, for --rank --format=html
   SYS1GREP_OPTS       default options, split on spaces and put before the command line, which wins;
                      --no-X turns a boolean flag off (--color takes --color=never). Options only: no
                      meanings, files or --. e.g. SYS1GREP_OPTS='--level strict -n'. Scripts: SYS1GREP_OPTS= sys1grep
@@ -522,10 +531,18 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
   --summarize-prompt=TEXT  --summarize のシステムプロンプトに、固定の指示に続けて足すユーザー自身の指示
                (長さ・観点など)。--summarize が要る。空の TEXT は指定しないのと同じ
   --format=FORMAT  plain (既定) / markdown / html。--rank では sys1grep 自身が結果を書く。markdown は結果ごとに
-               ## 見出しとコードブロック、html は結果ごとに <section> (<h2>, <pre>) を並べた 1 つの文書で、文字は
-               エスケープし色は付けない。--summarize では代わりに TOOL に頼み (plain は Markdown なし)、答えは
-               確かめずにそのまま表示する。--summarize-prompt の TEXT より前に置くので TEXT で上書きできる。
+               ## 見出しとコードブロック、html は --template の 1 つの文書で、文字はエスケープし色は付けない。
+               --summarize では代わりに TOOL に頼み (plain は Markdown なし)、答えは確かめずにそのまま表示する。
+               --summarize-prompt の TEXT より前に置くので TEXT で上書きできる。
                --rank (-l とは併用不可) か --summarize が要る (SYS1GREP_OPTS では要らない)。--summarize-format の後継
+  --template=NAME  --rank --format=html が書く文書 (既定は SYS1GREP_TEMPLATE、無ければ default)。
+               ~/.config/sys1grep/templates/NAME.html、無ければ同梱のもの (default, print, terminal)。/ を含むか
+               .html で終わる値はファイル。置き換える文字列は {{title}} {{query}} {{count}} と、<!--result--> と
+               <!--/result--> の間 (結果ごとに繰り返す) の {{rank}} {{score}} (-p のとき) {{score_pct}} (0〜100)
+               {{file}} (複数ファイルのとき) {{lines}}。どれもエスケープして入れる。
+               --template=list は名前を出し、自分のものに (user) を付ける
+  --install-templates  同梱のテンプレートを編集用に ~/.config/sys1grep/templates へコピーする。
+               既にあるファイルはそのまま残す
   --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
                API の設定。下の SYS1GREP_MODEL / SYS1GREP_URL / SYS1GREP_API_KEY より優先。
                コマンドラインのキーは ps やシェル履歴に残るので、なるべく ~/.config/sys1grep/.env に書く
@@ -544,6 +561,7 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                      ollama・lmstudio・URL では必須
   SYS1GREP_SUMMARIZER_API_KEY  --summarize=URL のサーバへ Authorization: Bearer で送る
                      (Jev 用の SYS1GREP_API_KEY とは別)
+  SYS1GREP_TEMPLATE   --rank --format=html の --template の既定
   SYS1GREP_OPTS       既定のオプション。空白で区切ってコマンドラインの前に置くので、コマンドラインが
                      優先する。--no-X で真偽のフラグを消せる (--color は --color=never)。書けるのは
                      オプションだけで、意味・ファイル・-- は書けない。例 SYS1GREP_OPTS='--level strict -n'。

@@ -1151,7 +1151,7 @@ case $out in *'summarizingwithclaude'*'033[KSUMMARY'*) ;; *) fail "spinner while
 # --help: exit 0, Japanese by locale, lists the options
 code 0 "--help" -- $E LANG=C node ../sys1grep.mjs --help
 eq "$($E LANG=C node ../sys1grep.mjs -h | head -1 | cut -c1-15)" "usage: sys1grep" "-h"
-for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename' '--summarize' '--summarize-prompt' '--format' '-M' '--max-filesize' '--max-cost' '-y, --yes' '--rank' '--no-rank' '--no-summarize'; do
+for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename' '--summarize' '--summarize-prompt' '--format' '-M' '--max-filesize' '--max-cost' '-y, --yes' '--rank' '--no-rank' '--no-summarize' '--template=NAME' '--install-templates'; do
   $E LANG=C node ../sys1grep.mjs --help | grep -q -- "$o" || fail "--help lacks $o"
 done
 $E LANG=C node ../sys1grep.mjs --help | grep -q 'grep by meaning' || fail "--help in English"

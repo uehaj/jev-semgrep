@@ -732,11 +732,52 @@ tickets/a.txt-13-確認いたします。
 - `--rank=match` は結果の中で最も高い一致の確率で並べ、リクエストを送りません。1 行ずつの yes/no の答えなので、
   はっきりした一致どうしは近い値になり、文脈も読みません。
 - `-p` は見出しに点数を付けます（`1. [0.96] tickets/b.txt`）。`-l` は最良の結果の順にファイル名を出します。
-- `--format=markdown` は結果ごとに `## 1. tickets/b.txt` の見出しとコードブロックを、`--format=html` は結果ごとに
-  `<h2>` と `<pre>` の `<section>` を並べた 1 つの HTML 文書を書きます。行は表示どおりで、エスケープし、色は付けません。
+- `--format=markdown` は結果ごとに `## 1. tickets/b.txt` の見出しとコードブロックを、`--format=html` はテンプレート
+  （下記）から 1 つの自己完結した HTML 文書を書きます。ライトとダークに対応し、結果ごとに関連度のバーが付きます。
+  行は表示どおりで、エスケープし、色は付けません。
 - `--summarize` には順位どおりに渡します。`--dedup` では代表 1 つが 1 つの結果です。
 - 意味が要ります（正規表現・`!`・`-v` だけでは並べられない）。`-c`・`-o`・`-q` とは併用できません。
   `--no-rank` はそれより前の `--rank`（`SYS1GREP_OPTS` のものなど）を取り消します。
+
+### HTML のテンプレート (`--template`)
+
+`--rank --format=html` はテンプレートを埋めて書きます。同梱は 3 つで、`default`、`print`（白地に黒の明朝系、
+紙と PDF 向け）、`terminal`（暗い背景の等幅）です。`--template=NAME` で選び、環境変数か
+`~/.config/sys1grep/.env` の `SYS1GREP_TEMPLATE` で既定を決められます。
+
+```sh
+$ sys1grep -r -n -C1 --rank -p --format=html --template=print -e "返金を断られた" tickets/ > refunds.html
+```
+
+テンプレートは 1 つの HTML ファイルです。`<!--result-->` と `<!--/result-->` の間を結果ごとに繰り返し、
+その前と後は 1 回だけ書きます。次の文字列をエスケープした値に置き換え、それ以外の `{{…}}` はそのまま残します。
+
+| 置き換える文字列 | 使える場所 | 値 |
+|---|---|---|
+| `{{title}}` | どこでも | `sys1grep: ` と意味 |
+| `{{query}}` | どこでも | 意味。`"refund" and not "policy"` の形 |
+| `{{count}}` | どこでも | 結果の数 |
+| `{{rank}}` | 結果ごと | 1, 2, … |
+| `{{score}}` | 結果ごと | `-p` が出す形の点数（`0.96`）。`-p` が無ければ空 |
+| `{{score_pct}}` | 結果ごと | 点数を 0〜100 の整数にしたもの。常に入る（バーには `style="--s:{{score_pct}}"`） |
+| `{{file}}` | 結果ごと | ファイル名。1 ファイルだけを探したときは空 |
+| `{{lines}}` | 結果ごと | 結果の行。表示どおり |
+
+`--template=NAME` は `~/.config/sys1grep/templates/NAME.html` があればそれを、無ければ同梱のものを読みます。
+なので自分の `default` を置けば同梱のものに代わります。`/` を含むか `.html` で終わる値はファイルのパスです。
+自分のものを作るには、同梱のものをコピーして編集します。
+
+```sh
+$ sys1grep --install-templates            # ファイルごとに "copied PATH"
+$ cp ~/.config/sys1grep/templates/default.html ~/.config/sys1grep/templates/team.html
+$ sys1grep -r --rank --format=html --template=team -e "..." src/ > out.html
+$ sys1grep --template=list                # 1 行に 1 つの名前。~/.config のものには "(user)"
+```
+
+`--install-templates` は既にあるファイルを上書きしません（そのファイルには `kept` と出します）。テンプレートが
+見つからない、あるいは `<!--result-->` 1 つの後に `<!--/result-->` 1 つ、になっていないときは、そのファイルを
+示して終了コード 2 です。コマンドラインの `--template` には `--rank --format=html` が要ります。
+`SYS1GREP_TEMPLATE` はそれ以外では使われないだけです。
 
 ## Claude Code から使う
 
@@ -837,6 +878,10 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
                前述の「テンプレートごとに 1 行だけ判定する」を参照)
   --rank[=jev|match]  結果 (一致とその文脈) を良いものから順に番号付きの見出しの下に出す。jev (値なしの
                --rank) は各結果を Jev に聞き、match は最も高い一致の確率で並べる (前述の「良いものから順に出す」を参照)。--no-rank でファイル順
+  --template=NAME  --rank --format=html が書く文書。~/.config/sys1grep/templates/NAME.html、無ければ同梱のもの
+               (default, print, terminal)、またはファイル。既定は SYS1GREP_TEMPLATE、無ければ default。
+               --template=list は名前を出す (前述の「HTML のテンプレート」を参照)
+  --install-templates  同梱のテンプレートを ~/.config/sys1grep/templates へコピーする。既にあるファイルは残す
   --color[=WHEN] 色付け。auto (端末なら付ける、既定) / always / never。=WHEN 省略時は auto
                ファイル名・行番号は grep と同じ配色。-p の確率は閾値以上を緑、
                否定側の閾値未満を赤、あいだを黄で表示。NO_COLOR にも従う
