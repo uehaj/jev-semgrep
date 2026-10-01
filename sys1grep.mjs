@@ -1544,7 +1544,13 @@ const POSIX = { alpha: 'A-Za-z', digit: '0-9', alnum: 'A-Za-z0-9', upper: 'A-Z',
 // ponytail: the swap ignores bracket expressions, where a BRE's ( or { would wrongly gain a backslash
 const fromBre = src => src.replace(/\\?[(){}|+?]/g, c => (c.length === 2 ? c[1] : `\\${c}`));
 const fromPosix = src => src.replace(/\[:(\w+):\]/g, (m, c) => { if (!POSIX[c]) throw new Error(`unknown class [:${c}:]`); return POSIX[c]; });
-const isFuncname = pats => line => { for (const { not, re } of pats) if (re.test(line)) return !not; return false; };
+const funcnameOf = pats => line => { for (const { not, re } of pats) { const m = re.exec(line); if (m) return not ? null : m; } return null; };
+// A function's name (#163): from the funcname pattern's first group when a name is in it, else the line; the identifier
+// after def / function / class / func / fn / const..., or before the first (. A keyword is no name: "function (" is anonymous.
+// ponytail: a method (indented, or "name(...) {" in a class body) is not a funcname line, so it has no unit or name of its own
+const NAME = /\b(?:(?:async\s+)?(?:def|function\*?|class|func|fn|sub)\s+(?:\([^)]*\)\s*)?|(?:const|let|var)\s+)([A-Za-z_$][\w$]*)|([A-Za-z_$][\w$]*)\s*\(/;
+const KEYWORDS = new Set(['async', 'await', 'catch', 'class', 'def', 'do', 'elif', 'else', 'for', 'fn', 'func', 'function', 'if', 'in', 'lambda', 'new', 'return', 'sub', 'switch', 'typeof', 'while', 'with', 'yield']);
+const nameIn = m => { const [, a, b] = (m[1] && NAME.exec(m[1])) || NAME.exec(m.input) || []; return a ?? b ?? null; };
 const funcnamesOf = new Map(); // file -> patterns
 if (opt.unit === 'function') {
   const git = (args, input) => { try { return execFileSync('git', args, { input, encoding: 'utf8', maxBuffer: Infinity, stdio: ['pipe', 'pipe', 'ignore'] }); } catch { return ''; } };
@@ -1569,8 +1575,9 @@ if (opt.unit === 'function') {
     funcnamesOf.set(f, configured.get(driver) ?? FUNCNAMES[driver] ?? FUNCNAMES[ext] ?? DEFAULT_FUNCNAME);
   });
 }
-// lines -> [{ text, spans }], one per function; a span covers a whole line, as toSentences' spans do part of one.
-const toFunctions = (lines, isName, decorators) => {
+// lines -> [{ text, spans, name, def }], one per function; a span covers a whole line, as toSentences' spans do part of
+// one. name: from its funcname line (with a decorator, the def or class line under it); def: that line's index in the unit.
+const toFunctions = (lines, funcname, decorators) => {
   const out = [];
   // decorators (sys1grep's own JavaScript and Python rules, which take an @ line as a funcname line): a decorator line
   // starts its function, which stays open through the decorator's arguments (inside brackets nothing is a funcname)
@@ -1578,16 +1585,18 @@ const toFunctions = (lines, isName, decorators) => {
   // ponytail: a string over several lines (triple quotes, template literals) still counts its brackets
   let open = false, depth = 0;
   lines.forEach((line, i) => {
-    const name = depth <= 0 && isName(line), decorator = decorators && name && /^\s*@/.test(line);
-    if (!out.length || (name && !open)) { out.push({ lines: [], spans: [] }); open = decorator; }
-    else if (name && !decorator) open = false;
+    const m = depth <= 0 ? funcname(line) : null, decorator = decorators && m && /^\s*@/.test(line);
+    if (!out.length || (m && !open)) { out.push({ lines: [], spans: [], name: null, def: null }); open = decorator; }
+    else if (m && !decorator) open = false;
+    const u = out.at(-1);
+    if (m && !decorator && u.def === null) { const n = nameIn(m); u.def = u.lines.length; u.name = KEYWORDS.has(n) ? null : n; }
     const code = line.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, '');
     depth = open ? depth + (code.match(/[([{]/g) ?? []).length - (code.match(/[)\]}]/g) ?? []).length : 0;
-    out.at(-1).lines.push(line);
-    out.at(-1).spans.push([i + 1, 0, line.length]);
+    u.lines.push(line);
+    u.spans.push([i + 1, 0, line.length]);
   });
   // Blank lines before the next funcname line are judged with the function but not printed, as git grep -W.
-  return out.map(u => ({ text: u.lines.join('\n'), spans: u.spans.slice(0, u.lines.findLastIndex(l => l.trim()) + 1 || 1) }));
+  return out.map(u => ({ text: u.lines.join('\n'), spans: u.spans.slice(0, u.lines.findLastIndex(l => l.trim()) + 1 || 1), name: u.name, def: u.def }));
 };
 const unitName = opt.unit === 'function' ? 'functions' : opt.unit.startsWith('sentence') ? 'sentences' : opt.z ? 'records' : 'lines';
 for (const [file, src] of read) {
@@ -1600,7 +1609,7 @@ for (const [file, src] of read) {
     if (opt.o) sources.set(file, sentences.map(u => u.text));
     units = sentences.map(u => u.text);
   } else if (opt.unit === 'function') {
-    const functions = toFunctions(src, isFuncname(funcnamesOf.get(file) ?? DEFAULT_FUNCNAME), Object.values(FUNCNAMES).includes(funcnamesOf.get(file)));
+    const functions = toFunctions(src, funcnameOf(funcnamesOf.get(file) ?? DEFAULT_FUNCNAME), Object.values(FUNCNAMES).includes(funcnamesOf.get(file)));
     spansOf.set(file, functions.map(u => u.spans));
     units = functions.map(u => u.text);
   }
