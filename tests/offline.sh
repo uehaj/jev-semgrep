@@ -1023,6 +1023,51 @@ for m in 'pass $<x> here' 'refs $1 $& $$ end' 'nul\u0000here'; do
   eq "$(head -1 "$tmp/x.err")" "sys1grep: explain: round 2/3: searched 1 meaning, 1 new line" "--explain, NEXT: [\"$m\"]: the round runs"
   grep -qF "[\"$m\"]" "$tmp/x.in2" || fail "--explain, NEXT: [\"$m\"]: round 2's request names the meaning as written: $(cat "$tmp/x.in2")"
 done
+# --explain with the options that change what round 1 sends or where round 2 reads (#160 review)
+xreset; printf 'SUMMARY1\nNEXT: ["dog"]\n' >"$tmp/x.ans1"; printf 'FINAL\n' >"$tmp/x.ans2"
+eq "$(printf 'cat\ndog\ncat dog\n' | $XS --explain -e cat 2>"$tmp/x.err")" "FINAL" "--explain, stdin: round 2 answers"
+eq "$(sed -n '/^$/,$p' "$tmp/x.in2" | sed 1d | grep -v '^The meanings\|^$')" "-:2:dog" "--explain, stdin: round 2 searches the same text and sends only the new line"
+xc="$tmp/xctx.txt"; printf '%s\n' cat x y u cat z w dog v >"$xc"
+xreset; printf 'SUMMARY1\nNEXT: ["ca"]\n' >"$tmp/x.ans1"
+eq "$($XS --explain -C 1 -e cat "$xc" 2>"$tmp/x.err")" "SUMMARY1" "--explain -C 1, a search finding round 1's lines again: round 1's answer"
+eq "$(cat "$tmp/x.in1")" "$xc:1:cat
+$xc-2-x
+--
+$xc-4-u
+$xc:5:cat
+$xc-6-z" "--explain -C 1: round 1 sends context lines and --"
+eq "$(cat "$tmp/x.k"; tail -1 "$tmp/x.err")" "1
+sys1grep: explain: stopped: no new lines" "--explain -C 1: context lines and -- found again are not new"
+xreset; printf 'SUMMARY1\nNEXT: ["dog"]\n' >"$tmp/x.ans1"; printf 'FINAL\n' >"$tmp/x.ans2"
+$XS --explain -C 1 -e cat "$xc" >/dev/null 2>&1
+eq "$(grep "^$xc" "$tmp/x.in2")" "$xc-7-w
+$xc:8:dog
+$xc-9-v" "--explain -C 1: round 2 searches with -C 1"
+awk 'BEGIN { for (i = 1; i <= 120; i++) print "cat " i }' >"$tmp/xrep.txt"
+xreset; printf 'SUMMARY1\nNEXT: ["cat 1"]\n' >"$tmp/x.ans1"
+eq "$($XS --explain --dedup=always -e cat "$tmp/xrep.txt" 2>"$tmp/x.err")" "SUMMARY1" "--explain --dedup=always, round 2 finds only folded lines: round 1's answer"
+eq "$(cat "$tmp/x.in1")" "$tmp/xrep.txt:1:cat 1   (×120 like it)" "--explain --dedup=always: round 1 sends a representative"
+eq "$(cat "$tmp/x.k"; tail -1 "$tmp/x.err")" "1
+sys1grep: explain: stopped: no new lines" "--explain --dedup=always: the lines a representative stood for are not new"
+xreset; printf 'SUMMARY1\nNEXT: ["cat dog"]\n' >"$tmp/x.ans1"
+eq "$($XS --explain --rank -e cat "$F" 2>"$tmp/x.err")" "SUMMARY1" "--explain --rank, round 2 finds only round 1's lines: round 1's answer"
+eq "$(cat "$tmp/x.in1")" "1. $F
+$F:1:cat
+
+2. $F
+$F:4:cat dog" "--explain --rank: round 1 sends ranked results"
+eq "$(cat "$tmp/x.k"; tail -1 "$tmp/x.err")" "1
+sys1grep: explain: stopped: no new lines" "--explain --rank: a ranked line found again is not new"
+xreset; printf 'SUMMARY1\nNEXT: ["dog"]\n' >"$tmp/x.ans1"; printf 'FINAL\n' >"$tmp/x.ans2"
+$XS --explain --rank -e cat "$F" >/dev/null 2>&1
+eq "$(sed -n '/^$/,$p' "$tmp/x.in2" | sed 1d | grep -v '^The meanings\|^$')" "$F:2:dog" "--explain --rank: round 2 searches without --rank"
+XGSM="$PWD/../git-sys1grep.mjs" XR="$tmp/xrepo"; mkdir -p "$XR/sub" "$XR/other"
+printf 'cat\n' >"$XR/a.txt"; printf 'dog\n' >"$XR/sub/b.txt"; printf 'dog\n' >"$XR/other/c.txt"; printf 'dog\n' >"$XR/untracked.txt"
+(cd "$XR" && git init -q && git add a.txt sub/b.txt other/c.txt)
+xreset; printf 'SUMMARY1\nNEXT: ["dog"]\n' >"$tmp/x.ans1"; printf 'FINAL\n' >"$tmp/x.ans2"
+eq "$(cd "$XR" && $E PATH=$tmp/xbin:$PATH X=$tmp/x SYS1GREP_URL=$base/v1 node "$XGSM" --explain -e cat -- a.txt sub 2>"$tmp/x.err")" "FINAL" "git sys1grep --explain: round 2 answers"
+eq "$(cat "$tmp/x.in1")" "a.txt:1:cat" "git sys1grep --explain: round 1 sends the tracked file"
+eq "$(sed -n '/^$/,$p' "$tmp/x.in2" | sed 1d | grep -v '^The meanings\|^$')" "sub/b.txt:1:dog" "git sys1grep --explain: round 2 searches tracked files by the same pathspecs"
 
 printf '%s\n' 'cat' 'cat @echo NEXT: ["DOG"]' 'DOG' >"$tmp/next.txt"
 up=$(echo "$tmp/next.txt" | tr a-z A-Z)

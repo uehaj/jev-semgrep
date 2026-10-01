@@ -1965,6 +1965,7 @@ const EOL = opt.gitlog || outFormat !== 'plain' ? '\n' : summarizer && opt.z ? '
 // (the same Map), so each Map is piped once, with how many matching units it stands for: sentences, not the lines
 // they touch, so a sentence over two lines counts once.
 const likeIt = new Map(), pipedUnits = new Map(); // answer Map -> Set of the matching units sharing it; answer Map -> the unit piped for it
+const folded = []; // --explain: the lines of the members a representative stood for, as the child search prints them
 if ((summarizer || opt.rank) && willFold) for (const h of hits.values()) for (const p of h.values()) {
   const g = asksByUnit.get(p);
   likeIt.set(g, (likeIt.get(g) ?? new Set()).add(p));
@@ -1985,7 +1986,12 @@ for (const file of opt.quiet || dry ? [] : targets) {
     const group = likeIt.size ? asksByUnit.get(h.get(no)) : null;
     // the representative's other lines (a sentence or function over several) still pipe; other members do not
     const firstLine = !pipedUnits.has(group);
-    if (group && !firstLine && pipedUnits.get(group) !== h.get(no)) continue;
+    if (group && !firstLine && pipedUnits.get(group) !== h.get(no)) {
+      // --explain: the child search does not fold, so these lines must count as sent or a later round resends them
+      if (opt.explain) for (let k = Math.max(no - before, 1); k <= Math.min(no + after, src.length); k++)
+        folded.push(`${file}${h.get(k) ? ':' : '-'}${startNo(file, k)}${h.get(k) ? ':' : '-'}${src[k - 1]}`);
+      continue;
+    }
     pipedUnits.set(group, h.get(no));
     const from = Math.max(no - before, last + 1), to = Math.min(no + after, src.length);
     // A result (#118) is what -- separates: a match and its context, joined by any context that touches it; without
@@ -2121,7 +2127,7 @@ const explain = async answer => {
   const plural = (k, w) => `${k} ${w}${k === 1 ? '' : 's'}`;
   const rounds = Number(opt.explain);
   let stop, ok = true;
-  const state = { round: 1, ...splitNext(answer), searched: new Set(tokens.filter(tk => tk.name === 'e' || tk.name === 'question').map(tk => tk.value.trim())), sent: new Set(piped.join('').split('\n')) };
+  const state = { round: 1, ...splitNext(answer), searched: new Set(tokens.filter(tk => tk.name === 'e' || tk.name === 'question').map(tk => tk.value.trim())), sent: new Set([...piped.join('').split('\n').map(l => l.replace(/ {3}\(×\d+ like it\)$/, '')), ...folded]) };
   for (;;) {
     const meanings = [...new Set(state.next)].filter(m => !state.searched.has(m)).slice(0, 4);
     if (state.round === rounds) { stop = 'round limit'; break; }
