@@ -747,10 +747,14 @@ The matching lines are passed to the summarizer tool as a single joined string v
 - `--explain` implies `-n -H`, over `--no-filename`: round 1's lines cite `file:line` too, in the same form as a
   later round's, so a line round 1 sent is not sent again.
 - Each round's search is a full search: its lines go to Jev and to TOOL's provider again.
+- `--max-cost` applies to each round's search, not to their total, so the total cost grows with ROUNDS.
+- With `-o`, or with `-z` records that hold a newline, a line a representative stood for in round 1 can be sent
+  again in a later round. A round still ends on the round limit or an empty `NEXT:`.
+- With `-p`, most of a later round's lines count as new: they carry the new meanings' probabilities.
 - TOOL is `--summarize`'s when given, else `SYS1GREP_SUMMARIZER`'s, else `claude`. Every TOOL works the same way:
   sys1grep keeps the state and sends each round as a request of its own.
-- A later round that fails (TOOL, or the search) says why, and the last good answer still prints (exit 2).
-  A round whose request would be over 200 KB is not sent; the answer so far prints (exit 0).
+- A later round that fails (TOOL, an empty answer, or the search) says why, and the last good answer still prints
+  (exit 2). A round whose request would be over 200 KB is not sent; the answer so far prints (exit 0).
 - Not with `-q`, `-l`, `-c` (as `--summarize`) or `--format=html` (the `NEXT:` line would sit inside the
   document). `--no-explain` turns off an earlier one, from `SYS1GREP_OPTS` say.
 

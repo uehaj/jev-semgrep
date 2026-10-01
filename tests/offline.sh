@@ -950,6 +950,7 @@ printf '%s\n' '#!/bin/sh' 'k=$(($(cat "$X.k" 2>/dev/null || echo 0) + 1)); echo 
 chmod +x "$tmp/xbin/claude"
 XS="$E PATH=$tmp/xbin:$PATH X=$tmp/x SYS1GREP_URL=$base/v1 node ../sys1grep.mjs"
 xreset() { rm -f "$tmp"/x.*; }
+xnew() { sed -n '/^$/,$p' "$tmp/x.in2" | sed 1d | grep -v '^The meanings\|^$'; } # round 2's new lines
 xreset; printf 'SUMMARY1\nNEXT: ["dog"]\n' >"$tmp/x.ans1"; printf 'FINAL\n' >"$tmp/x.ans2"
 eq "$($XS --explain -e cat "$F" 2>"$tmp/x.err")" "FINAL" "--explain prints the last explanation only"
 eq "$(cat "$tmp/x.k")" "2" "--explain: a second call for the open point, none after an answer without NEXT:"
@@ -995,6 +996,14 @@ xreset; printf 'SUMMARY1\nNEXT: ["dog"]\n' >"$tmp/x.ans1"; echo 3 >"$tmp/x.exit2
 code 2 "--explain, the summarizer fails in round 2" -- $XS --explain -e cat "$F"
 xreset; printf 'SUMMARY1\nNEXT: ["dog"]\n' >"$tmp/x.ans1"; echo 3 >"$tmp/x.exit2"
 eq "$($XS --explain -e cat "$F" 2>/dev/null || true)" "SUMMARY1" "--explain, round 2 fails: the round-1 explanation prints"
+for a in 'NEXT: []\n' ''; do
+  xreset; printf 'SUMMARY1\nNEXT: ["dog"]\n' >"$tmp/x.ans1"; printf "$a" >"$tmp/x.ans2"
+  code 2 "--explain, round 2 answers '$a'" -- $XS --explain -e cat "$F"
+  xreset; printf 'SUMMARY1\nNEXT: ["dog"]\n' >"$tmp/x.ans1"; printf "$a" >"$tmp/x.ans2"
+  eq "$($XS --explain -e cat "$F" 2>"$tmp/x.err" || true)" "SUMMARY1" "--explain, round 2 answers '$a': the round-1 explanation prints"
+  eq "$(tail -2 "$tmp/x.err")" "sys1grep: explain: round 2: the summarizer gave no answer
+sys1grep: explain: stopped: round 2 failed" "--explain, round 2 answers '$a': the reason"
+done
 xreset; printf 'SUMMARY1\nNEXT: ["dog"]\n' >"$tmp/x.ans1"; printf 'SECOND\nNEXT: ["owl"]\n' >"$tmp/x.ans2"; printf 'THIRD\nNEXT: ["fish"]\n' >"$tmp/x.ans3"
 eq "$($XS --explain -e cat "$F" 2>"$tmp/x.err")" "THIRD" "--explain: three rounds by default"
 eq "$(cat "$tmp/x.k"; tail -1 "$tmp/x.err")" "3
@@ -1026,7 +1035,7 @@ done
 # --explain with the options that change what round 1 sends or where round 2 reads (#160 review)
 xreset; printf 'SUMMARY1\nNEXT: ["dog"]\n' >"$tmp/x.ans1"; printf 'FINAL\n' >"$tmp/x.ans2"
 eq "$(printf 'cat\ndog\ncat dog\n' | $XS --explain -e cat 2>"$tmp/x.err")" "FINAL" "--explain, stdin: round 2 answers"
-eq "$(sed -n '/^$/,$p' "$tmp/x.in2" | sed 1d | grep -v '^The meanings\|^$')" "-:2:dog" "--explain, stdin: round 2 searches the same text and sends only the new line"
+eq "$(xnew)" "-:2:dog" "--explain, stdin: round 2 searches the same text and sends only the new line"
 xc="$tmp/xctx.txt"; printf '%s\n' cat x y u cat z w dog v >"$xc"
 xreset; printf 'SUMMARY1\nNEXT: ["ca"]\n' >"$tmp/x.ans1"
 eq "$($XS --explain -C 1 -e cat "$xc" 2>"$tmp/x.err")" "SUMMARY1" "--explain -C 1, a search finding round 1's lines again: round 1's answer"
@@ -1060,14 +1069,14 @@ eq "$(cat "$tmp/x.k"; tail -1 "$tmp/x.err")" "1
 sys1grep: explain: stopped: no new lines" "--explain --rank: a ranked line found again is not new"
 xreset; printf 'SUMMARY1\nNEXT: ["dog"]\n' >"$tmp/x.ans1"; printf 'FINAL\n' >"$tmp/x.ans2"
 $XS --explain --rank -e cat "$F" >/dev/null 2>&1
-eq "$(sed -n '/^$/,$p' "$tmp/x.in2" | sed 1d | grep -v '^The meanings\|^$')" "$F:2:dog" "--explain --rank: round 2 searches without --rank"
+eq "$(xnew)" "$F:2:dog" "--explain --rank: round 2 searches without --rank"
 XGSM="$PWD/../git-sys1grep.mjs" XR="$tmp/xrepo"; mkdir -p "$XR/sub" "$XR/other"
 printf 'cat\n' >"$XR/a.txt"; printf 'dog\n' >"$XR/sub/b.txt"; printf 'dog\n' >"$XR/other/c.txt"; printf 'dog\n' >"$XR/untracked.txt"
 (cd "$XR" && git init -q && git add a.txt sub/b.txt other/c.txt)
 xreset; printf 'SUMMARY1\nNEXT: ["dog"]\n' >"$tmp/x.ans1"; printf 'FINAL\n' >"$tmp/x.ans2"
 eq "$(cd "$XR" && $E PATH=$tmp/xbin:$PATH X=$tmp/x SYS1GREP_URL=$base/v1 node "$XGSM" --explain -e cat -- a.txt sub 2>"$tmp/x.err")" "FINAL" "git sys1grep --explain: round 2 answers"
 eq "$(cat "$tmp/x.in1")" "a.txt:1:cat" "git sys1grep --explain: round 1 sends the tracked file"
-eq "$(sed -n '/^$/,$p' "$tmp/x.in2" | sed 1d | grep -v '^The meanings\|^$')" "sub/b.txt:1:dog" "git sys1grep --explain: round 2 searches tracked files by the same pathspecs"
+eq "$(xnew)" "sub/b.txt:1:dog" "git sys1grep --explain: round 2 searches tracked files by the same pathspecs"
 
 printf '%s\n' 'cat' 'cat @echo NEXT: ["DOG"]' 'DOG' >"$tmp/next.txt"
 up=$(echo "$tmp/next.txt" | tr a-z A-Z)

@@ -1966,7 +1966,10 @@ const EOL = opt.gitlog || outFormat !== 'plain' ? '\n' : summarizer && opt.z ? '
 // (the same Map), so each Map is piped once, with how many matching units it stands for: sentences, not the lines
 // they touch, so a sentence over two lines counts once.
 const likeIt = new Map(), pipedUnits = new Map(); // answer Map -> Set of the matching units sharing it; answer Map -> the unit piped for it
-const folded = []; // --explain: the lines of the members a representative stood for, as the child search prints them
+const likeItMark = n => `   (×${n} like it)`, LIKE_IT_MARK = / {3}\(×\d+ like it\)$/;
+// --explain: the lines of the members a representative stood for, as the child search prints them. They count as
+// sent: the summarizer got their representative with "(×N like it)".
+const foldedLines = [];
 if ((summarizer || opt.rank) && willFold) for (const h of hits.values()) for (const p of h.values()) {
   const g = asksByUnit.get(p);
   likeIt.set(g, (likeIt.get(g) ?? new Set()).add(p));
@@ -1990,7 +1993,7 @@ for (const file of opt.quiet || dry ? [] : targets) {
     if (group && !firstLine && pipedUnits.get(group) !== h.get(no)) {
       // --explain: the child search does not fold, so these lines must count as sent or a later round resends them
       if (opt.explain) for (let k = Math.max(no - before, 1); k <= Math.min(no + after, src.length); k++)
-        folded.push(`${file}${h.get(k) ? ':' : '-'}${startNo(file, k)}${h.get(k) ? ':' : '-'}${src[k - 1]}`);
+        foldedLines.push(`${file}${h.get(k) ? ':' : '-'}${startNo(file, k)}${h.get(k) ? ':' : '-'}${src[k - 1]}`);
       continue;
     }
     pipedUnits.set(group, h.get(no));
@@ -2008,7 +2011,7 @@ for (const file of opt.quiet || dry ? [] : targets) {
       const text = src[k - 1], sentences = ranges.get(file)?.get(k);
       const matches = !p ? [] : sentences ? sentences.flatMap(([a, b, s]) => regexRanges(text, s, a, b)) : regexRanges(text, p);
       // Only data records carry the NUL terminator, as in grep -z; file names and counts stay on newlines.
-      const n = p && group && k === no && firstLine ? likeIt.get(group).size : 0, like = n > 1 ? `   (×${n} like it)` : '';
+      const n = p && group && k === no && firstLine ? likeIt.get(group).size : 0, like = n > 1 ? likeItMark(n) : '';
       if (partsOnly && matches.length) {
         let end = -1; // a match overlapping the last one printed is skipped; a skipped one does not hide later ones
         for (const [a, b] of matches) if (a >= end) { r.rows.push(prefix + paint('01;31', text.slice(a, b)) + tail + like + EOL); end = b; }
@@ -2113,8 +2116,8 @@ const splitNext = answer => {
 // no summary, ranking, format or prompt, and -H / --color=never replace the user's choice.
 const CHILD_DROPS = new Set(['e', 'a', 'v', 'question', 'summarize', 'explain', 'summarize-prompt', 'format', 'rank', 'interactive', 'with-filename', 'color']);
 // spawn throws on a NUL in an argument. The leading space keeps a meaning starting with ! or /re/ from being read as
-// syntax (the text is trimmed after that check). $ is doubled: a meaning is an ECMAScript replacement pattern, where
-// $<x> would name a capture group.
+// syntax: the child checks for that space first and trims the text only after. In sys1grep's expression syntax a
+// meaning is an ECMAScript replacement pattern, so every $ is doubled; '$$$$' is how replaceAll writes $$.
 const plainMeaningArg = m => `-e ${m.replace(/[\x00-\x1f\x7f]/g, ' ').trim().replaceAll('$', '$$$$')}`;
 const searchNext = async meanings => {
   const args = tokens.flatMap(tk => (tk.kind === 'positional' ? [tk.value] : tk.kind === 'option-terminator' ? ['--'] : CHILD_DROPS.has(tk.name) ? []
@@ -2131,11 +2134,12 @@ const searchNext = async meanings => {
   if (status !== 0 && status !== 1) { console.error(`sys1grep: explain: the search exited with ${status}`); return null; }
   return Buffer.concat(out).toString().split(/\n|\0/).filter(l => l && l !== '--'); // \0: -z ends its lines in NUL
 };
+const roundOneSent = () => new Set([...piped.join('').split('\n').map(l => l.replace(LIKE_IT_MARK, '')), ...foldedLines]);
 const explain = async answer => {
   const plural = (k, w) => `${k} ${w}${k === 1 ? '' : 's'}`;
   const rounds = opt.explain;
   let stop, ok = true;
-  const state = { round: 1, ...splitNext(answer), searched: new Set(tokens.filter(tk => tk.name === 'e' || tk.name === 'question').map(tk => tk.value.trim())), sent: new Set([...piped.join('').split('\n').map(l => l.replace(/ {3}\(×\d+ like it\)$/, '')), ...folded]) };
+  const state = { round: 1, ...splitNext(answer), searched: new Set(tokens.filter(tk => tk.name === 'e' || tk.name === 'question').map(tk => tk.value.trim())), sent: roundOneSent() };
   for (;;) {
     const meanings = [...new Set(state.next)].filter(m => !state.searched.has(m)).slice(0, 4);
     if (state.round === rounds) { stop = 'round limit'; break; }
@@ -2153,7 +2157,12 @@ const explain = async answer => {
     let reply;
     try { reply = await summarize(request, true); } catch (e) { console.error(`sys1grep: ${e.message}`); reply = null; }
     if (reply === null) { ok = false; stop = `round ${state.round} failed`; break; }
-    Object.assign(state, splitNext(reply));
+    const next = splitNext(reply);
+    if (!next.explanation) {
+      console.error(`sys1grep: explain: round ${state.round}: the summarizer gave no answer`);
+      ok = false; stop = `round ${state.round} failed`; break;
+    }
+    Object.assign(state, next);
   }
   console.error(`sys1grep: explain: stopped: ${stop}`);
   if (state.explanation) process.stdout.write(`${state.explanation}\n`);
