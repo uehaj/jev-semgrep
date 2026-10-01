@@ -708,6 +708,33 @@ OpenAI 互換サーバ全般です。3 つとも `SYS1GREP_SUMMARIZER_MODEL` が
 （Jev 用の `SYS1GREP_API_KEY` は送りません）。`OLLAMA_HOST` で ollama 側のホストを変えられます
 （`ollama` CLI 自体と同じ）。
 
+### 続けて調べる (`--explain`)
+
+1 回の検索では答えが出ない質問があります。行をどこで渡しているか、次にそれが失敗したらどうなるか。
+`--explain` は `--summarize` を行い、さらに TOOL に、行からまだわからない点を最大 4 つの意味の JSON 配列にして
+`NEXT:` の行で最後に書くよう頼みます。sys1grep はそれを同じ入力に対して検索し（sys1grep をもう一度、
+`file:line` を引けるよう `-n -H` 付きで動かす）、TOOL にはそれまでの答えと、まだどのラウンドでも送っていない行だけを
+渡します。新しい行が見つからないか、`NEXT:` が空か、ROUNDS 回（`--explain=ROUNDS`、1〜10、既定 3）要約したら止まり、
+最後の答えだけを表示します。
+
+```sh
+$ sys1grep --explain -Q "how does --summarize hand the lines to the tool and what happens when it fails" sys1grep.mjs
+sys1grep: explain: round 2/3: searched 4 meanings, 66 new lines
+sys1grep: explain: round 3/3: searched 4 meanings, 17 new lines
+sys1grep: explain: stopped: round limit
+The matching lines are passed to the summarizer tool as a single joined string via stdin for CLI tools or as a server request body for HTTP servers. ...
+```
+
+- `--explain` は `-n -H` を含み、`--no-filename` より優先します。1 回目の行も後のラウンドと同じ形で `file:line`
+  を示すので、1 回目に送った行を再び送ることはありません。
+- ラウンドごとの検索は通常の検索です。その行はもう一度 Jev と TOOL の提供元に送られます。
+- TOOL は `--summarize` があればその TOOL、なければ `SYS1GREP_SUMMARIZER` のもの、なければ `claude` です。
+  状態は sys1grep が持ち、ラウンドごとに独立した依頼として送るので、どの TOOL でも同じように動きます。
+- 2 回目以降のラウンドが失敗したら（TOOL でも検索でも）理由を出し、最後に得た答えは表示します（終了コード 2）。
+  依頼が 200 KB を超えるラウンドは送らず、それまでの答えを表示します（終了コード 0）。
+- `-q`・`-l`・`-c`（`--summarize` と同じ）と `--format=html`（`NEXT:` の行が文書の中に入ってしまう）とは併用できません。
+  `--no-explain` はそれより前の `--explain`（`SYS1GREP_OPTS` のものなど）を取り消します。
+
 ### 良いものから順に出す (`--rank`)
 
 一致は grep と同じくファイル順に出ます。多いときは `--rank` で、結果を良いものから順に、番号付きの見出しの下に

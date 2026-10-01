@@ -6,6 +6,13 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
+- `--explain[=ROUNDS]` follows up on `--summarize` (#157). TOOL is also asked to end with a `NEXT:` line naming,
+  as up to 4 meanings, what the lines still do not show; sys1grep searches those over the same inputs and sends
+  TOOL its answer so far with only the new lines, until a round finds no new line, `NEXT:` is empty, or ROUNDS
+  summaries (1 to 10, default 3) are done. Only the last answer prints; stderr has a line per round and one on
+  stopping. Every TOOL works, each round being a request of its own. A later round failing still prints the last
+  answer (exit 2). Implies `-n -H` (over `--no-filename`), so round 1's lines cite `file:line` as later rounds' do.
+  Refused with `-q`, `-l`, `-c` and `--format=html`; `--no-explain` turns off an earlier one.
 - `--rank[=jev|match]` prints the results best first, each under a numbered header (`1. FILE`, `1. [SCORE] FILE`
   with `-p`), a blank line between them (#118). A result is a match with its `-A/-B/-C` lines; matches whose
   context touches are one. `--rank` is `--rank=jev`: after the search Jev is asked, one question per result,

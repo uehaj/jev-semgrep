@@ -727,6 +727,33 @@ OpenAI-compatible server. All three need `SYS1GREP_SUMMARIZER_MODEL`: none has a
 `SYS1GREP_SUMMARIZER_API_KEY` goes as `Authorization: Bearer` to a URL TOOL only (never `SYS1GREP_API_KEY`,
 which is Jev's). `OLLAMA_HOST` moves ollama's host, as it does for the `ollama` CLI itself.
 
+### Following up (`--explain`)
+
+A question often takes more than one search: where the lines are handed over, then what happens when that
+fails. `--explain` runs `--summarize` and also asks TOOL to end with a `NEXT:` line, a JSON array of up to 4
+meanings for what the lines still do not show. sys1grep searches those over the same inputs (sys1grep again,
+with `-n -H` so the new lines cite `file:line`), and sends TOOL its answer so far with only the lines no round
+has sent yet. It stops when a round finds no new line, when `NEXT:` is empty, or after ROUNDS summaries
+(`--explain=ROUNDS`, 1 to 10, default 3), and prints only the last answer.
+
+```sh
+$ sys1grep --explain -Q "how does --summarize hand the lines to the tool and what happens when it fails" sys1grep.mjs
+sys1grep: explain: round 2/3: searched 4 meanings, 66 new lines
+sys1grep: explain: round 3/3: searched 4 meanings, 17 new lines
+sys1grep: explain: stopped: round limit
+The matching lines are passed to the summarizer tool as a single joined string via stdin for CLI tools or as a server request body for HTTP servers. ...
+```
+
+- `--explain` implies `-n -H`, over `--no-filename`: round 1's lines cite `file:line` too, in the same form as a
+  later round's, so a line round 1 sent is not sent again.
+- Each round's search is a full search: its lines go to Jev and to TOOL's provider again.
+- TOOL is `--summarize`'s when given, else `SYS1GREP_SUMMARIZER`'s, else `claude`. Every TOOL works the same way:
+  sys1grep keeps the state and sends each round as a request of its own.
+- A later round that fails (TOOL, or the search) says why, and the last good answer still prints (exit 2).
+  A round whose request would be over 200 KB is not sent; the answer so far prints (exit 0).
+- Not with `-q`, `-l`, `-c` (as `--summarize`) or `--format=html` (the `NEXT:` line would sit inside the
+  document). `--no-explain` turns off an earlier one, from `SYS1GREP_OPTS` say.
+
 ### Best first (`--rank`)
 
 Matches print in file order, as grep prints them. With many, `--rank` prints the results best first, each under a
