@@ -153,6 +153,8 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   `-z` / `--null-data` stay, as `--unit=zero`, and still combine with the sentence units to split each record into
   sentences.
 - `--unit=sentence-by-*` colors the matching sentence bold yellow instead of bold red, so a regex match inside it stands out.
+- The text of `-e`, `-a`, `-v` and `-Q` loses its surrounding spaces before it is sent. A leading space still keeps a
+  `/.../` meaning from being read as a regex.
 
 ### Renamed
 `semgrep` collided with the trademarked static-analysis tool [Semgrep](https://semgrep.dev/) (#93).

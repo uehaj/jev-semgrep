@@ -779,6 +779,7 @@ const HTTP_BASES = {
 };
 if (opt.explain !== undefined) {
   if (!/^\d+$/.test(opt.explain) || opt.explain < 1 || opt.explain > 10) die(`--explain: invalid number of rounds '${opt.explain}' (1 to 10)`);
+  opt.explain = Number(opt.explain);
   opt.summarize ??= SYS1GREP_SUMMARIZER || 'claude';
   opt.n = opt['with-filename'] = true;
   if (opt.format === 'html') die('--explain and --format=html cannot be combined: the NEXT: line would sit inside the document');
@@ -2108,11 +2109,18 @@ const splitNext = answer => {
   return { explanation: rows.slice(0, at < 0 ? rows.length : at).join('\n').replace(/\s+$/, ''),
     next: Array.isArray(next) ? next.filter(m => typeof m === 'string' && m.trim()).map(m => m.trim()) : [] };
 };
+// The child searches the new meanings, not the user's expression, and prints plain lines for this process to read:
+// no summary, ranking, format or prompt, and -H / --color=never replace the user's choice.
 const CHILD_DROPS = new Set(['e', 'a', 'v', 'question', 'summarize', 'explain', 'summarize-prompt', 'format', 'rank', 'interactive', 'with-filename', 'color']);
+// spawn throws on a NUL in an argument. The leading space keeps a meaning starting with ! or /re/ from being read as
+// syntax (the text is trimmed after that check). $ is doubled: a meaning is an ECMAScript replacement pattern, where
+// $<x> would name a capture group.
 const plainMeaningArg = m => `-e ${m.replace(/[\x00-\x1f\x7f]/g, ' ').trim().replaceAll('$', '$$$$')}`;
 const searchNext = async meanings => {
   const args = tokens.flatMap(tk => (tk.kind === 'positional' ? [tk.value] : tk.kind === 'option-terminator' ? ['--'] : CHILD_DROPS.has(tk.name) ? []
     : tk.value === undefined ? [tk.rawName] : tk.name.length > 1 ? [`--${tk.name}=${tk.value}`] : [`-${tk.name}`, tk.value]));
+  // -n -H: the new lines must cite file:line as round 1's do; --color=never: they go to TOOL, not a terminal.
+  // SYS1GREP_OPTS is emptied because its options are already among the rebuilt arguments.
   const child = spawn(process.execPath, [...process.execArgv, process.argv[1], ...meanings.map(plainMeaningArg), '-n', '-H', '--color=never', ...args],
     { env: { ...process.env, SYS1GREP_OPTS: '' }, stdio: ['pipe', 'pipe', 'inherit'] });
   const out = [];
@@ -2121,11 +2129,11 @@ const searchNext = async meanings => {
   child.stdin.end(stdinBuf ?? '');
   const status = await new Promise(r => child.on('error', e => { console.error(`sys1grep: explain: ${e.message}`); r(2); }).on('close', (c, sg) => r(c ?? sg)));
   if (status !== 0 && status !== 1) { console.error(`sys1grep: explain: the search exited with ${status}`); return null; }
-  return Buffer.concat(out).toString().split(/\n|\0/).filter(l => l && l !== '--');
+  return Buffer.concat(out).toString().split(/\n|\0/).filter(l => l && l !== '--'); // \0: -z ends its lines in NUL
 };
 const explain = async answer => {
   const plural = (k, w) => `${k} ${w}${k === 1 ? '' : 's'}`;
-  const rounds = Number(opt.explain);
+  const rounds = opt.explain;
   let stop, ok = true;
   const state = { round: 1, ...splitNext(answer), searched: new Set(tokens.filter(tk => tk.name === 'e' || tk.name === 'question').map(tk => tk.value.trim())), sent: new Set([...piped.join('').split('\n').map(l => l.replace(/ {3}\(×\d+ like it\)$/, '')), ...folded]) };
   for (;;) {
