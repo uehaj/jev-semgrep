@@ -779,7 +779,7 @@ written:
 | `{{count}}` | anywhere | the number of results |
 | `{{rank}}` | per result | 1, 2, … |
 | `{{score}}` | per result | the score as `-p` prints it (`0.96`); empty without `-p` |
-| `{{score_pct}}` | per result | the score as a whole number 0 to 100, always set (for a bar: `style="--s:{{score_pct}}"`) |
+| `{{score_pct}}` | per result | the score as a whole number 0 to 100, set even without `-p` (for a bar: `style="--s:{{score_pct}}"`) |
 | `{{file}}` | per result | the file name; empty when one file is searched |
 | `{{lines}}` | per result | the result's lines as they print |
 
@@ -794,9 +794,15 @@ $ sys1grep -r --rank --format=html --template=team -e "..." src/ > out.html
 $ sys1grep --template=list                # one name a line, "(user)" after those under ~/.config
 ```
 
+`{{score_pct}}` is set even without `-p`, so a bar can show the relevance without printing the number.
+
+A template is trusted local input: a path you give, or a symlink in the templates directory, is read as it is;
+only the results put into it are escaped.
+
 `--install-templates` never overwrites a file that is already there (it prints `kept` for it). A missing
 template, or one without exactly one `<!--result-->` before one `<!--/result-->`, is exit 2 naming the file.
 `--template` on the command line needs `--rank --format=html`; `SYS1GREP_TEMPLATE` is simply unused elsewhere.
+`--template=list` and `--install-templates` take no other arguments and are refused in `SYS1GREP_OPTS`.
 
 ## Use it from Claude Code
 

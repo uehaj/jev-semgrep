@@ -118,8 +118,9 @@ let optsInteractive = false; // -i from SYS1GREP_OPTS: a script without a termin
 try {
   const { tokens: t } = parseArgs({ args: defaults, options: OPTIONS, allowPositionals: true, allowNegative: true, tokens: true });
   optsInteractive = t.some(k => k.name === 'interactive' && !k.rawName.startsWith('--no-'));
-  const bad = t.find(k => k.kind !== 'option' || ['e', 'a', 'v', 'question', 'cached', 'untracked'].includes(k.name));
-  if (bad) die(`SYS1GREP_OPTS: ${bad.kind !== 'option' ? `'${bad.value ?? '--'}' is not an option` : ['cached', 'untracked'].includes(bad.name) ? `--${bad.name} is not allowed (what is searched goes on the command line)` : `${bad.name.length > 1 ? '--' : '-'}${bad.name} is not allowed (meanings go on the command line)`}`);
+  const command = k => k.name === 'install-templates' || (k.name === 'template' && k.value === 'list');
+  const bad = t.find(k => k.kind !== 'option' || ['e', 'a', 'v', 'question', 'cached', 'untracked'].includes(k.name) || command(k));
+  if (bad) die(`SYS1GREP_OPTS: ${bad.kind !== 'option' ? `'${bad.value ?? '--'}' is not an option` : command(bad) ? `${bad.rawName}${bad.value === undefined ? '' : `=${bad.value}`} is not allowed (it does something instead of searching)` : ['cached', 'untracked'].includes(bad.name) ? `--${bad.name} is not allowed (what is searched goes on the command line)` : `${bad.name.length > 1 ? '--' : '-'}${bad.name} is not allowed (meanings go on the command line)`}`);
 } catch (e) { die(`SYS1GREP_OPTS: ${e.message}`); }
 const { values: opt, positionals: files, tokens } = parseArgs({
   args: [...defaults, ...process.argv.slice(2).map(fill)],
@@ -328,10 +329,10 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                ~/.config/sys1grep/templates/NAME.html, else the bundled one (default, print, terminal); a
                value with / or ending in .html is a file. Placeholders: {{title}} {{query}} {{count}}, and
                between <!--result--> and <!--/result--> (repeated per result) {{rank}} {{score}} (with -p)
-               {{score_pct}} (0-100) {{file}} (with several files) {{lines}}; each is filled in escaped.
-               --template=list prints the names, (user) marking your own
+               {{score_pct}} (0-100, also without -p) {{file}} (with several files) {{lines}}; each is filled
+               in escaped. --template=list prints the names, (user) marking your own
   --install-templates  copy the bundled templates to ~/.config/sys1grep/templates to edit; an existing
-               file is kept
+               file is kept. It and --template=list must stand alone, and are refused in SYS1GREP_OPTS
   --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
                the API settings, overriding SYS1GREP_MODEL, SYS1GREP_URL, SYS1GREP_API_KEY below.
                A key on the command line shows up in ps and shell history; prefer ~/.config/sys1grep/.env
@@ -538,11 +539,12 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
   --template=NAME  --rank --format=html が書く文書 (既定は SYS1GREP_TEMPLATE、無ければ default)。
                ~/.config/sys1grep/templates/NAME.html、無ければ同梱のもの (default, print, terminal)。/ を含むか
                .html で終わる値はファイル。置き換える文字列は {{title}} {{query}} {{count}} と、<!--result--> と
-               <!--/result--> の間 (結果ごとに繰り返す) の {{rank}} {{score}} (-p のとき) {{score_pct}} (0〜100)
-               {{file}} (複数ファイルのとき) {{lines}}。どれもエスケープして入れる。
+               <!--/result--> の間 (結果ごとに繰り返す) の {{rank}} {{score}} (-p のとき) {{score_pct}} (0〜100、
+               -p が無くても入る) {{file}} (複数ファイルのとき) {{lines}}。どれもエスケープして入れる。
                --template=list は名前を出し、自分のものに (user) を付ける
   --install-templates  同梱のテンプレートを編集用に ~/.config/sys1grep/templates へコピーする。
-               既にあるファイルはそのまま残す
+               既にあるファイルはそのまま残す。これと --template=list は単独で使い、
+               SYS1GREP_OPTS には書けない
   --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
                API の設定。下の SYS1GREP_MODEL / SYS1GREP_URL / SYS1GREP_API_KEY より優先。
                コマンドラインのキーは ps やシェル履歴に残るので、なるべく ~/.config/sys1grep/.env に書く
@@ -581,6 +583,10 @@ if (opt.help) {
 // head, the part repeated per result, and the tail. A user's copy under ~/.config wins over the bundled one.
 const USER_TEMPLATES = `${homedir()}/.config/sys1grep/templates`, BUNDLED_TEMPLATES = fileURLToPath(new URL('templates', import.meta.url));
 const templateNames = dir => (existsSync(dir) ? readdirSync(dir).filter(f => /^[A-Za-z0-9_-]+\.html$/.test(f)).map(f => f.slice(0, -5)) : []);
+if (opt.template === 'list' || opt['install-templates']) {
+  const own = opt['install-templates'] ? '--install-templates' : '--template=list';
+  if (tokens.filter(k => k.index >= defaults.length).length > 1) die(`${own} takes no other arguments`);
+}
 if (opt.template === 'list') {
   const user = new Set(templateNames(USER_TEMPLATES));
   for (const name of [...new Set([...user, ...templateNames(BUNDLED_TEMPLATES)])].sort()) console.log(user.has(name) ? `${name} (user)` : name);
@@ -604,7 +610,7 @@ const parseTemplate = (text, where) => {
   const [item, tail] = rest.split(close);
   return { head, item, tail };
 };
-const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const esc = t => t.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fillPart = (part, vars) => part.replace(/\{\{(\w+)\}\}/g, (m, k) => (Object.hasOwn(vars, k) ? esc(String(vars[k])) : m));
 
 const customUrl = opt['sys1-url'] || SYS1GREP_URL;
@@ -867,7 +873,10 @@ if (opt.rank && !opt.l && !summarizer && opt.format === 'html') {
     : die(`--template: '${templateName}' is neither a NAME (letters, digits, _ and -) nor a file (containing / or ending in .html)`);
   const where = tried.find(f => existsSync(f));
   if (!where) die(`--template=${templateName}: no such template (tried ${tried.join(', ')})`, false);
-  try { template = parseTemplate(readFileSync(where, 'utf8'), where); } catch (e) { die(e.message, false); }
+  let text;
+  try { if (!statSync(where).isFile()) throw new Error('not a regular file'); text = readFileSync(where, 'utf8'); }
+  catch (e) { die(`template ${where}: ${e.message}`, false); }
+  try { template = parseTemplate(text, where); } catch (e) { die(e.message, false); }
 } else if (optSrc('template') === '') die('--template needs --rank --format=html (without -l or --summarize)');
 const includes = (opt.include ?? []).map(globRe('include')), excludes = (opt.exclude ?? []).map(globRe('exclude'));
 for (const [o, gs] of [['include', opt.include], ['exclude', opt.exclude]]) for (const g of gs ?? [])

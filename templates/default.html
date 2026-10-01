@@ -89,8 +89,8 @@ pre:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 <!--result-->
 <article class="result">
 <div class="head"><span class="rank">{{rank}}</span><span class="file">{{file}}</span><span class="score">{{score}}</span></div>
-<span class="meter" style="--s:{{score_pct}}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{score_pct}}" aria-label="relevance"></span>
-<pre tabindex="0" lang="">{{lines}}</pre>
+<span class="meter" style="--s:{{score_pct}}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{score_pct}}" aria-label="relevance of result {{rank}}"></span>
+<pre tabindex="0" lang="" aria-label="lines of result {{rank}}">{{lines}}</pre>
 </article>
 <!--/result-->
 </main>

@@ -809,10 +809,11 @@ echo "$out" | grep -qF 'style="--s:90"' || fail "--rank --format=html: the meter
 eq "$($J -p --rank=match --format=html -e cat "$tmp/rkf.txt" | grep -c '<span class="score">0.90</span>')" "2" "--rank --format=html -p: the score"
 for t in ../templates/*.html; do
   o=$($J -H --rank=match --format=html --template="$(basename "$t" .html)" -e cat "$tmp/rkf.txt" "$tmp/rk.txt")
-  case $o in *http://*|*https://*|*src=*|*@import*|*'url('*) fail "$t reaches outside the file: $o" ;; esac
+  case $o in *http://*|*https://*|*src=*|*href=*|*@import*|*'url('*) fail "$t reaches outside the file: $o" ;; esac
   echo "$o" | grep -q '<meta name="viewport"' || fail "$t: no viewport meta"
   echo "$o" | grep -q '<html lang="en">' || fail "$t: no lang"
   echo "$o" | grep -qF ">$tmp/rk.txt<" || fail "$t: no file names"
+  if grep -qF tabindex "$t"; then echo "$o" | grep -qF 'aria-label="lines of result 2"' || fail "$t: a scrollable block without its own label"; fi
 done
 eq "$($J --rank=match --format=html --template=print -e cat "$tmp/rkf.txt" | grep -c '@page')" "1" "--template=print picks print"
 eq "$($J --rank=match --format=html -e cat "$tmp/rkf.txt" | grep -c '@page' || true)" "0" "the default is not print"
@@ -860,6 +861,20 @@ eq "$(stat count)" "0" "--template with --format=markdown sends nothing"
 code 2 "--template without --rank" -- $H --format=html --template=default -e cat "$tmp/tp1.txt"
 code 2 "--template with -l" -- $H -l --rank --format=html --template=default -e cat "$tmp/tp1.txt"
 code 2 "--template=a.b (neither a name nor a file)" -- $H --rank --format=html --template=a.b -e cat "$tmp/tp1.txt"
+for o in --template=list --install-templates; do
+  code 2 "$o in SYS1GREP_OPTS" -- $E HOME=$TH SYS1GREP_URL=$base/v1 SYS1GREP_OPTS=$o node ../sys1grep.mjs -c -e cat "$tmp/tp1.txt"
+  eq "$($E HOME=$TH SYS1GREP_OPTS=$o node ../sys1grep.mjs -c -e cat "$tmp/tp1.txt" 2>&1 | head -1)" "sys1grep: SYS1GREP_OPTS: $o is not allowed (it does something instead of searching)" "$o in SYS1GREP_OPTS: refused, not run"
+done
+eq "$($E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS=--template=print node ../sys1grep.mjs -c -e cat "$tmp/tp1.txt")" "2" "--template=NAME in SYS1GREP_OPTS: allowed, unused without --rank --format=html"
+code 2 "--template=list with other arguments" -- $H --template=list --rank -c -e cat "$tmp/tp1.txt"
+code 2 "--install-templates with other arguments" -- $H --install-templates --template=foo
+mkdir -p "$tmp/dir.html"
+code 2 "a template that is a directory" -- $H --rank --format=html --template="$tmp/dir.html" -e cat "$tmp/tp1.txt"
+$H --rank --format=html --template="$tmp/dir.html" -e cat "$tmp/tp1.txt" 2>&1 | grep -qF "template $tmp/dir.html: " || fail "a template that is a directory is named"
+eq "$(printf '%s' 'a<!--result-->b<!--/result-->' | $H --rank --format=html --template=/dev/stdin -e cat "$tmp/tp1.txt" 2>&1)" "sys1grep: template /dev/stdin: not a regular file" "a template on a pipe is refused, not read"
+printf '%s' "<!--result--><i data-x='{{file}}'>{{lines}}</i><!--/result-->" >"$tmp/q.html"; printf '%s\n' "cat's" >"$tmp/q'1.txt"
+eq "$($H -H --rank=match --format=html --template="$tmp/q.html" -e cat "$tmp/q'1.txt")" "<i data-x='$tmp/q&#39;1.txt'>$tmp/q&#39;1.txt:cat&#39;s
+</i>" "a quote in a result is escaped"
 IH="$tmp/ih"; bundled=$(ls ../templates | wc -l | tr -d ' ')
 eq "$($E HOME=$IH node ../sys1grep.mjs --install-templates | grep -c "^copied $IH/.config/sys1grep/templates/[a-z]*\.html$")" "$bundled" "--install-templates copies each bundled template"
 eq "$(cat "$IH/.config/sys1grep/templates/default.html")" "$(cat ../templates/default.html)" "--install-templates: the bundled file, as it is"

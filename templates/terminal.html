@@ -45,8 +45,8 @@ pre:focus-visible { outline: 1px dashed var(--sep); outline-offset: 2px; }
 <p class="count"># results: {{count}}, best first</p>
 <!--result-->
 <section class="result">
-<p class="head">{{rank}}. <span class="score">{{score}}</span> <span class="file">{{file}}</span><span class="meter" style="--s:{{score_pct}}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{score_pct}}" aria-label="relevance"></span></p>
-<pre tabindex="0" lang="">{{lines}}</pre>
+<p class="head">{{rank}}. <span class="score">{{score}}</span> <span class="file">{{file}}</span><span class="meter" style="--s:{{score_pct}}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{score_pct}}" aria-label="relevance of result {{rank}}"></span></p>
+<pre tabindex="0" lang="" aria-label="lines of result {{rank}}">{{lines}}</pre>
 </section>
 <!--/result-->
 </div>

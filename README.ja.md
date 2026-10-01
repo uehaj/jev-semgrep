@@ -759,7 +759,7 @@ $ sys1grep -r -n -C1 --rank -p --format=html --template=print -e "返金を断�
 | `{{count}}` | どこでも | 結果の数 |
 | `{{rank}}` | 結果ごと | 1, 2, … |
 | `{{score}}` | 結果ごと | `-p` が出す形の点数（`0.96`）。`-p` が無ければ空 |
-| `{{score_pct}}` | 結果ごと | 点数を 0〜100 の整数にしたもの。常に入る（バーには `style="--s:{{score_pct}}"`） |
+| `{{score_pct}}` | 結果ごと | 点数を 0〜100 の整数にしたもの。`-p` が無くても入る（バーには `style="--s:{{score_pct}}"`） |
 | `{{file}}` | 結果ごと | ファイル名。1 ファイルだけを探したときは空 |
 | `{{lines}}` | 結果ごと | 結果の行。表示どおり |
 
@@ -774,10 +774,16 @@ $ sys1grep -r --rank --format=html --template=team -e "..." src/ > out.html
 $ sys1grep --template=list                # 1 行に 1 つの名前。~/.config のものには "(user)"
 ```
 
+`{{score_pct}}` は `-p` が無くても入るので、数字を出さずに関連度をバーで見せられます。
+
+テンプレートは信頼したローカルの入力として扱います。指定したパスやテンプレートのディレクトリにあるシンボリック
+リンクはそのまま読み、エスケープするのは埋め込む結果だけです。
+
 `--install-templates` は既にあるファイルを上書きしません（そのファイルには `kept` と出します）。テンプレートが
 見つからない、あるいは `<!--result-->` 1 つの後に `<!--/result-->` 1 つ、になっていないときは、そのファイルを
 示して終了コード 2 です。コマンドラインの `--template` には `--rank --format=html` が要ります。
-`SYS1GREP_TEMPLATE` はそれ以外では使われないだけです。
+`SYS1GREP_TEMPLATE` はそれ以外では使われないだけです。`--template=list` と `--install-templates` は他の引数と
+併用できず、`SYS1GREP_OPTS` には書けません。
 
 ## Claude Code から使う
 
