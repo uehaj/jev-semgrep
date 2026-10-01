@@ -760,8 +760,9 @@ tickets/a.txt-13-We will check it.
 
 ### HTML templates (`--template`)
 
-`--rank --format=html` fills in a template. Three come with sys1grep: `default`, `print` (black on white, serif,
-for paper and PDF) and `terminal` (dark monospace). `--template=NAME` picks one; `SYS1GREP_TEMPLATE`, in the
+`--rank --format=html` fills in a template. Four come with sys1grep: `default`, `print` (black on white, serif,
+for paper and PDF), `search` (a results page like a web search engine's) and `terminal` (dark monospace).
+`--template=NAME` picks one; `SYS1GREP_TEMPLATE`, in the
 environment or `~/.config/sys1grep/.env`, sets the default.
 
 ```sh

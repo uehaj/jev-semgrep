@@ -19,7 +19,7 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   Anywhere but `--rank` and `--summarize` it is an error on the command line and unused in `SYS1GREP_OPTS`.
 - `--rank --format=html` writes its document from a template (#158). The default is a self-contained page (no
   outside requests) with light and dark colors, a relevance bar per result, the top result set apart, and a print
-  style; `print` and `terminal` are bundled too. `--template=NAME` reads `~/.config/sys1grep/templates/NAME.html`,
+  style; `print`, `search` (a web search engine's results page) and `terminal` are bundled too. `--template=NAME` reads `~/.config/sys1grep/templates/NAME.html`,
   else the bundled one, or takes a file path; `SYS1GREP_TEMPLATE` sets the default. A template is one HTML file
   whose `<!--result-->` ... `<!--/result-->` part repeats per result, with `{{title}}`, `{{query}}`, `{{count}}`,
   `{{rank}}`, `{{score}}`, `{{score_pct}}`, `{{file}}` and `{{lines}}` filled in escaped. `--template=list` prints
