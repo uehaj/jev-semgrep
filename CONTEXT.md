@@ -24,20 +24,22 @@ _Avoid_: source (the code uses `sources` for the units printed)
 
 ### What is judged, and multi-step matching
 
+Multi-step matching (`--from`, `--to`, `--edges`, `--reverse`, `--hops`) is planned in #163 and not built yet. The terms below fix its words first.
+
 **Unit**:
-What Jev judges in one question and what is printed for a match: a line, a record (`-z`), a sentence, or a function (`--unit=function`).
+What one question judges, and what decides which lines are printed for a match: a line, a record (`--unit=zero`, `-z`), a sentence (`--unit=sentence-by-jev` or `sentence-by-rule`), or a function (`--unit=function`). A regex term judges it locally; a meaning is judged by Jev.
 _Avoid_: chunk (a chunk is a batch of units sent in one request, `--chunk`), block
 
 **Multi-step matching**:
-A search that matches a Start, walks Edges from it one Hop at a time, and matches an End among the Units it reaches (`--from`, `--to`, `--hops`). Jev judges the Start and the End; no score decides the route.
-_Avoid_: trace, chaining, explain (a closed loop in which an LLM chose the next search)
+A search that finds the Start, walks Edges from it breadth first, and finds the End among the Units it reaches. The `--from` and `--to` expressions decide Start and End (Jev for meanings, locally for regexes); no score decides the route.
+_Avoid_: trace, chaining, explain (the `--explain` loop of PR #160, in which an LLM chose the next search)
 
 **Start**:
-The Units that match the `--from` expression. They are Hop 0.
+The Units that match the `--from` expression. Their Hop is 0.
 _Avoid_: seed, root, source
 
 **End**:
-The Units among those reached that match the `--to` expression.
+The reached Units within `--hops` that match the `--to` expression.
 _Avoid_: target (a Target is a searched file or blob), sink, goal
 
 **Edge**:
@@ -45,9 +47,9 @@ One directed link from one Unit to another: a call by default (caller to callee)
 _Avoid_: call (only one kind of Edge), reference, arc
 
 **Hop**:
-The shortest number of Edges from any Start to a Unit. `--hops` selects Units by it: `N` exactly, `M..N` with both ends included, `M..` with no upper bound.
+A Unit's distance from the Start: the smallest number of Edges from any Start Unit to it. `--hops` selects Units by it: `N` exactly, `M..N` with both ends included, `M..` with no upper bound.
 _Avoid_: step, depth, round, level (`--level` is the strict/loose threshold)
 
 **Path**:
-The Units from a Start to an End along Edges, printed with each Unit's Hop.
+The Units from a Start Unit to an End Unit along Edges, printed with each Unit's Hop.
 _Avoid_: chain, trail
