@@ -350,6 +350,72 @@ eq "$($J --unit=function -n -e '/=> 2/' "$tmp/d.js" | nums)" "2 " "--unit=functi
 eq "$(printf 'intro\n@tag\nnext\n  body\n' | $J --unit=function -n -e '/next/' | nums)" "3 4 " "--unit=function: an @ line joins its def only where the rule takes it as a funcname"
 eq "$(printf 'intro\n== one\nalpha\n== two\nbeta\n' | $J --unit=function -n -e '/beta/' | nums)" "5 " "--unit=function: no attribute, git's default rule"
 reset; $J --unit=function -e backoff "$tmp/net.js" >/dev/null; eq "$(stat count)" "1" "--unit=function: one request for three functions"
+
+# Multi-step matching (#163): main calls load and check, load calls parse and read, parse calls fail and check,
+# check calls fail. main -> check is a shortcut: check is 1 hop away, not 3, and fail 2 (through check).
+C="$tmp/chain.js"
+printf '%s\n' 'function main() {' '  // --from start: parse(x) here is a comment, not a call' '  load();' "  check('');" '}' \
+  'function load() {' '  return parse(read());' '}' 'function read() {' "  return 'data';" '}' \
+  'function parse(s) {' "  if (!s) fail('empty');" '  return check(s);' '}' \
+  'function check(s) {' "  return s.length > 0 || fail('short');" '}' 'function fail(why) {' '  throw new Error(why); // raised here' '}' >"$C"
+# 1 main / 6 load / 9 read / 12 parse / 16 check / 19 fail
+eq "$($J --from '/^function main/' --to 'raised here' "$C" 2>/dev/null | tr '\n' '|')" "0 $C-1-main|  1 $C-16-check|    2 $C:19:fail|" "--from / --to: the path, through the shortcut"
+eq "$($J --from '/^function main/' --to 'raised here' "$C" 2>&1 >/dev/null)" "sys1grep: walk: 1 at hop 0, 2 at hop 1, 3 at hop 2; stopped: no new unit" "--from / --to: units per hop, and why the walk stopped"
+reset; $J --from '/^function main/' --to '/throw/' "$C" >/dev/null 2>&1; eq "$(stat count)" "0" "--from / --to: regex-only ends send nothing"
+reset; $J --from '/^function main/' --to 'raised here' "$C" >/dev/null 2>&1; eq "$(stat count)" "1" "--from / --to: the ends in one request"
+eq "$($J --from '/^function fail/' --to 'raised here' "$C" 2>/dev/null)" "0 $C:19:fail" "--from / --to: hop 0, a start that is an end"
+eq "$($J --hops=2 --from '/^function main/' --to '/./' "$C" 2>/dev/null | grep -c ':')" "3" "--hops=N: exactly N"
+eq "$($J --hops=1..2 --from '/^function main/' --to '/./' "$C" 2>/dev/null | grep -c ':')" "5" "--hops=M..N: both ends included"
+eq "$($J --hops=2.. --from '/^function main/' --to '/./' "$C" 2>/dev/null | grep -c ':')" "3" "--hops=M..: no upper bound"
+eq "$($J --hops=1 --from '/^function main/' --to '/./' "$C" 2>&1 >/dev/null)" "sys1grep: walk: 1 at hop 0, 2 at hop 1; stopped: --hops=1" "--hops stops the walk, and says so"
+code 1 "--hops=3: fail is 2 hops away by the shortcut" -- $J --hops=3 --from '/^function main/' --to 'raised here' "$C"
+eq "$($J --reverse --from '/^function fail/' --to '/^function main/' "$C" 2>/dev/null | tr '\n' '|')" "0 $C-19-fail|  1 $C-16-check|    2 $C:1:main|" "--reverse: callee to caller"
+eq "$($J -p --from '/^function main/' --to -e 'fail(' -v short "$C" 2>/dev/null | tr '\n' '|')" \
+  "0 $C-1-main	[0.05 0.05]|  1 $C-6-load	[0.05 0.05]|    2 $C:12:parse	[0.90 0.05]|  1 $C-16-check	[0.90 0.90]|    2 $C:19:fail	[0.90 0.05]|" \
+  "--to -e -v: compound end, - for a unit on the way, -p its --to scores"
+eq "$($J --from -e 'a comment' -a '/load/' -v zebra --to 'raised here' "$C" 2>/dev/null | head -1)" "0 $C-1-main" "--from -e -a -v: compound start"
+eq "$($J --from='a comment' --to='raised here' "$C" 2>/dev/null | head -1)" "0 $C-1-main" "--from=X / --to=X"
+eq "$($J --from '--from start' --to 'raised here' "$C" 2>/dev/null | head -1)" "0 $C-1-main" "--from X: X may start with --"
+eq "$($J --to 'raised here' --from 'a comment' "$C" 2>/dev/null | head -1)" "0 $C-1-main" "--to before --from"
+code 1 "no start" -- $J --from zebra --to 'raised here' "$C"
+eq "$($J --from zebra --to 'raised here' "$C" 2>&1)" "sys1grep: walk: no unit matched --from" "no start: says so"
+eq "$($J -q --from 'a comment' --to 'raised here' "$C" 2>&1)" "" "-q: prints nothing"
+code 0 "-q: an end" -- $J -q --from 'a comment' --to 'raised here' "$C"
+code 1 "-q: no end" -- $J -q --from 'a comment' --to zebra "$C"
+# A cycle (decode and raw_decode call each other) ends; comments and docstrings hold no call; a decorator's def names it
+printf '%s\n' 'def load(fp):' '    """Calls nothing: decode() is only in the docstring."""' '    return loads(fp.read())' '' \
+  'def loads(s):' '    # raw_decode(s) in a comment is no call' '    return decode(s)' '' \
+  '@cache' 'def decode(s):' '    return raw_decode(s)' '' 'def raw_decode(s):' '    if not s:' '        raise ValueError("bad input")' '    return decode(s[1:])' >"$tmp/dec.py"
+eq "$($J --from '/def load\b/' --to 'bad input' "$tmp/dec.py" 2>/dev/null | tr '\n' '|')" \
+  "0 $tmp/dec.py-1-load|  1 $tmp/dec.py-5-loads|    2 $tmp/dec.py-9-decode|      3 $tmp/dec.py:13:raw_decode|" "Python: a cycle ends, comments and docstrings hold no call"
+eq "$($J --reverse --from '/def raw_decode/' --to '/./' "$tmp/dec.py" 2>/dev/null | sed 's/.*://' | tr '\n' ' ')" "raw_decode decode loads load " "--reverse in Python, through the decorator"
+# --edges: any relation between lines, named in the file; a line not searched is counted
+printf 'alpha\nbeta\ngamma\ndelta\n' >"$tmp/e.txt"
+printf '%s\t%s\t%s\t%s\n' "$tmp/e.txt:1" A "$tmp/e.txt:3" C "$tmp/e.txt:3" C "$tmp/e.txt:4" D "$tmp/e.txt:9" X "$tmp/e.txt:1" A >"$tmp/edges.tsv"
+eq "$($J --edges="$tmp/edges.tsv" --from alpha --to delta "$tmp/e.txt" 2>/dev/null | tr '\n' '|')" "0 $tmp/e.txt-1-A|  1 $tmp/e.txt-3-C|    2 $tmp/e.txt:4:D|" "--edges: lines, with their names"
+eq "$($J --edges "$tmp/edges.tsv" --from alpha --to delta "$tmp/e.txt" 2>&1 >/dev/null | head -1)" "sys1grep: --edges: 1 of 3 edges name a line not searched" "--edges: a line not searched"
+printf 'one\ttwo\n' >"$tmp/bad.tsv"
+code 2 "--edges: a malformed line" -- $J --edges="$tmp/bad.tsv" --from alpha --to delta "$tmp/e.txt"
+code 2 "--edges: no such file" -- $J --edges="$tmp/none" --from alpha --to delta "$tmp/e.txt"
+# --max-cost counts the run: the --to requests are asked about with what --from already sent (no terminal: exit 2)
+eq "$($J --from 'a comment' --to 'raised here' --max-cost 0.00005 "$C" 2>&1 </dev/null | grep -c 'about 1,')" "1" "--max-cost: --from and --to together"
+code 0 "--max-cost: each alone under it" -- $J --from 'a comment' --to 'raised here' --max-cost 0.00008 "$C"
+# --dry-run: every answer is 0, so it walks from every unit --from could hold for, a bound
+out=$($J --dry-run --from 'a comment' --to 'raised here' "$C")
+case $out in *'walk (a bound: every unit --from could hold for starts): 6 at hop 0; stopped: no new unit'*'[to]'*'dry run: 2 requests, 6 of 6 functions'*) ;; *) fail "--dry-run bound: $out" ;; esac
+eq "$($J --dry-run --from '/^function main/' --to 'raised here' "$C" | grep -c '^sys1grep: request')" "1" "--dry-run: a regex start walks for real"
+# refused, or wrong
+for o in -z -o -c -l '-A 1' '-C 1' --rank --summarize=claude --dedup=always --unit=line --hops=2..1 --hops=x; do
+  code 2 "--from / --to with $o" -- $J $o --from a --to b "$C"
+done
+code 2 "-g" -- $J -g --from a --to b
+code 2 "-e before --from" -- $J -e x --from a --to b "$C"
+code 2 "-a right after --to" -- $J --from a --to -a b "$C"
+code 2 "--from alone" -- $J --from a "$C"
+code 2 "--to with nothing" -- $J --from a "$C" --to
+code 2 "--hops without --from" -- $J --hops=2 -e a "$C"
+code 2 "--from in SYS1GREP_OPTS" -- $E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS=--from node ../sys1grep.mjs -e a "$C"
+code 0 "--dedup in SYS1GREP_OPTS gives way" -- $E SYS1GREP_URL=$base/v1 SYS1GREP_OPTS=--dedup=auto node ../sys1grep.mjs --from '/^function main/' --to '/throw/' "$C"
 $J --unit=function --dry-run -e backoff "$tmp/net.js" 2>&1 | grep -q "net.js: 3 functions, 3 to send" || fail "--unit=function: --dry-run counts functions"
 $J --unit=function --dry-run -e x "$F" | grep -q '^sys1grep: options: .*--unit=function, .*-M 8000, ' || fail "--unit=function: -M defaults to 8000"
 code 2 "--unit=function -z" -- $J --unit=function -z -e cat "$F"
@@ -1101,7 +1167,7 @@ case $out in *'summarizingwithclaude'*'033[KSUMMARY'*) ;; *) fail "spinner while
 # --help: exit 0, Japanese by locale, lists the options
 code 0 "--help" -- $E LANG=C node ../sys1grep.mjs --help
 eq "$($E LANG=C node ../sys1grep.mjs -h | head -1 | cut -c1-15)" "usage: sys1grep" "-h"
-for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename' '--summarize' '--summarize-prompt' '--format' '-M' '--max-filesize' '--max-cost' '-y, --yes' '--rank' '--no-rank' '--no-summarize'; do
+for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename' '--summarize' '--summarize-prompt' '--format' '-M' '--max-filesize' '--max-cost' '-y, --yes' '--rank' '--no-rank' '--no-summarize' '--from' '--edges=FILE' '--reverse' '--hops='; do
   $E LANG=C node ../sys1grep.mjs --help | grep -q -- "$o" || fail "--help lacks $o"
 done
 $E LANG=C node ../sys1grep.mjs --help | grep -q 'grep by meaning' || fail "--help in English"
@@ -1113,4 +1179,5 @@ eq "$($E node ../sys1grep.mjs -V)" "sys1grep $v" "-V"
 code 0 "--version with no key" -- $E node ../sys1grep.mjs --version
 $E LANG=ja_JP.UTF-8 node ../sys1grep.mjs --help | grep -q '何も表示せず' || fail "--help in Japanese"
 $E LANG=C LC_MESSAGES=ja_JP.UTF-8 node ../sys1grep.mjs --help | grep -q '何も表示せず' || fail "LC_MESSAGES"
+$E LANG=ja_JP.UTF-8 node ../sys1grep.mjs --help | grep -q '多段階マッチング' || fail "--help in Japanese: --from / --to"
 echo "OK: $n checks passed (and the grep-guarded ones)"

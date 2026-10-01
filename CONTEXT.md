@@ -24,7 +24,7 @@ _Avoid_: source (the code uses `sources` for the units printed)
 
 ### What is judged, and multi-step matching
 
-Multi-step matching (`--from`, `--to`, `--edges`, `--reverse`, `--hops`) is planned in #163 and not built yet. The terms below fix its words first.
+Multi-step matching (`--from`, `--to`, `--edges`, `--reverse`, `--hops`) came in #163. The terms below are its words.
 
 **Unit**:
 What one question judges, and what decides which lines are printed for a match: a line, a record (`--unit=zero`, `-z`), a sentence (`--unit=sentence-by-jev` or `sentence-by-rule`), or a function (`--unit=function`). A regex term judges it locally; a meaning is judged by Jev.
