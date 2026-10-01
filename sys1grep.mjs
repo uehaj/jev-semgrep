@@ -571,7 +571,7 @@ if (dry) opt.quiet = false;
 // File names and file contents come from whatever is searched, maybe an untrusted checkout: the lines about them
 // show control characters as \xNN, so an escape sequence cannot redraw what -i asks about.
 const safe = s => String(s).replace(/[\x00-\x1f\x7f-\x9f]/g, c => `\\x${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
-const trace = dry ? s => console.log(`sys1grep: ${safe(s)}`) : opt.verbose ? s => console.error(`sys1grep: ${safe(s)}`) : null;
+const logPlan = dry ? s => console.log(`sys1grep: ${safe(s)}`) : opt.verbose ? s => console.error(`sys1grep: ${safe(s)}`) : null;
 // While waiting on Jev or the summarizer, a one-line spinner on stderr (#89), drawn after 300 ms so a fast search never
 // flickers. Only where nothing else would show: a terminal, and not -q, --dry-run or --verbose (its trace lines). Any
 // write to stdout or stderr erases it first, and so does exit, so no half-drawn line stays behind.
@@ -842,24 +842,24 @@ const wanted = (path, st) => {
 // only which option or variable supplied it. optTag: the "(SYS1GREP_OPTS)" suffix options: lists a setting
 // with, or '' for the command line or a default (this line only marks the one source that isn't obvious).
 const optTag = name => (optSrc(name) === 'SYS1GREP_OPTS' ? ' (SYS1GREP_OPTS)' : '');
-if (trace) {
+if (logPlan) {
   const envTag = (cliVal, meta) => (cliVal ? '' : ` (${meta.name === null ? 'default' : envLabel(meta.name)})`);
   // key: the name only; a value from the .env file gets the file in parens, same as elsewhere, but the value
   // itself is never shown, so a real-environment variable gets no parens at all (it needs no further source).
   const keyFileTag = name => (shellEnv.has(name) ? '' : ` (${tildeEnvFile})`);
-  trace(`endpoint ${apiHost}${new URL(apiUrl).pathname}${envTag(opt['sys1-url'], envURL)}, model ${model}${envTag(opt['sys1-model'], envMODEL)}`);
+  logPlan(`endpoint ${apiHost}${new URL(apiUrl).pathname}${envTag(opt['sys1-url'], envURL)}, model ${model}${envTag(opt['sys1-model'], envMODEL)}`);
   if (hasMeanings) {
-    if (opt['sys1-api-key']) trace('key: --sys1-api-key');
-    else if (envAPI_KEY.name) trace(`key: ${envAPI_KEY.name}${keyFileTag(envAPI_KEY.name)}`);
-    else if (TYPESAFE_API_KEY !== undefined) trace(`key: TYPESAFE_API_KEY${keyFileTag('TYPESAFE_API_KEY')}`);
-    else trace('key: none (no auth header sent)');
+    if (opt['sys1-api-key']) logPlan('key: --sys1-api-key');
+    else if (envAPI_KEY.name) logPlan(`key: ${envAPI_KEY.name}${keyFileTag(envAPI_KEY.name)}`);
+    else if (TYPESAFE_API_KEY !== undefined) logPlan(`key: TYPESAFE_API_KEY${keyFileTag('TYPESAFE_API_KEY')}`);
+    else logPlan('key: none (no auth header sent)');
   }
   // --sys1-api-key's value is masked here too: SYS1GREP_OPTS is not on the rejected-option list (only
   // e/a/v/question/summarize are), so a key placed there would otherwise leak in full, unlike the option
   // typed on the command line, which only ever shows as its name (line above).
   if (SYS1GREP_OPTS) {
     const masked = SYS1GREP_OPTS.split(/\s+/).filter(Boolean).map((tok, i, toks) => (toks[i - 1] === '--sys1-api-key' ? '***' : tok.replace(/^--sys1-api-key=.*$/, '--sys1-api-key=***'))).join(' ');
-    trace(`${envOPTS.name}: ${masked}`);
+    logPlan(`${envOPTS.name}: ${masked}`);
   }
   const thresholds = optSrc('t') === null && optSrc('T') === null
     ? `--level ${opt.level}${optTag('level')} = -t ${tPos} -T ${tNeg}`
@@ -878,7 +878,7 @@ if (trace) {
     // #50: what git sys1grep searches instead of the working tree; only ever from the command line (SYS1GREP_OPTS rejects them)
     opt.cached && '--cached', opt.untracked && '--untracked', trees.length && `<tree> ${trees.join(' ')}`,
   ].filter(Boolean);
-  trace(`options: ${options.join(', ')}`);
+  logPlan(`options: ${options.join(', ')}`);
   if (summarizer) {
     const raw = [...SYS1GREP_OPTS.split(/\s+/), ...process.argv.slice(2)].filter(a => a === '--summarize' || a.startsWith('--summarize='));
     const bare = raw.at(-1) === '--summarize';
@@ -891,8 +891,8 @@ if (trace) {
     const keyTag = Array.isArray(summarizer) || !/^https?:\/\//.test(opt.summarize) ? ''
       : envSUMMARIZER_API_KEY.name ? `, key ${envSUMMARIZER_API_KEY.name}${keyFileTag(envSUMMARIZER_API_KEY.name)}` : ', key none (no auth header sent)';
     const promptTag = opt['summarize-prompt'] ? `, --summarize-prompt${optTag('summarize-prompt')}` : '';
-    trace(`summarize: ${opt.summarize}${toolTag}${optTag('summarize')}, model ${summModel}${keyTag}${promptTag}`);
-    trace(`summarize: ${Array.isArray(summarizer) ? summarizer.map(a => (/^[\w./=:-]+$/.test(a) ? a : JSON.stringify(a))).join(' ')
+    logPlan(`summarize: ${opt.summarize}${toolTag}${optTag('summarize')}, model ${summModel}${keyTag}${promptTag}`);
+    logPlan(`summarize: ${Array.isArray(summarizer) ? summarizer.map(a => (/^[\w./=:-]+$/.test(a) ? a : JSON.stringify(a))).join(' ')
       : `POST ${summarizer.url} model=${summarizer.model}`} (stops over ${SUMMARY_MAX / 1024} KB)`);
   }
 }
@@ -1072,13 +1072,13 @@ function traceScope(text, answers, pool) {
   const listed = CANDIDATES.filter(c => answers[c.key].noul >= 0.2).sort((x, y) => answers[y.key].noul - answers[x.key].noul);
   const times = CANDIDATES.filter(c => c.cat === 'time' && answers[c.key].noul >= SCOPE_AT);
   const narrowest = times.length ? pickTime(times) : null;
-  trace(`scope "${cut(text, 40)}":`);
-  if (!listed.length) return trace('  (no candidate answered 0.2 or more)');
+  logPlan(`scope "${cut(text, 40)}":`);
+  if (!listed.length) return logPlan('  (no candidate answered 0.2 or more)');
   const names = listed.map(c => `${c.what} (${cut(c.label, 40)})`), width = Math.max(...names.map(n => n.length));
   listed.forEach((c, i) => {
     const p = answers[c.key].noul, applied = p >= SCOPE_AT && (c.cat !== 'time' || c === narrowest);
     const tail = applied ? `keeps ${pool.filter(f => c.test(f, statSync(f))).length} of ${pool.length} files` : p >= SCOPE_AT ? '(another span applied)' : `(below ${SCOPE_AT}, not applied)`;
-    trace(`  ${applied ? '✓' : '·'} ${names[i].padEnd(width)}  ${p.toFixed(2)}  ${tail}`);
+    logPlan(`  ${applied ? '✓' : '·'} ${names[i].padEnd(width)}  ${p.toFixed(2)}  ${tail}`);
   });
 }
 // Each scope goes into its meaning's AND term as { kind: 's', label, words, admits(file) }; negated meanings say
@@ -1268,16 +1268,16 @@ function show(state, questions, label) {
   const count = new Map();
   for (const q of Object.values(questions)) { const k = q.instructions.replace(/\bL\d{3}\b/g, 'Lnnn'); count.set(k, (count.get(k) ?? 0) + 1); }
   const n = Object.keys(questions).length, chars = Object.values(state).join('').length;
-  trace(`request ${++traced} ${label}, ${n} question${n === 1 ? '' : 's'}, ${chars} chars`);
-  if (state.note) trace(`  ${cut(state.note, 110)}`);
-  [...count].slice(0, 3).forEach(([q, k]) => trace(`  ${String(k).padStart(3)}× ${cut(q, 100)}`));
-  if (count.size > 3) trace(`       (+${count.size - 3} more)`);
+  logPlan(`request ${++traced} ${label}, ${n} question${n === 1 ? '' : 's'}, ${chars} chars`);
+  if (state.note) logPlan(`  ${cut(state.note, 110)}`);
+  [...count].slice(0, 3).forEach(([q, k]) => logPlan(`  ${String(k).padStart(3)}× ${cut(q, 100)}`));
+  if (count.size > 3) logPlan(`       (+${count.size - 3} more)`);
   const body = JSON.stringify({ model, state, questions });
   tracedQuestions += n; tracedChars += chars; tracedBytes += Buffer.byteLength(body); tracedCjkBytes += cjkBytesOf(body);
 }
 // One request with retries: 429 / 529 / 5xx, connection errors and timeouts back off exponentially.
 async function post(state, questions, label) {
-  if (trace) show(state, questions, label);
+  if (logPlan) show(state, questions, label);
   if (dry) return Object.fromEntries(Object.keys(questions).map(k => [k, { noul: 0 }]));
   const body = JSON.stringify({ model, state, questions });
   sentBytes += Buffer.byteLength(body); sentCjkBytes += cjkBytesOf(body); sentRequests++;
@@ -1380,7 +1380,7 @@ let gitlogBuf = null;
 if (opt.gitlog) {
   const args = gitlogArgs();
   const cmd = `git ${args.map(a => (/^[\w@:.=/<>-]+$/.test(a) ? a : `'${a}'`)).join(' ')}`;
-  if (trace) trace(cmd); else if (!opt.quiet && expr[0]?.some(l => l.kind === 's')) console.error(`sys1grep: ${cmd}`);
+  if (logPlan) logPlan(cmd); else if (!opt.quiet && expr[0]?.some(l => l.kind === 's')) console.error(`sys1grep: ${cmd}`);
   try { gitlogBuf = execFileSync('git', args, { maxBuffer: Infinity, stdio: ['ignore', 'pipe', 'inherit'] }); }
   catch (e) { if (e.status == null) die(`git log: ${e.message}`); process.exit(2); } // git exited non-zero: it has said why
 }
@@ -1657,13 +1657,13 @@ for (const l of allLines) {
 }
 const lines = allLines.filter(l => asksByUnit.get(l).size);
 const totalUnits = [...unitCount.values()].reduce((a, b) => a + b, 0);
-if (trace) for (const file of read.keys())
-  trace(`file ${file}${opt.cached ? ' (index)' : ''}: ${unitCount.get(file)} ${unitName}, ${lines.filter(l => l.file === file).length} to send`);
+if (logPlan) for (const file of read.keys())
+  logPlan(`file ${file}${opt.cached ? ' (index)' : ''}: ${unitCount.get(file)} ${unitName}, ${lines.filter(l => l.file === file).length} to send`);
 // --rank=jev asks after the search, so which results there are is not known yet: at most one per unit that could match.
 // ponytail: --max-cost does not count these; the estimate would be this bound, far over what a search usually finds
-if (trace && opt.rank === 'jev') {
+if (logPlan && opt.rank === 'jev') {
   const reqs = Math.ceil(allLines.length / chunkLines);
-  trace(`rank: at most ${allLines.length} results, ~${reqs} request${reqs === 1 ? '' : 's'} after the search, a question each`);
+  logPlan(`rank: at most ${allLines.length} results, ~${reqs} request${reqs === 1 ? '' : 's'} after the search, a question each`);
 }
 // -q stops at the first match, like grep -q. Known before any request, --dedup's included: unsent units (blank, or
 // no term's regexes hold; their meanings score 0) and regex-only terms.
@@ -1764,9 +1764,9 @@ if (summarizer && opt.dedup === 'auto' && !willFold) {
   if (Array.isArray(summarizer)) summarizer = summarizer.map(strip);
   else summarizer.prompt = strip(summarizer.prompt);
 }
-if (trace && dedupEstimate) {
+if (logPlan && dedupEstimate) {
   const state = opt.dedup === 'always' ? 'on (always)' : opt.dedup === 'never' ? 'off (never)' : dedupEstimate.pays ? 'on' : 'off (auto)';
-  trace(`dedup: ${dedupEstimate.units} units fold to at most ${dedupEstimate.templates} templates (~${dedupEstimate.requests} requests, ~${kify(dedupEstimate.saved)} tokens saved): ${state}`);
+  logPlan(`dedup: ${dedupEstimate.units} units fold to at most ${dedupEstimate.templates} templates (~${dedupEstimate.requests} requests, ~${kify(dedupEstimate.saved)} tokens saved): ${state}`);
 }
 if (willFold && sent.length) {
   // Asked with the unexpanded meaning, for meanings only; a regex-only expression sends nothing and gets here with no lines.
@@ -2081,7 +2081,7 @@ if (dry) {
   // #125 review: the size guard is gone (an oversized file is skipped outright above, not asked about); --dry-run
   // and -i show only the cost guard's verdict here, consistent with what a real run would ask.
   const guard = (tokens * 0.042) / 1e6 > MAX_COST ? `; over --max-cost ${MAX_COST}, would ask` : '';
-  trace(`dry run: ${traced} request${traced === 1 ? '' : 's'}, ${sent.length} of ${totalUnits} ${unitName} to send, ${tracedQuestions} questions, ${tracedChars} chars, ~${tokens} input tokens${price}; nothing sent${assumed.length ? ` (${assumed.join(' and ')} questions assumed no)` : ''}${guard}`);
+  logPlan(`dry run: ${traced} request${traced === 1 ? '' : 's'}, ${sent.length} of ${totalUnits} ${unitName} to send, ${tracedQuestions} questions, ${tracedChars} chars, ~${tokens} input tokens${price}; nothing sent${assumed.length ? ` (${assumed.join(' and ')} questions assumed no)` : ''}${guard}`);
 } else if ((process.stderr.isTTY || opt.verbose) && !opt.quiet) {
   // #143: dedup off by default until real-run stats say auto should be it; meanwhile a run that would have paid
   // says so, once, so a user stuck on the default default learns --dedup=auto exists.
