@@ -32,7 +32,7 @@ const server = createServer(async (req, res) => {
     res.setHeader('content-type', 'application/json');
     if (sys.includes('@empty')) return res.end(JSON.stringify({ choices: [{ message: {} }] }));
     const user = messages.find(x => x.role === 'user')?.content ?? '';
-    return res.end(JSON.stringify({ choices: [{ message: { content: user.toUpperCase() } }] }));
+    return res.end(JSON.stringify({ choices: [{ message: { content: user.replace(/^.*@echo /gm, '').toUpperCase() } }] }));
   }
   let body = '';
   for await (const c of req) body += c;

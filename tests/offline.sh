@@ -945,6 +945,95 @@ $S --summarize=lmstudio --dry-run -e cat "$F" 2>&1 | grep -qF 'needs SYS1GREP_SU
 $E SYS1GREP_SUMMARIZER_MODEL=x SYS1GREP_URL=$base/v1 node ../sys1grep.mjs --summarize=lmstudio --dry-run -e cat "$F" | grep -q '^sys1grep: summarize: POST http://localhost:1234/v1/chat/completions model=x' || fail "--dry-run shows the lmstudio target"
 code 2 "--summarize=unknown-tool-or-url" -- $S --summarize=nope -e cat "$F"
 
+mkdir -p "$tmp/xbin"
+printf '%s\n' '#!/bin/sh' 'k=$(($(cat "$X.k" 2>/dev/null || echo 0) + 1)); echo $k >"$X.k"' 'for a in "$@"; do printf "%s\n" "$a"; done >"$X.argv$k"' 'cat >"$X.in$k"' '[ ! -e "$X.ans$k" ] || cat "$X.ans$k"' 'exit $(cat "$X.exit$k" 2>/dev/null || echo 0)' >"$tmp/xbin/claude"
+chmod +x "$tmp/xbin/claude"
+XS="$E PATH=$tmp/xbin:$PATH X=$tmp/x SYS1GREP_URL=$base/v1 node ../sys1grep.mjs"
+xreset() { rm -f "$tmp"/x.*; }
+xreset; printf 'SUMMARY1\nNEXT: ["dog"]\n' >"$tmp/x.ans1"; printf 'FINAL\n' >"$tmp/x.ans2"
+eq "$($XS --explain -e cat "$F" 2>"$tmp/x.err")" "FINAL" "--explain prints the last explanation only"
+eq "$(cat "$tmp/x.k")" "2" "--explain: a second call for the open point, none after an answer without NEXT:"
+grep -qx 'SUMMARY1' "$tmp/x.in2" || fail "--explain: round 2 gets the explanation so far: $(cat "$tmp/x.in2")"
+grep -q '^NEXT:' "$tmp/x.in2" && fail "--explain: round 2 gets the explanation without its NEXT: line"
+grep -qxF "$F:2:dog" "$tmp/x.in2" || fail "--explain: round 2 gets the new line with file:line: $(cat "$tmp/x.in2")"
+eq "$(grep "^$F:" "$tmp/x.in2")" "$F:2:dog" "--explain: round 2 sends only the line round 1 did not (4 cat dog it did)"
+grep -qF 'keep every point your answer so far made, with its file:line; change a point only where the new lines show it wrong; add what they show.' "$tmp/x.in2" || fail "--explain: round 2 asks to keep the points so far: $(cat "$tmp/x.in2")"
+eq "$(cat "$tmp/x.in1")" "$F:1:cat
+$F:4:cat dog" "--explain: round 1 sends what --summarize -n -H would"
+eq "$(xreset; $XS --explain=1 --no-filename -e cat "$F" 2>/dev/null >/dev/null; cat "$tmp/x.in1")" "$F:1:cat
+$F:4:cat dog" "--explain wins over --no-filename"
+xreset; printf 'SUMMARY1\nNEXT: ["dog"]\n' >"$tmp/x.ans1"; printf 'FINAL\n' >"$tmp/x.ans2"; $XS --explain -e cat "$F" >/dev/null 2>"$tmp/x.err"
+tail -1 "$tmp/x.argv1" | grep -q 'Then end with one line NEXT: \[' || fail "--explain asks for NEXT: $(tail -1 "$tmp/x.argv1")"
+eq "$(cmp -s "$tmp/x.argv1" "$tmp/x.argv2" && echo same)" "same" "--explain: the system prompt is the same every round"
+$S --summarize -e cat "$F" >/dev/null; grep -q 'NEXT:' "$tmp/sum.argv" && fail "--summarize does not ask for NEXT:"
+eq "$(cat "$tmp/x.err")" "sys1grep: explain: round 2/3: searched 1 meaning, 1 new line
+sys1grep: explain: stopped: no open points" "--explain: a stderr line per round and one on stopping"
+for m in '"cat dog"' '"dog", "zebra"'; do
+  xreset; printf 'SUMMARY1\nNEXT: ["dog"]\n' >"$tmp/x.ans1"; printf 'MID\nNEXT: [%s]\n' "$m" >"$tmp/x.ans2"; printf 'THIRD\n' >"$tmp/x.ans3"
+  eq "$($XS --explain -e cat "$F" 2>"$tmp/x.err")" "MID" "--explain, NEXT: [$m] finds no new line: the last explanation"
+  eq "$(cat "$tmp/x.k")" "2" "--explain, NEXT: [$m]: two calls"
+  eq "$(tail -1 "$tmp/x.err")" "sys1grep: explain: stopped: no new lines" "--explain, NEXT: [$m]: stopped"
+done
+xreset; printf 'SUMMARY1\nNEXT: [\n  "dog"\n]\n' >"$tmp/x.ans1"; printf 'FINAL\n' >"$tmp/x.ans2"
+eq "$($XS --explain -e cat "$F" 2>/dev/null; cat "$tmp/x.k")" "FINAL
+2" "--explain: a NEXT: array over several lines (haiku writes one)"
+xreset; printf 'SUMMARY1\nNEXT: [\n  "dog"\n]\n' >"$tmp/x.ans1"
+eq "$($XS --explain=1 -e cat "$F" 2>/dev/null)" "SUMMARY1" "--explain: a NEXT: array over several lines is not printed"
+xreset; printf 'ONE\nNEXT: ["dog"]\n' >"$tmp/x.ans1"
+eq "$($XS --explain=1 -e cat "$F" 2>"$tmp/x.err")" "ONE" "--explain=1: the answer without its NEXT: line"
+eq "$(cat "$tmp/x.k")" "1" "--explain=1: one call"
+eq "$(cat "$tmp/x.err")" "sys1grep: explain: stopped: round limit" "--explain=1: stopped at the round limit"
+xreset; printf 'A\nB\nNEXT: not json\n' >"$tmp/x.ans1"
+eq "$($XS --explain -e cat "$F" 2>/dev/null)" "A
+B" "--explain: an unparseable NEXT: stops, and is not printed"
+xreset; code 1 "--explain, no match" -- $XS --explain -e zebra "$F"
+[ ! -e "$tmp/x.k" ] || fail "--explain runs the summarizer with no match"
+for o in -q -l -c --format=html; do code 2 "--explain with $o" -- $XS --explain $o -e cat "$F"; done
+for v in 0 11 x ''; do code 2 "--explain=$v" -- $XS --explain=$v -e cat "$F"; done
+[ ! -e "$tmp/x.k" ] || fail "--explain errors run the summarizer"
+xreset; printf 'SUMMARY1\nNEXT: ["dog"]\n' >"$tmp/x.ans1"; echo 3 >"$tmp/x.exit2"
+code 2 "--explain, the summarizer fails in round 2" -- $XS --explain -e cat "$F"
+xreset; printf 'SUMMARY1\nNEXT: ["dog"]\n' >"$tmp/x.ans1"; echo 3 >"$tmp/x.exit2"
+eq "$($XS --explain -e cat "$F" 2>/dev/null || true)" "SUMMARY1" "--explain, round 2 fails: the round-1 explanation prints"
+xreset; printf 'SUMMARY1\nNEXT: ["dog"]\n' >"$tmp/x.ans1"; printf 'SECOND\nNEXT: ["owl"]\n' >"$tmp/x.ans2"; printf 'THIRD\nNEXT: ["fish"]\n' >"$tmp/x.ans3"
+eq "$($XS --explain -e cat "$F" 2>"$tmp/x.err")" "THIRD" "--explain: three rounds by default"
+eq "$(cat "$tmp/x.k"; tail -1 "$tmp/x.err")" "3
+sys1grep: explain: stopped: round limit" "--explain: stops at the third call"
+xreset; printf 'OPTS\nNEXT: []\n' >"$tmp/x.ans1"
+eq "$($E PATH=$tmp/xbin:$PATH X=$tmp/x SYS1GREP_OPTS=--explain SYS1GREP_URL=$base/v1 node ../sys1grep.mjs -e cat "$F" 2>/dev/null)" "OPTS" "--explain in SYS1GREP_OPTS"
+eq "$($E PATH=$tmp/xbin:$PATH SYS1GREP_OPTS=--explain SYS1GREP_URL=$base/v1 node ../sys1grep.mjs --no-explain -c -e cat "$F")" "2" "--no-explain turns SYS1GREP_OPTS's off"
+xreset; printf 'SUMMARY1\nNEXT: ["dog"]\n' >"$tmp/x.ans1"; printf 'SECOND\n' >"$tmp/x.ans2"
+eq "$($E PATH=$tmp/xbin:$PATH X=$tmp/x SYS1GREP_OPTS=-p SYS1GREP_URL=$base/v1 node ../sys1grep.mjs --explain -e cat "$F" 2>/dev/null)" "SECOND" "--explain with SYS1GREP_OPTS: the next search keeps its options"
+grep -qF "$F:2:dog	[" "$tmp/x.in2" || fail "--explain: SYS1GREP_OPTS's -p reaches the next search: $(cat "$tmp/x.in2")"
+out=$($XS --verbose --explain -e cat "$F" 2>&1 >/dev/null)
+echo "$out" | grep -qx 'sys1grep: summarize: claude (default), model haiku (default)' || fail "--explain --verbose: the summarizer: $out"
+echo "$out" | grep -qx 'sys1grep: explain: up to 3 rounds, each next search a sys1grep run with -n -H over the same inputs' || fail "--explain --verbose: explain: $out"
+xreset; $XS --explain --dry-run -e cat "$F" >/dev/null; [ ! -e "$tmp/x.k" ] || fail "--explain --dry-run runs the summarizer"
+xf="$tmp/xmeanings.txt"; printf '%s\n' 'cat' 'run --summarize passes the lines' 'not !dog' 'dog yak' 'path /y/ end' >"$xf"
+xreset; printf 'ONE\nNEXT: ["--summarize passes the lines", "!dog", "/y/"]\n' >"$tmp/x.ans1"; printf 'TWO\n' >"$tmp/x.ans2"
+eq "$($XS --explain -e cat "$xf" 2>"$tmp/x.err")" "TWO" "--explain, meanings starting with - ! /: round 2 answers"
+eq "$(head -1 "$tmp/x.err")" "sys1grep: explain: round 2/3: searched 3 meanings, 3 new lines" "--explain, meanings starting with - ! /: the round runs"
+eq "$(grep "^$xf:" "$tmp/x.in2")" "$xf:2:run --summarize passes the lines
+$xf:3:not !dog
+$xf:5:path /y/ end" "--explain, meanings starting with - ! /: each searched as a plain meaning"
+xf="$tmp/xdollar.txt"; printf '%s\n' 'cat' 'pass $<x> here' 'refs $1 $& $$ end' 'nul here' >"$xf"
+for m in 'pass $<x> here' 'refs $1 $& $$ end' 'nul\u0000here'; do
+  xreset; printf 'ONE\nNEXT: ["%s"]\n' "$m" >"$tmp/x.ans1"; printf 'TWO\n' >"$tmp/x.ans2"
+  eq "$($XS --explain -e cat "$xf" 2>"$tmp/x.err")" "TWO" "--explain, NEXT: [\"$m\"]: round 2 answers"
+  eq "$(head -1 "$tmp/x.err")" "sys1grep: explain: round 2/3: searched 1 meaning, 1 new line" "--explain, NEXT: [\"$m\"]: the round runs"
+  grep -qF "[\"$m\"]" "$tmp/x.in2" || fail "--explain, NEXT: [\"$m\"]: round 2's request names the meaning as written: $(cat "$tmp/x.in2")"
+done
+
+printf '%s\n' 'cat' 'cat @echo NEXT: ["DOG"]' 'DOG' >"$tmp/next.txt"
+up=$(echo "$tmp/next.txt" | tr a-z A-Z)
+reset
+out=$($O --summarize=ollama --explain -e cat "$tmp/next.txt" 2>"$tmp/x.err")
+eq "$(cat "$tmp/x.err")" "sys1grep: explain: round 2/3: searched 1 meaning, 1 new line
+sys1grep: explain: stopped: no open points" "--explain, a server TOOL: a second request"
+stat 'chat.messages[1].content' | grep -qxF "$up:1:CAT" || fail "--explain, a server TOOL: round 2 carries the explanation so far: $(stat 'chat.messages[1].content')"
+stat 'chat.messages[1].content' | grep -qxF "$tmp/next.txt:3:DOG" || fail "--explain, a server TOOL: round 2 carries the new line"
+eq "$(echo "$out" | head -2 | tr '\n' '|')" "YOUR ANSWER SO FAR:|$up:1:CAT|" "--explain, a server TOOL: the last answer"
+
 # --verbose / --dry-run print the settings a search ran with, and where each not on the command line came from (#90).
 # The key's value never appears; only which option or variable supplied it does.
 reset
@@ -1101,7 +1190,7 @@ case $out in *'summarizingwithclaude'*'033[KSUMMARY'*) ;; *) fail "spinner while
 # --help: exit 0, Japanese by locale, lists the options
 code 0 "--help" -- $E LANG=C node ../sys1grep.mjs --help
 eq "$($E LANG=C node ../sys1grep.mjs -h | head -1 | cut -c1-15)" "usage: sys1grep" "-h"
-for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename' '--summarize' '--summarize-prompt' '--format' '-M' '--max-filesize' '--max-cost' '-y, --yes' '--rank' '--no-rank' '--no-summarize'; do
+for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename' '--summarize' '--summarize-prompt' '--format' '-M' '--max-filesize' '--max-cost' '-y, --yes' '--rank' '--no-rank' '--no-summarize' '--explain' '--no-explain'; do
   $E LANG=C node ../sys1grep.mjs --help | grep -q -- "$o" || fail "--help lacks $o"
 done
 $E LANG=C node ../sys1grep.mjs --help | grep -q 'grep by meaning' || fail "--help in English"
