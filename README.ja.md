@@ -741,7 +741,7 @@ tickets/a.txt-13-確認いたします。
 
 ### HTML のテンプレート (`--template`)
 
-`--rank --format=html` はテンプレートを埋めて書きます。同梱は 4 つで、`default`、`print`（白地に黒の明朝系、
+`--rank --format=html` と `--summarize --format=html` はテンプレートを埋めて書きます。同梱は 4 つで、`default`、`print`（白地に黒の明朝系、
 紙と PDF 向け）、`search`（Web 検索エンジン風の結果ページ）、`terminal`（暗い背景の等幅）です。`--template=NAME` で選び、環境変数か
 `~/.config/sys1grep/.env` の `SYS1GREP_TEMPLATE` で既定を決められます。
 
@@ -756,7 +756,8 @@ $ sys1grep -r -n -C1 --rank -p --format=html --template=print -e "返金を断�
 |---|---|---|
 | `{{title}}` | どこでも | `sys1grep: ` と意味 |
 | `{{query}}` | どこでも | 意味。`"refund" and not "policy"` の形 |
-| `{{count}}` | どこでも | 結果の数 |
+| `{{count}}` | どこでも | 結果の数（`--summarize` では一致した行の数） |
+| `{{answer}}` | どこでも | `--summarize` の答え。`--rank` では空 |
 | `{{rank}}` | 結果ごと | 1, 2, … |
 | `{{score}}` | 結果ごと | `-p` が出す形の点数（`0.96`）。`-p` が無ければ空 |
 | `{{score_pct}}` | 結果ごと | 点数を 0〜100 の整数にしたもの。`-p` が無くても入る（バーには `style="--s:{{score_pct}}"`） |
@@ -776,12 +777,20 @@ $ sys1grep --template=list                # 1 行に 1 つの名前。~/.config 
 
 `{{score_pct}}` は `-p` が無くても入るので、数字を出さずに関連度をバーで見せられます。
 
+`--summarize --format=html` では TOOL に平文を書かせ、その答えを、終わってからエスケープして `{{answer}}` に入れます。
+`<!--result-->` と `<!--/result-->` の間は書きません。`--summarize` で使うテンプレートには、その外に `{{answer}}`
+が要ります（同梱のものにはあります。`--rank` のときは空）。
+
+```sh
+$ sys1grep -r --summarize --format=html --template=print -e "返金を断った理由" tickets/ > why.html
+```
+
 テンプレートは信頼したローカルの入力として扱います。指定したパスやテンプレートのディレクトリにあるシンボリック
 リンクはそのまま読み、エスケープするのは埋め込む結果だけです。
 
 `--install-templates` は既にあるファイルを上書きしません（そのファイルには `kept` と出します）。テンプレートが
 見つからない、あるいは `<!--result-->` 1 つの後に `<!--/result-->` 1 つ、になっていないときは、そのファイルを
-示して終了コード 2 です。コマンドラインの `--template` には `--rank --format=html` が要ります。
+示して終了コード 2 です。コマンドラインの `--template` には、`--rank` か `--summarize` と `--format=html` が要ります（`-l` とは併用不可）。
 `SYS1GREP_TEMPLATE` はそれ以外では使われないだけです。`--template=list` と `--install-templates` は他の引数と
 併用できず、`SYS1GREP_OPTS` には書けません。
 
@@ -884,7 +893,7 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
                前述の「テンプレートごとに 1 行だけ判定する」を参照)
   --rank[=jev|match]  結果 (一致とその文脈) を良いものから順に番号付きの見出しの下に出す。jev (値なしの
                --rank) は各結果を Jev に聞き、match は最も高い一致の確率で並べる (前述の「良いものから順に出す」を参照)。--no-rank でファイル順
-  --template=NAME  --rank --format=html が書く文書。~/.config/sys1grep/templates/NAME.html、無ければ同梱のもの
+  --template=NAME  --rank か --summarize の --format=html が書く文書。~/.config/sys1grep/templates/NAME.html、無ければ同梱のもの
                (default, print, terminal)、またはファイル。既定は SYS1GREP_TEMPLATE、無ければ default。
                --template=list は名前を出す (前述の「HTML のテンプレート」を参照)
   --install-templates  同梱のテンプレートを ~/.config/sys1grep/templates へコピーする。既にあるファイルは残す

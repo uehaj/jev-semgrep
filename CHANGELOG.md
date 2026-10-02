@@ -26,6 +26,10 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   the names, `--install-templates` copies the bundled ones there without overwriting; both take no other
   arguments and are refused in `SYS1GREP_OPTS`. A missing or broken template
   is exit 2 naming the file.
+- `--template` also applies to `--summarize --format=html`. The TOOL is asked for plain text instead of a whole
+  HTML document, and its answer goes, escaped, into the template's `{{answer}}` (empty with `--rank`) once the
+  TOOL is done; the `<!--result-->` part is not written. A template used with `--summarize` must have `{{answer}}`
+  outside that part, or it is exit 2. The bundled `default`, `print` and `terminal` have it.
 - `--no-summarize` turns off an earlier `--summarize`, and `SYS1GREP_OPTS` now takes `--summarize` and `--rank`
   (both used to be refused there, having no `--no-` form to undo them for `-l` / `-c`). A `--summarize` in
   `SYS1GREP_OPTS` sends every search's matches to TOOL's provider too.

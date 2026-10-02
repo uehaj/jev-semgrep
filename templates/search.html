@@ -87,6 +87,8 @@ pre:focus-visible { outline: 2px solid var(--title); outline-offset: 2px; }
   .title, .url { break-after: avoid; }
   .relevance { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
+.answer { margin: 16px 0 8px; padding: 12px 16px; border-left: 3px solid var(--url); background: var(--snippet-bg); border-radius: 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.answer:empty { display: none; }
 </style>
 </head>
 <body>
@@ -96,6 +98,7 @@ pre:focus-visible { outline: 2px solid var(--title); outline-offset: 2px; }
 </div></div>
 <div class="page">
 <p class="stats">About {{count}} results, best first</p>
+<section class="answer" lang="">{{answer}}</section>
 <main>
 <!--result-->
 <article class="result">

@@ -37,12 +37,15 @@ pre:focus-visible { outline: 1px dashed var(--sep); outline-offset: 2px; }
   :root { --bg: #fff; --fg: #000; --dim: #555; --prompt: #000; --file: #000; --sep: #000; --score: #000; }
   pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 }
+.answer { margin: 0 0 1em; white-space: pre-wrap; overflow-wrap: anywhere; }
+.answer:empty { display: none; }
 </style>
 </head>
 <body>
 <div class="page">
 <p class="cmd" lang="">{{query}}</p>
 <p class="count"># results: {{count}}, best first</p>
+<section class="answer" lang="">{{answer}}</section>
 <!--result-->
 <section class="result">
 <p class="head">{{rank}}. <span class="score">{{score}}</span> <span class="file">{{file}}</span><span class="meter" style="--s:{{score_pct}}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{score_pct}}" aria-label="relevance of result {{rank}}"></span></p>
