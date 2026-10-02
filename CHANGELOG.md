@@ -6,10 +6,10 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
-- Multi-step matching: `--from EXPRESSION --to EXPRESSION` finds the functions the start expression matches,
-  walks the calls from them breadth first, and prints the paths to the reached functions the end expression
-  matches, as a tree of hop, `file:line` and name (#163). No score steers the walk: Jev judges every function
-  against `--from` in one batch and the functions reached within `--hops=N|M..N|M..` against `--to` in another;
+- Multi-step matching: `EXPRESSION --step-to EXPRESSION` finds the functions the expression before `--step-to`
+  matches, walks the calls from them breadth first, and prints the paths to the reached functions the expression
+  after it matches, as a tree of hop, `file:line` and name (#163). No score steers the walk: Jev judges every function
+  against the start expression in one batch and the functions reached within `--hops=N|M..N|M..` against the end in another;
   regex-only ends send nothing. `--edges=FILE` walks any other relation between lines, `--reverse` walks
   backwards. stderr gives the functions reached at each hop and why the walk stopped. `--max-cost` counts both
   batches, and `--dry-run` shows a bound. Refused with `-z`, `-g`, `-o`, `-c`, `-l`, `-A/-B/-C`, `--rank`,

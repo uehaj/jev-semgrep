@@ -220,12 +220,12 @@ $J --quiet -e 'the weather is sunny' intent.txt 2>/dev/null
 if $J -q -e 'a volcano is erupting' intent.txt 2>/dev/null; then exit 1; elif [ $? -ne 1 ]; then exit 1; fi
 $J -q -Q "the cat's name" intent.txt no-such-file 2>/dev/null
 
-# Multi-step matching (#163), the json chain measured in #161: down from json.load, raw_decode raises on bad JSON
-# itself (0.65-0.85 there); detect_encoding (0.04) is pruned. Skipped without a python3 to find json in.
+# Multi-step matching (#163), the json chain measured in #161: down from json.load, loads, decode and raw_decode
+# raise on bad JSON themselves (0.65-0.85 there); detect_encoding (0.04) is pruned. Skipped without a python3 to find json in.
 jsondir=$(python3 -c 'import json, os; print(os.path.dirname(json.__file__))' 2>/dev/null) || jsondir=
 if [ -n "$jsondir" ]; then
-  out=$($J --from '/^\s*def load\b/' --to '不正な JSON のとき、自分で例外を送出している' "$jsondir"/*.py 2>/dev/null)
-  echo "$out" | grep -q ':raw_decode$'
+  out=$($J -e '/^\s*def load\b/' --step-to '不正な JSON のとき、自分で例外を送出している' "$jsondir"/*.py 2>/dev/null)
+  for f in loads decode raw_decode; do echo "$out" | grep -q ":$f\$"; done
   if echo "$out" | grep -q 'detect_encoding'; then exit 1; fi
 fi
 echo OK
