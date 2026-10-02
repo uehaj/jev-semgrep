@@ -741,8 +741,8 @@ tickets/a.txt-13-確認いたします。
 
 ### HTML のテンプレート (`--template`)
 
-`--rank --format=html` と `--summarize --format=html` はテンプレートを埋めて書きます。同梱は 3 つで、`default`、`print`（白地に黒の明朝系、
-紙と PDF 向け）、`terminal`（暗い背景の等幅）です。`--template=NAME` で選び、環境変数か
+`--rank --format=html` と `--summarize --format=html` はテンプレートを埋めて書きます。同梱は 4 つで、`default`、`print`（白地に黒の明朝系、
+紙と PDF 向け）、`search`（Web 検索エンジン風の結果ページ）、`terminal`（暗い背景の等幅）です。`--template=NAME` で選び、環境変数か
 `~/.config/sys1grep/.env` の `SYS1GREP_TEMPLATE` で既定を決められます。
 
 ```sh

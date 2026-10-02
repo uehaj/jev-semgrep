@@ -816,6 +816,7 @@ for t in ../templates/*.html; do
 done
 eq "$($J --rank=match --format=html --template=print -e cat "$tmp/rkf.txt" | grep -c '@page')" "1" "--template=print picks print"
 eq "$($J --rank=match --format=html -e cat "$tmp/rkf.txt" | grep -c '@page' || true)" "0" "the default is not print"
+eq "$($J --rank=match --format=html --template=search -e cat "$tmp/rkf.txt" | grep -c "class=\"box\"")" "1" "--template=search picks search"
 eq "$($J --rank=match --format=html --template=terminal -e cat "$tmp/rkf.txt" | grep -c 'content="dark"')" "1" "--template=terminal picks terminal"
 code 2 "--format=html with -l --rank" -- $J -l --rank --format=html -e cat "$tmp/rkf.txt"
 eq "$($J --rank --format=html -e zebra "$tmp/rkf.txt")" "" "--rank --format=html, no match: nothing"

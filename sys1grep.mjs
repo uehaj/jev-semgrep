@@ -327,7 +327,7 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                --template's {{answer}} and prints when TOOL is done. Before --summarize-prompt's TEXT, which can override it. Needs
                --rank (not with -l) or --summarize, except in SYS1GREP_OPTS. (It replaces --summarize-format.)
   --template=NAME  the document --rank or --summarize --format=html writes (default: SYS1GREP_TEMPLATE, else default):
-               ~/.config/sys1grep/templates/NAME.html, else the bundled one (default, print, terminal); a
+               ~/.config/sys1grep/templates/NAME.html, else the bundled one (default, print, search, terminal); a
                value with / or ending in .html is a file. Placeholders: {{title}} {{query}} {{count}}, and
                between <!--result--> and <!--/result--> (repeated per result) {{rank}} {{score}} (with -p)
                {{score_pct}} (0-100, also without -p) {{file}} (with several files) {{lines}}; each is filled
@@ -540,7 +540,7 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                --summarize-prompt の TEXT より前に置くので TEXT で上書きできる。
                --rank (-l とは併用不可) か --summarize が要る (SYS1GREP_OPTS では要らない)。--summarize-format の後継
   --template=NAME  --rank か --summarize の --format=html が書く文書 (既定は SYS1GREP_TEMPLATE、無ければ default)。
-               ~/.config/sys1grep/templates/NAME.html、無ければ同梱のもの (default, print, terminal)。/ を含むか
+               ~/.config/sys1grep/templates/NAME.html、無ければ同梱のもの (default, print, search, terminal)。/ を含むか
                .html で終わる値はファイル。置き換える文字列は {{title}} {{query}} {{count}} と、<!--result--> と
                <!--/result--> の間 (結果ごとに繰り返す) の {{rank}} {{score}} (-p のとき) {{score_pct}} (0〜100、
                -p が無くても入る) {{file}} (複数ファイルのとき) {{lines}}。どれもエスケープして入れる。
