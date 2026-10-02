@@ -118,10 +118,10 @@ const OPTIONS = {
 const defaults = SYS1GREP_OPTS.split(/\s+/).filter(Boolean).map(fill);
 // --step-to X (#163) is --step-to -e X, and so is --step-to=X; a bare --step-to (followed by an option) opens the end
 // expression for the -e / -a / -v / -Q after it. After --, every argument is a file. X, and the MEANING of -e / -a /
-// -v / -Q, may start with a dash ("--summarize hands the lines on"): an option is a known short one, or -- and a word
-// with no space in it. parseArgs refuses a separate value starting with -, so such a value is attached.
+// -v / -Q, may start with a dash ("--summarize hands the lines on"): an option holds no space, and is -- and a word or
+// a known short one. parseArgs refuses a separate value starting with -, so such a value is attached.
 const SHORTS = new Set(Object.entries(OPTIONS).map(([k, o]) => o.short ?? (k.length === 1 ? k : null)).filter(Boolean));
-const isOption = a => /^--\S*$/.test(a) || (/^-[^-]/.test(a) && SHORTS.has(a[1]));
+const isOption = a => !/\s/.test(a) && (a.startsWith('--') || (/^-[^-]/.test(a) && SHORTS.has(a[1])));
 const openStep = args => {
   const out = [];
   for (let i = 0; i < args.length; i++) {
@@ -2111,8 +2111,9 @@ for (const file of opt.quiet || dry ? [] : targets) {
     lastHit = h.get(no);
   }
 }
-// JavaScript without its comments and string text; a template literal's ${...} stays, being code. stack: a ` for each
-// template literal open, a { for each brace open inside one's ${...}.
+// JavaScript without its comments, strings and regex literals; a template literal's ${...} stays, being code. stack: a `
+// for each template literal open, a { for each brace open inside one's ${...}. A / is a regex where an operand is due:
+// at the start, after an operator or bracket, or after return.
 function jsCode(t) {
   let out = '';
   const stack = [];
@@ -2129,6 +2130,17 @@ function jsCode(t) {
       const end = t[i + 1] === '/' ? t.indexOf('\n', i) : t.indexOf('*/', i + 2) + 2;
       if (end < 2) break;
       i = end;
+      continue;
+    }
+    if (c === '/' && /(?:^|[(,=:[!&|?{};+\-*%<>~^]|\breturn)$/.test(out.trimEnd().slice(-7))) {
+      let j = i + 1, inClass = false;
+      for (; j < t.length && t[j] !== '\n' && (inClass || t[j] !== '/'); j++) {
+        if (t[j] === '\\') j++;
+        else if (t[j] === '[') inClass = true;
+        else if (t[j] === ']') inClass = false;
+      }
+      i = j + 1;
+      out += ' ';
       continue;
     }
     if (c === '"' || c === "'") {
@@ -2173,7 +2185,7 @@ if (multiStep) {
   } else {
     // A call: name( in a function's body, its comments, docstrings and strings left out (one pass, so a # or // in a
     // string is no comment) and its own funcname line skipped. It links to every function of that name in the files read.
-    // ponytail: a JS regex literal holding a quote, or a Python f-string's {call()}, hides or drops a call
+    // ponytail: a Python f-string's {call()} is a string, so its call is dropped
     const defs = new Map();
     for (const u of allLines) if (u.name) defs.set(u.name, [...(defs.get(u.name) ?? []), u]);
     const call = new RegExp(`(?<![\\w$])(${[...defs.keys()].map(n => n.replace(/\$/g, '\\$')).join('|')})\\(`, 'g');

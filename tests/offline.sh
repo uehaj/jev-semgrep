@@ -377,6 +377,7 @@ eq "$($J -e 'a comment' -a '/load/' -v zebra --step-to 'raised here' "$C" 2>/dev
 eq "$($J -e 'a comment' --step-to='raised here' "$C" 2>/dev/null | head -1)" "0 $C-1-main" "--step-to=X"
 eq "$($J -e '/^function main/' --step-to '--step start' "$C" 2>/dev/null | head -1)" "0 $C:1:main" "--step-to X: X may start with --"
 eq "$($J -e '--step start' --step-to 'raised here' "$C" 2>/dev/null | head -1)" "0 $C-1-main" "-e X: X may start with --, if it has a space"
+code 1 "--step-to '-v X' is a meaning, not -v" -- $J -e '/^function main/' --step-to '-v raised' "$C"
 code 1 "no start" -- $J -e zebra --step-to 'raised here' "$C"
 eq "$($J -e zebra --step-to 'raised here' "$C" 2>&1)" "sys1grep: walk: no unit matched the start expression" "no start: says so"
 eq "$($J -q -e 'a comment' --step-to 'raised here' "$C" 2>&1)" "" "-q: prints nothing"
@@ -421,6 +422,8 @@ code 0 "--dedup in SYS1GREP_OPTS gives way" -- $E SYS1GREP_URL=$base/v1 SYS1GREP
 # A call in a string, or after a // or # in a string, is read right; a template literal's ${...} is code
 printf '%s\n' 'function a() {' "  fetch('http://h/'); b(\`\${c()} d()\`); // e()" "  const s = 'f()';" '}' 'function b() {}' 'function c() {}' 'function d() {}' 'function e() {}' 'function f() {}' >"$tmp/s.js"
 eq "$($J --hops=0..1 -e '/^function a/' --step-to '/./' "$tmp/s.js" 2>/dev/null | sed 's/.*://' | tr '\n' ' ')" "a b c " "JS: strings and comments hold no call, \${...} does"
+printf '%s\n' 'function a() {' "  n = (s.match(/\`'[/]/g) ?? []).length / 2;" '  b(); return /x/.test(s) && c();' '}' 'function b() {}' 'function c() {}' >"$tmp/r.js"
+eq "$($J --hops=0..1 -e '/^function a/' --step-to '/./' "$tmp/r.js" 2>/dev/null | sed 's/.*://' | tr '\n' ' ')" "a b c " "JS: a regex literal holding \` ' or / is no template, string or end"
 printf '%s\n' 'def a():' '    s = "#"; b()' "    t = 'c()'  # d()" 'def b(): pass' 'def c(): pass' 'def d(): pass' >"$tmp/s.py"
 eq "$($J --hops=0..1 -e '/^def a/' --step-to '/./' "$tmp/s.py" 2>/dev/null | sed 's/.*://' | tr '\n' ' ')" "a b " "Python: a # in a string is no comment"
 $J --unit=function --dry-run -e backoff "$tmp/net.js" 2>&1 | grep -q "net.js: 3 functions, 3 to send" || fail "--unit=function: --dry-run counts functions"
