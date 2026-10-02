@@ -790,7 +790,7 @@ $ sys1grep -r --summarize --format=html --template=print -e "返金を断った�
 
 `--install-templates` は既にあるファイルを上書きしません（そのファイルには `kept` と出します）。テンプレートが
 見つからない、あるいは `<!--result-->` 1 つの後に `<!--/result-->` 1 つ、になっていないときは、そのファイルを
-示して終了コード 2 です。コマンドラインの `--template` には `--rank --format=html` が要ります。
+示して終了コード 2 です。コマンドラインの `--template` には、`--rank` か `--summarize` と `--format=html` が要ります（`-l` とは併用不可）。
 `SYS1GREP_TEMPLATE` はそれ以外では使われないだけです。`--template=list` と `--install-templates` は他の引数と
 併用できず、`SYS1GREP_OPTS` には書けません。
 
@@ -893,7 +893,7 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
                前述の「テンプレートごとに 1 行だけ判定する」を参照)
   --rank[=jev|match]  結果 (一致とその文脈) を良いものから順に番号付きの見出しの下に出す。jev (値なしの
                --rank) は各結果を Jev に聞き、match は最も高い一致の確率で並べる (前述の「良いものから順に出す」を参照)。--no-rank でファイル順
-  --template=NAME  --rank --format=html が書く文書。~/.config/sys1grep/templates/NAME.html、無ければ同梱のもの
+  --template=NAME  --rank か --summarize の --format=html が書く文書。~/.config/sys1grep/templates/NAME.html、無ければ同梱のもの
                (default, print, terminal)、またはファイル。既定は SYS1GREP_TEMPLATE、無ければ default。
                --template=list は名前を出す (前述の「HTML のテンプレート」を参照)
   --install-templates  同梱のテンプレートを ~/.config/sys1grep/templates へコピーする。既にあるファイルは残す

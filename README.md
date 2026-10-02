@@ -810,7 +810,7 @@ only the results put into it are escaped.
 
 `--install-templates` never overwrites a file that is already there (it prints `kept` for it). A missing
 template, or one without exactly one `<!--result-->` before one `<!--/result-->`, is exit 2 naming the file.
-`--template` on the command line needs `--rank --format=html`; `SYS1GREP_TEMPLATE` is simply unused elsewhere.
+`--template` on the command line needs `--format=html` with `--rank` or `--summarize` (not `-l`); `SYS1GREP_TEMPLATE` is simply unused elsewhere.
 `--template=list` and `--install-templates` take no other arguments and are refused in `SYS1GREP_OPTS`.
 
 ## Use it from Claude Code
@@ -913,7 +913,7 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
                for now; see "One line per template" above)
   --rank[=jev|match]  print the results (a match with its context) best first, under numbered headers; jev
                (bare --rank) asks Jev of each result, match sorts by its best match probability (see "Best first"); --no-rank: file order
-  --template=NAME  the document --rank --format=html writes: ~/.config/sys1grep/templates/NAME.html, else the
+  --template=NAME  the document --rank or --summarize --format=html writes: ~/.config/sys1grep/templates/NAME.html, else the
                bundled one (default, print, terminal), or a file; default SYS1GREP_TEMPLATE, else default.
                --template=list prints the names (see "HTML templates")
   --install-templates  copy the bundled templates to ~/.config/sys1grep/templates, keeping existing files
