@@ -31,12 +31,15 @@ pre {
   overflow-wrap: anywhere;
   tab-size: 4;
 }
+.answer { margin: 0 0 1em; white-space: pre-wrap; overflow-wrap: anywhere; }
+.answer:empty { display: none; }
 </style>
 </head>
 <body>
 <div class="page">
 <h1 lang="">{{query}}</h1>
 <p class="count">sys1grep, results best first: {{count}}</p>
+<section class="answer" lang="">{{answer}}</section>
 <!--result-->
 <section class="result">
 <h2>{{rank}}. <span class="file">{{file}}</span> <span class="score">{{score}}</span></h2>

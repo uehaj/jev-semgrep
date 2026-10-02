@@ -741,7 +741,7 @@ tickets/a.txt-13-確認いたします。
 
 ### HTML のテンプレート (`--template`)
 
-`--rank --format=html` はテンプレートを埋めて書きます。同梱は 3 つで、`default`、`print`（白地に黒の明朝系、
+`--rank --format=html` と `--summarize --format=html` はテンプレートを埋めて書きます。同梱は 3 つで、`default`、`print`（白地に黒の明朝系、
 紙と PDF 向け）、`terminal`（暗い背景の等幅）です。`--template=NAME` で選び、環境変数か
 `~/.config/sys1grep/.env` の `SYS1GREP_TEMPLATE` で既定を決められます。
 
@@ -756,7 +756,8 @@ $ sys1grep -r -n -C1 --rank -p --format=html --template=print -e "返金を断�
 |---|---|---|
 | `{{title}}` | どこでも | `sys1grep: ` と意味 |
 | `{{query}}` | どこでも | 意味。`"refund" and not "policy"` の形 |
-| `{{count}}` | どこでも | 結果の数 |
+| `{{count}}` | どこでも | 結果の数（`--summarize` では一致した行の数） |
+| `{{answer}}` | どこでも | `--summarize` の答え。`--rank` では空 |
 | `{{rank}}` | 結果ごと | 1, 2, … |
 | `{{score}}` | 結果ごと | `-p` が出す形の点数（`0.96`）。`-p` が無ければ空 |
 | `{{score_pct}}` | 結果ごと | 点数を 0〜100 の整数にしたもの。`-p` が無くても入る（バーには `style="--s:{{score_pct}}"`） |
@@ -775,6 +776,14 @@ $ sys1grep --template=list                # 1 行に 1 つの名前。~/.config 
 ```
 
 `{{score_pct}}` は `-p` が無くても入るので、数字を出さずに関連度をバーで見せられます。
+
+`--summarize --format=html` では TOOL に平文を書かせ、その答えを、終わってからエスケープして `{{answer}}` に入れます。
+`<!--result-->` と `<!--/result-->` の間は書きません。`--summarize` で使うテンプレートには、その外に `{{answer}}`
+が要ります（同梱のものにはあります。`--rank` のときは空）。
+
+```sh
+$ sys1grep -r --summarize --format=html --template=print -e "返金を断った理由" tickets/ > why.html
+```
 
 テンプレートは信頼したローカルの入力として扱います。指定したパスやテンプレートのディレクトリにあるシンボリック
 リンクはそのまま読み、エスケープするのは埋め込む結果だけです。

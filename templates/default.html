@@ -76,6 +76,8 @@ pre:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .head, .meter { break-after: avoid; }
   .meter { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
+.answer { margin: 0 0 24px; padding: 14px 16px; border-left: 3px solid var(--accent); background: var(--code-bg); border-radius: 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.answer:empty { display: none; }
 </style>
 </head>
 <body>
@@ -85,6 +87,7 @@ pre:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 <h1 lang="">{{query}}</h1>
 <p class="count">Best first. Results: {{count}}</p>
 </header>
+<section class="answer" lang="">{{answer}}</section>
 <main>
 <!--result-->
 <article class="result">
