@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>{{title}}</title>
+<style>
+:root {
+  --bg: #0d0f10;
+  --fg: #d7dad6;
+  --dim: #7c837e;
+  --prompt: #8fcf6a;
+  --file: #d38ad8;
+  --sep: #5fb8c6;
+  --score: #8fcf6a;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--mono); }
+.page { max-width: 120ch; margin: 0 auto; padding: 24px 16px 48px; }
+.cmd { margin: 0 0 4px; overflow-wrap: anywhere; }
+.cmd::before { content: "sys1grep: "; color: var(--prompt); }
+.count { margin: 0 0 20px; color: var(--dim); }
+.result { margin: 0 0 20px; }
+.head { margin: 0; color: var(--sep); overflow-wrap: anywhere; }
+.file { color: var(--file); }
+.score { color: var(--score); }
+.score::before { content: "["; color: var(--dim); }
+.score::after { content: "]"; color: var(--dim); }
+.score:empty { display: none; }
+.meter { display: inline-block; width: 10ch; height: 0.5em; margin-left: 1ch; border: 1px solid var(--dim); vertical-align: middle; }
+.meter::before { content: ""; display: block; height: 100%; width: calc(var(--s) * 1%); background: var(--score); }
+pre { margin: 0; font: inherit; white-space: pre; overflow-x: auto; tab-size: 8; }
+pre:focus-visible { outline: 1px dashed var(--sep); outline-offset: 2px; }
+@media print {
+  :root { --bg: #fff; --fg: #000; --dim: #555; --prompt: #000; --file: #000; --sep: #000; --score: #000; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+}
+.answer { margin: 0 0 1em; white-space: pre-wrap; overflow-wrap: anywhere; }
+.answer:empty { display: none; }
+</style>
+</head>
+<body>
+<div class="page">
+<p class="cmd" lang="">{{query}}</p>
+<p class="count"># results: {{count}}, best first</p>
+<section class="answer" lang="">{{answer}}</section>
+<!--result-->
+<section class="result">
+<p class="head">{{rank}}. <span class="score">{{score}}</span> <span class="file">{{file}}</span><span class="meter" style="--s:{{score_pct}}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{score_pct}}" aria-label="relevance of result {{rank}}"></span></p>
+<pre tabindex="0" lang="" aria-label="lines of result {{rank}}">{{lines}}</pre>
+</section>
+<!--/result-->
+</div>
+</body>
+</html>

@@ -29,7 +29,10 @@
     "README.ja.md",
     "docs/color.svg",
     "docs/demo.svg",
-    "docs/sentence.svg"
+    "docs/sentence.svg",
+    "templates/default.html",
+    "templates/print.html",
+    "templates/terminal.html"
   ],
   "engines": {
     "node": ">=20.16"

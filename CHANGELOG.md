@@ -15,8 +15,21 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
   the extra requests. It needs a meaning, and is refused with `-c`, `-o` and `-q`; `--no-rank` turns off an
   earlier one.
 - `--format=plain|markdown|html` also shapes `--rank`'s output: sys1grep writes a `## N. FILE` heading and a fenced
-  block per result, or one HTML document with a `<section>` (`<h2>`, `<pre>`) per result, escaped and uncolored.
+  block per result, or one HTML document (from a template, below), escaped and uncolored.
   Anywhere but `--rank` and `--summarize` it is an error on the command line and unused in `SYS1GREP_OPTS`.
+- `--rank --format=html` writes its document from a template (#158). The default is a self-contained page (no
+  outside requests) with light and dark colors, a relevance bar per result, the top result set apart, and a print
+  style; `print` and `terminal` are bundled too. `--template=NAME` reads `~/.config/sys1grep/templates/NAME.html`,
+  else the bundled one, or takes a file path; `SYS1GREP_TEMPLATE` sets the default. A template is one HTML file
+  whose `<!--result-->` ... `<!--/result-->` part repeats per result, with `{{title}}`, `{{query}}`, `{{count}}`,
+  `{{rank}}`, `{{score}}`, `{{score_pct}}`, `{{file}}` and `{{lines}}` filled in escaped. `--template=list` prints
+  the names, `--install-templates` copies the bundled ones there without overwriting; both take no other
+  arguments and are refused in `SYS1GREP_OPTS`. A missing or broken template
+  is exit 2 naming the file.
+- `--template` also applies to `--summarize --format=html`. The TOOL is asked for plain text instead of a whole
+  HTML document, and its answer goes, escaped, into the template's `{{answer}}` (empty with `--rank`) once the
+  TOOL is done; the `<!--result-->` part is not written. A template used with `--summarize` must have `{{answer}}`
+  outside that part, or it is exit 2. The bundled `default`, `print` and `terminal` have it.
 - `--no-summarize` turns off an earlier `--summarize`, and `SYS1GREP_OPTS` now takes `--summarize` and `--rank`
   (both used to be refused there, having no `--no-` form to undo them for `-l` / `-c`). A `--summarize` in
   `SYS1GREP_OPTS` sends every search's matches to TOOL's provider too.
