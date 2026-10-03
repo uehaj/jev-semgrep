@@ -695,9 +695,13 @@ K="$tmp/skew"; mkdir -p "$K"; Y=$(node -e 'const d=new Date();d.setDate(d.getDat
 (cd "$K" && git init -q -b main && git config user.email b@x && git config user.name Bob && git config core.hooksPath /dev/null \
   && echo 'cat @s:t_today' >today.txt && git add today.txt && git commit -q -m today -m 'cat @s:t_today' \
   && echo 'cat @s:t_today' >skew.txt && git add skew.txt && GIT_AUTHOR_DATE=$Y GIT_COMMITTER_DATE=$Y git commit -q -m skew -m 'cat @s:t_today')
-eq "$(cd "$K" && $JI -g -e 'cat @s:t_today' 2>/dev/null | grep -aoE '^[0-9a-f]{7,} [0-9-]{10} [a-z]+' | awk '{print $3}' | tr '\n' ' ')" "today " "-g: a period commit behind an older-dated HEAD is still seen"
-eq "$($JI -r -l -e 'cat @s:t_today' "$K" 2>/dev/null | sed "s|$K/||" | tr '\n' ' ')" "today.txt " "git scope: time by commit sees past an older-dated HEAD"
-(cd "$K" && $JI -g -e 'cat @s:t_today' 2>&1 >/dev/null) | grep -q -- '--since-as-filter=' || fail "-g: --since-as-filter on git >= 2.37"
+if (cd "$K" && git log -1 --since-as-filter=1 >/dev/null 2>&1); then
+  eq "$(cd "$K" && $JI -g -e 'cat @s:t_today' 2>/dev/null | grep -aoE '^[0-9a-f]{7,} [0-9-]{10} [a-z]+' | awk '{print $3}' | tr '\n' ' ')" "today " "-g: a period commit behind an older-dated HEAD is still seen"
+  eq "$($JI -r -l -e 'cat @s:t_today' "$K" 2>/dev/null | sed "s|$K/||" | tr '\n' ' ')" "today.txt " "git scope: time by commit sees past an older-dated HEAD"
+  (cd "$K" && $JI -g -e 'cat @s:t_today' 2>&1 >/dev/null) | grep -q -- '--since-as-filter=' || fail "-g: --since-as-filter on git >= 2.37"
+else
+  echo "skip: git < 2.37 has no --since-as-filter ($(git --version)); the #136 behaviour checks need it"
+fi
 printf '#!/bin/sh\ncase " $* " in *" --version "*) echo "git version 2.30.0"; exit 0;; esac\nexec %s "$@"\n' "$(command -v git)" >"$tmp/gitwrap/git"
 (cd "$K" && PATH="$tmp/gitwrap:$PATH" $JI -g -e 'cat @s:t_today' 2>&1 >/dev/null) | grep -qE -- ' --since=[0-9T:.-]+Z ' || fail "-g: --since on git < 2.37"
 # places: by path; several are alternatives
