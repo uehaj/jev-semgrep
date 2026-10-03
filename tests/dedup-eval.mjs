@@ -15,7 +15,7 @@
 // then never's own), between auto's runs too. Only a difference beyond that control is shown as invented / hidden,
 // and the table prints the control's size next to it: a difference no larger than the control is not a finding.
 import { execFile } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { promisify } from 'node:util';
 
 const here = new URL('.', import.meta.url).pathname;
@@ -24,6 +24,8 @@ const dry = args.includes('--dry');
 const runs = Number(args.find(a => a.startsWith('--runs='))?.slice(7) ?? 2);
 if (!Number.isInteger(runs) || runs < 1) { console.error('dedup-eval: --runs must be a whole number, 1 or more'); process.exit(2); }
 const tsvs = args.filter(a => !a.startsWith('--'));
+const outFile = args.find(a => a.startsWith('--out='))?.slice(6); // every run's lines, tokens and requests as JSON
+const raw = [];
 const corpora = (tsvs.length ? tsvs : [`${here}dedup-corpus.tsv`, `${here}dedup-holdout.tsv`])
   .map(f => [f.split('/').at(-1), f.replace(/(-corpus)?\.tsv$/, '/'), readFileSync(f, 'utf8').trim().split('\n').map(l => l.split('\t'))]);
 const QUESTION_COST = 650; // sys1grep's own figure for --dedup's question, per meaning
@@ -44,7 +46,7 @@ async function once(mode, file, meaning, dryRun = false) {
   return {
     lines: new Set(out.split('\n').filter(Boolean).map(l => +l.split(':')[0])),
     est: d && { units: +d[1], templates: +d[2], requests: +d[3], saved: +d[4], on: d[5] === 'on' },
-    kept: err.match(/^sys1grep: dedup: kept apart .*: (.*)$/m)?.[1] ?? '',
+    kept: err.match(/^sys1grep: dedup: kept apart .*: (.*)$/m)?.[1] ?? err.match(/^sys1grep: dedup: (\d+ templates agreed, \d+ split; \d+ units) sent again$/m)?.[1] ?? '',
     requests: +(s?.[1] ?? q?.[1] ?? 0), tokens: +(s?.[2] ?? q?.[2] ?? 0),
   };
 }
@@ -75,6 +77,7 @@ for (const [name, dir, rows] of corpora) {
     console.log('');
     continue;
   }
+  raw.push({ corpus: name, rows: results.map(x => ({ ...x, r: x.r && Object.fromEntries(Object.entries(x.r).map(([m, rs]) => [m, rs.map(y => ({ ...y, lines: y.lines && [...y.lines] }))])), dryAuto: undefined })) });
   const errors = results.flatMap(x => Object.values(x.r).flat().filter(y => y.error).map(y => `${x.f}  ${x.meaning}: ${y.error}`));
   const ok = results.filter(x => Object.values(x.r).flat().every(y => !y.error) && !x.dryAuto.error);
   failed += results.length - ok.length;
@@ -110,5 +113,6 @@ for (const [name, dir, rows] of corpora) {
   KS.forEach((k, i) => console.log(`| ${k} | ${sweep[i].tp} | ${sweep[i].fp} | ${sweep[i].fn} | ${sweep[i].tn} | ${sweep[i].wrong} |`));
   console.log('');
 }
+if (outFile) writeFileSync(outFile, JSON.stringify(raw));
 if (dry) console.log(`A real run (--runs=${runs}) sends about ${planned.requests} requests, ~${planned.tokens} input tokens (~$${(planned.tokens * 0.042 / 1e6).toFixed(2)}): never's size for every run, an estimate, and it ran ~30% under what Jev billed.`);
 if (failed) process.exit(1);

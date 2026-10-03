@@ -1964,7 +1964,45 @@ if (logPlan && dedupEstimate) {
   const state = opt.dedup === 'always' ? 'on (always)' : opt.dedup === 'never' ? 'off (never)' : dedupEstimate.pays ? 'on' : 'off (auto)';
   logPlan(`dedup: ${dedupEstimate.units} units fold to at most ${dedupEstimate.templates} templates (~${dedupEstimate.requests} requests, ~${dedupEstimate.saved} tokens saved): ${state}`);
 }
-if (willFold && sent.length) {
+// #152 experiment: --dedup=auto asks no question about which values a meaning reads. Each template (every MASK kind
+// folded) sends a sample of members whose values differ: for each varying value, fewest distinct values first, the
+// member holding its lowest, its highest and its middle value, up to SAMPLE. The rest wait. If every sample gets the
+// same verdict the rest share the first sample's answers; if not, the rest are sent too.
+const SAMPLE = 5;
+const valuesOf = text => { const vals = []; MASK.reduce((s, [, re, to]) => s.replace(re, v => (vals.push(v), to)), text); return vals; };
+function sampleOf(group) {
+  if (group.length <= SAMPLE) return group;
+  const vals = group.map(l => valuesOf(l.text));
+  const num = v => { const n = Number(v.replace(/[,_]/g, '')); return Number.isFinite(n) ? n : null; };
+  const slots = vals[0].map((_, i) => [i, new Set(vals.map(v => v[i])).size]).filter(([, n]) => n > 1).sort((a, b) => a[1] - b[1]);
+  const picked = new Set();
+  for (const [i] of slots) {
+    const order = group.map((_, j) => j).sort((a, b) => {
+      const [x, y] = [num(vals[a][i]), num(vals[b][i])];
+      return x !== null && y !== null ? x - y : vals[a][i] < vals[b][i] ? -1 : vals[a][i] > vals[b][i] ? 1 : 0;
+    });
+    for (const j of [order[0], order.at(-1), order[order.length >> 1]]) if (picked.size < SAMPLE) picked.add(j);
+  }
+  if (!picked.size) picked.add(0);
+  return [...picked].map(j => group[j]);
+}
+let waiting = []; // [samples, the rest] per template that sent a sample only
+if (willFold && sent.length && opt.dedup === 'auto') {
+  const groups = new Map();
+  for (const l of sent) {
+    const key = [templateKey(l.text, [], MASK), ...asksByUnit.get(l).keys()].join('\0\0');
+    if (groups.has(key)) groups.get(key).push(l);
+    else groups.set(key, [l]);
+  }
+  for (const g of groups.values()) {
+    const s = sampleOf(g);
+    if (s.length < g.length) waiting.push([s, g.filter(l => !s.includes(l))]);
+  }
+  const held = new Set(waiting.flatMap(([, rest]) => rest));
+  sent = sent.filter(l => !held.has(l));
+  if (logPlan) logPlan(`dedup: ${waiting.length} templates sampled, ${held.size} units wait for their samples' verdicts`);
+}
+if (willFold && sent.length && opt.dedup === 'always') {
   // Asked with the unexpanded meaning, for meanings only; a regex-only expression sends nothing and gets here with no lines.
   const meanings = [...new Set(expr.flat().filter(lit => lit.kind === 'm').map(lit => lit.text))];
   // One request per meaning, the meaning as the only state: this is the form measured in #19. Keeping a kind that
@@ -2043,11 +2081,27 @@ function guardCost(chunks, asks, terms) {
 guardCost(chunks, asksByUnit, starting);
 const isHit = l => starting.some(term => termHolds(term, l));
 // -q: a failed request is reported and the rest still run, since a later match means exit 0 (grep -q).
-let answered = 0;
-spin.set(`0 of ${chunks.length} requests`);
-await Promise.all(chunks.map(chunk => pooled(() => evaluate(chunk).then(() => {
-  if (opt.quiet && !multiStep && chunk.some(isHit)) process.exit(0);
-}, e => { if (!opt.quiet) throw e; console.error(`sys1grep: ${e.message}`); hadError = true; }).finally(() => spin.set(`${++answered} of ${chunks.length} requests`)))));
+async function judgeAll(chunks) {
+  let answered = 0;
+  spin.set(`0 of ${chunks.length} requests`);
+  await Promise.all(chunks.map(chunk => pooled(() => evaluate(chunk).then(() => {
+    if (opt.quiet && !multiStep && chunk.some(isHit)) process.exit(0);
+  }, e => { if (!opt.quiet) throw e; console.error(`sys1grep: ${e.message}`); hadError = true; }).finally(() => spin.set(`${++answered} of ${chunks.length} requests`)))));
+}
+await judgeAll(chunks);
+if (waiting.length) {
+  const verdict = l => [...asksByUnit.get(l).values()].map(x => (x >= tPos) + 2 * (x < tNeg)).join();
+  const split = waiting.filter(([s]) => new Set(s.map(verdict)).size > 1);
+  for (const pair of waiting) if (!split.includes(pair)) pair.flat().forEach(l => asksByUnit.set(l, asksByUnit.get(pair[0][0])));
+  const again = split.flatMap(([, rest]) => rest);
+  if (logPlan) logPlan(`dedup: ${waiting.length - split.length} templates agreed, ${split.length} split; ${again.length} units sent again`);
+  if (again.length) {
+    const more = chunked(again);
+    guardCost(more, asksByUnit, starting);
+    await judgeAll(more);
+    sent = [...sent, ...again];
+  }
+}
 spin.stop();
 
 // What --summarize pipes is never colored: escape sequences would reach the summarizer as text.

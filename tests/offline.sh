@@ -199,8 +199,16 @@ echo "$V" | grep -q -- 'would save' && fail "-q: no would-save hint on stderr (#
 reset; V=$($J --verbose --dedup=auto -e cat "$tmp/rep.txt" 2>&1 >/dev/null)
 echo "$V" | grep -Eq '^sys1grep: dedup: 120 units fold to at most 1 templates .*: on$' || fail "--verbose --dedup=auto, pays: on: $V"
 echo "$V" | grep -q -- 'would save' && fail "--dedup=auto, pays: no separate would-save hint, only the decision line (#143 review): $V"
-eq "$(echo "$V" | grep -c '\[dedup\]')" "1" "--dedup=auto, pays: exactly one [dedup] request"
-eq "$(stat count)" "2" "--dedup=auto, pays: the pre-question plus one judge request"
+eq "$(echo "$V" | grep -c '\[dedup\]')" "0" "--dedup=auto (#152 experiment): no [dedup] question"
+echo "$V" | grep -q '^sys1grep: dedup: 1 templates agreed, 0 split; 0 units sent again$' || fail "--dedup=auto: the samples agreed: $V"
+eq "$(stat count)" "1" "--dedup=auto: the samples in one judge request, the rest share their answers"
+# The samples of "usage N" are the lowest, the highest and the middle N (1, 120, 61). A meaning they disagree on
+# sends the rest; one that only a value between them holds is missed: the weakness of sampling.
+awk 'BEGIN { for (i = 1; i <= 120; i++) print "usage " i }' >"$tmp/use120.txt"
+reset; eq "$($J -n --dedup=auto -e 'usage 120' "$tmp/use120.txt" | nums)" "120 " "--dedup=auto: samples split, the rest are sent"
+eq "$(stat count)" "5" "--dedup=auto, split: one request of samples, then the other 117 units in 4"
+eq "$($J -n --dedup=never -e 'usage 50' "$tmp/use120.txt" | nums)" "50 " "never finds a value between the samples"
+eq "$($J -n --dedup=auto -e 'usage 50' "$tmp/use120.txt" | nums)" "" "--dedup=auto misses it: every sample said no"
 reset; $J --dedup=always -e cat "$tmp/rep.txt" >/dev/null; eq "$(stat count)" "2" "--dedup=always: folds regardless"
 reset; V=$($J --verbose --dedup=always -e cat "$tmp/rep.txt" 2>&1 >/dev/null)
 echo "$V" | grep -Eq ': on \(always\)$' || fail "--verbose --dedup=always: the decision line reads on (always) (#143 review): $V"
