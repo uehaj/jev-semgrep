@@ -23,6 +23,8 @@ n=0
 eq() { [ "$1" = "$2" ] || fail "$3: got '$1', want '$2'"; n=$((n + 1)); [ -z "$OFFLINE_VERBOSE" ] || echo "ok: $3"; }
 # code EXPECTED DESCRIPTION -- COMMAND...: the exit status of COMMAND
 code() { want=$1 what=$2; shift 3; set +e; "$@" >/dev/null 2>&1; got=$?; set -e; eq "$got" "$want" "$what (exit)"; }
+# notty COMMAND...: COMMAND in a new session, which has no controlling terminal (</dev/null alone still leaves /dev/tty)
+notty() { perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' "$@"; }
 
 F="$tmp/a.txt"
 printf '%s\n' 'cat' 'dog' '' 'cat dog' 'bird @0.4' 'fish @0.6' 'the line answers: owl' 'owl' >"$F"
@@ -438,7 +440,7 @@ code 2 "--edges: no such file" -- $J --edges="$tmp/none" -e alpha --step-to delt
 code 2 "--step-to given twice" -- $J -e alpha --step-to delta --step-to gamma "$tmp/e.txt"
 eq "$($J -e alpha --step-to delta --step-to gamma "$tmp/e.txt" 2>&1 | head -1)" "sys1grep: --step-to cannot be given twice: only one step is supported" "--step-to given twice: the message"
 # --max-cost counts the run: the end's requests are asked about with what the start already sent (no terminal: exit 2)
-eq "$($J -e 'a comment' --step-to 'raised here' --max-cost 0.00005 "$C" 2>&1 </dev/null | grep -c 'about 1,')" "1" "--max-cost: start and end together"
+eq "$(notty $J -e 'a comment' --step-to 'raised here' --max-cost 0.00005 "$C" 2>&1 </dev/null | grep -c 'about 1,')" "1" "--max-cost: start and end together"
 code 0 "--max-cost: each alone under it" -- $J -e 'a comment' --step-to 'raised here' --max-cost 0.00008 "$C"
 # --dry-run: every answer is 0, so it walks from every unit the start expression could hold for, a bound
 out=$($J --dry-run -e 'a comment' --step-to 'raised here' "$C")
@@ -760,8 +762,7 @@ eq "$(cd "$P" && $GS -l --include='*.md' --changed-within=7d -e cat | tr '\n' ' 
 eq "$(cd "$P" && $GS -l --include='*.md' -e cat b.txt a.md | tr '\n' ' ')" "a.md " "git sys1grep: pathspecs are filtered too"
 $JI -r -l --include='sub/*.md' -e cat "$P" 2>&1 >/dev/null | grep -q "has a /, but globs match the file name only" || fail "--include with a / warns"
 
-# -i without a terminal is an error; from SYS1GREP_OPTS it says so. notty: a new session has no controlling terminal
-notty() { perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' "$@"; }
+# -i without a terminal is an error; from SYS1GREP_OPTS it says so
 code 2 "-i without a terminal" -- notty $JI -i -e cat "$P/a.md"
 notty $E SYS1GREP_OPTS=-i SYS1GREP_URL=$base/v1 node ../sys1grep.mjs -e cat "$P/a.md" 2>&1 | grep -q 'SYS1GREP_OPTS= sys1grep' || fail "-i from SYS1GREP_OPTS names it"
 # -i: shows the dry run on the terminal and sends nothing before the answer; y searches, anything else exits 1
@@ -1060,8 +1061,8 @@ sh -c "$J --max-filesize 10K -e cat < '$tmp/huge.txt'" 2>&1 >/dev/null | grep -q
 reset; eq "$(sh -c "$J -n -e cat < '$F'" | nums)" "1 4 " "stdin under --max-filesize is still searched"
 # --max-cost 0: any estimated price is over it, so even ordinary input asks; --max-filesize's own skip above never
 # asks, so a run now shows at most this one question (item 8, now moot: see the PR body)
-reset; code 2 "--max-cost 0, no terminal" -- sh -c "$J --max-cost 0 -e cat '$F' </dev/null"
-out=$($J --max-cost 0 -e cat "$F" </dev/null 2>&1 >/dev/null) || true
+reset; code 2 "--max-cost 0, no terminal" -- notty sh -c "$J --max-cost 0 -e cat '$F' </dev/null"
+out=$(notty $J --max-cost 0 -e cat "$F" </dev/null 2>&1 >/dev/null) || true
 echo "$out" | grep -q -- 'input tokens.*--max-cost 0' || fail "the message names --max-cost: $out"
 # item 4 (owner 2026-09-27): --max-cost keeps pricing at TypeSafe's list price even for a custom endpoint (every
 # offline test's own SYS1GREP_URL counts as one), and now says so in the question
