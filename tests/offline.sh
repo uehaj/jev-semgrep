@@ -1289,6 +1289,11 @@ eq "$($JI -r --chunk 1000 -q -e owl "$B" 2>&1 | grep -c '^sys1grep: sending' || 
 eq "$($JI -r --dry-run -e owl "$B" 2>&1 | grep -c '^sys1grep: sending' || true)" "0" "large send: --dry-run shows its own totals"
 eq "$($JI -r -e owl "$P" 2>&1 >/dev/null | grep -c '^sys1grep: sending' || true)" "0" "large send: a small tree is silent"
 eq "$($JI --chunk 1000 -e owl "$B/a.txt" "$B/b.txt" 2>&1 >/dev/null | grep -c '^sys1grep: sending' || true)" "0" "large send: files named without -r are silent"
+B10="$tmp/big10k"; mkdir -p "$B10"; seq 1 5000 | sed 's/^/row /' >"$B10/a.txt"; cp "$B10/a.txt" "$B10/b.txt"
+eq "$($JI -r --chunk 1000 -e owl "$B10" 2>&1 >/dev/null | grep -c '^sys1grep: sending' || true)" "0" "large send: exactly 10,000 lines is silent"
+reset; out=$(asking "$JI -i -r --chunk 1000 -l -e owl '$B'" y)
+[ "$(stat count)" -gt 0 ] || fail "large send: -i, y: searched: $out"
+echo "$out" | grep -q '^sys1grep: sending' && fail "large send: -i already showed the totals, no warning: $out"
 code 0 "--version with no key" -- $E node ../sys1grep.mjs --version
 $E LANG=ja_JP.UTF-8 node ../sys1grep.mjs --help | grep -q '何も表示せず' || fail "--help in Japanese"
 $E LANG=C LC_MESSAGES=ja_JP.UTF-8 node ../sys1grep.mjs --help | grep -q '何も表示せず' || fail "LC_MESSAGES"

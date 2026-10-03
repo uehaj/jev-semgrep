@@ -2031,6 +2031,12 @@ async function evaluate(chunk, asks = asksByUnit, terms = starting, tag = 'judge
 // --step-to (#163) asks it again before the end expression's requests, which then count with everything sent before.
 function guardCost(chunks, asks, terms) {
   if (dry || opt.interactive) return;
+  // #138: a meaning in a term without a regex is asked of every unit -r or git sys1grep found, which an OR'd regex
+  // term does not narrow. A warning only; -y does not silence it, -q does. Decided before the estimate, so -y
+  // without the warning still skips serializing every request.
+  const units = chunks.reduce((t, c) => t + c.length, 0);
+  const wide = (opt.r || asGit) && !opt.quiet && units > LARGE_SEND_UNITS && terms.find(term => term.some(lit => lit.kind === 'm') && !term.some(lit => lit.kind === 'r' && !lit.not));
+  if (opt.yes && !wide) return;
   const bits = chunks.reduce((t, c) => {
     const body = JSON.stringify({ model, ...requestOf(c, asks, terms) });
     return { bytes: t.bytes + Buffer.byteLength(body), cjk: t.cjk + cjkBytesOf(body) };
@@ -2040,10 +2046,6 @@ function guardCost(chunks, asks, terms) {
   // (OpenRouter, a local server): a wrong number the guard can act on beats none it cannot (#58's open question).
   // #125 review (item 4): say so in the question itself, so a custom endpoint's own price is never mistaken for it.
   const estPrice = (estTokens * 0.042) / 1e6;
-  // #138: a meaning in a term without a regex is asked of every unit -r or git sys1grep found, which an OR'd regex
-  // term does not narrow. A warning only; -y does not silence it, -q does.
-  const units = chunks.reduce((t, c) => t + c.length, 0);
-  const wide = (opt.r || asGit) && !opt.quiet && units > LARGE_SEND_UNITS && terms.find(term => term.some(lit => lit.kind === 'm') && !term.some(lit => lit.kind === 'r' && !lit.not));
   const meaning = wide && wide.find(lit => lit.kind === 'm').text;
   if (meaning) {
     const short = meaning.length > 40 ? `${meaning.slice(0, 40).replace(/\s+\S*$/, '')}…` : meaning;
