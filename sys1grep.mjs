@@ -2450,11 +2450,13 @@ process.exitCode = dry ? (hadError ? 2 : 0) : matched && opt.quiet ? 0 : hadErro
 if (process.exitCode === 1 && sent.length && !opt.quiet && !summarizer && !multiStep) {
   // A term is as close as its lowest meaning: an AND holds only when every meaning in it clears the threshold.
   let best = { p: -1 };
+  // the tNeg after following the advice: --level loose also loosens tNeg, a lower -t (or -T as given) does not
+  const adviceNeg = opt.t !== undefined || opt.T !== undefined || tPos <= levels.loose[0] ? tNeg : levels.loose[1];
   for (const l of sent) for (const term of expr) {
     const { ok, matches } = regexPart(term, l);
     if (!ok) continue;
-    // a failed negation holds the term down whatever -t is: that unit is no candidate (the termHolds test)
-    if (term.some(lit => lit.kind === 'm' && lit.not && (asksByUnit.get(l).get(expandCaptures(lit.text, matches)) ?? 0) >= tNeg)) continue;
+    // a negation that fails even after the advice holds the term down: that unit is no candidate (the termHolds test)
+    if (term.some(lit => lit.kind === 'm' && lit.not && (asksByUnit.get(l).get(expandCaptures(lit.text, matches)) ?? 0) >= adviceNeg)) continue;
     let low = null;
     for (const lit of term) if (lit.kind === 'm' && !lit.not) {
       const p = asksByUnit.get(l).get(expandCaptures(lit.text, matches)) ?? 0;
