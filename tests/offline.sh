@@ -216,6 +216,43 @@ eq "$(stat count)" "2" "SYS1GREP_OPTS=--dedup=never, undone by --dedup on the co
 out=$($J --dry-run --dedup=auto -e cat "$tmp/rep.txt")
 echo "$out" | grep -Eq '^sys1grep: dedup: 120 units fold to at most 1 templates .*: on$' || fail "--dry-run --dedup=auto: the decision line: $out"
 
+# #152: folding changes what is sent, not what is printed. On the real-shaped logs in tests/dedup, with a meaning
+# outside every MASK kind (so the fake answers a template's members alike), auto and always print what never prints,
+# exit status included, whatever option touches line identity.
+same3() { what=$1; shift; pids=
+  for m in never auto always; do (set +e; $J --dedup=$m "$@" 2>/dev/null; echo "exit $?") >"$tmp/s3.$m" & pids="$pids $!"; done
+  wait $pids
+  for m in auto always; do eq "$(cat "$tmp/s3.$m")" "$(cat "$tmp/s3.never")" "--dedup=$m prints what never prints: $what"; done; }
+for p in 'app-ja.txt WARN' 'disk.txt mounted on /var' 'java.txt Exception' 'k8s.txt Warning' 'nginx.txt curl' \
+  'syslog.txt sshd' 'tickets.txt password' 'unique.txt pilots' 'export.csv cancelled' 'app.jsonl error'; do
+  same3 "${p%% *}" -n -e "${p#* }" "dedup/${p%% *}"
+done
+reset; $J --dedup=never -e sshd dedup/syslog.txt >/dev/null; never=$(stat count)
+reset; $J --dedup=always -e sshd dedup/syslog.txt >/dev/null
+[ "$(stat count)" -lt "$never" ] || fail "--dedup=always folds syslog.txt, or the sweep below compares nothing"
+S1=dedup/syslog.txt
+for o in -c -l -o '-A 1' '-B 2' '-C 1' '-p --color=never' '--color=always' '-j 1' '-j 3 --chunk 7' -H -q; do
+  same3 "$o" $o -n -e Failed "$S1"
+done
+same3 "two files" -n -e Failed "$S1" dedup/app-ja.txt
+same3 "-v" -n -e sshd -v Accepted "$S1"
+same3 "-e -e" -n -e Failed -e 'Out of memory' "$S1"
+same3 "-a" -n -e sshd -a Failed "$S1"
+same3 "a regex term" -n -e '/port 4\d+/' -a Failed "$S1"
+same3 "-Q" -n -Q 'a login' -e Accepted "$S1"
+ref=$($J --dedup=never -n -e Failed <"$S1")
+for m in auto always; do eq "$($J --dedup=$m -n -e Failed <"$S1")" "$ref" "--dedup=$m prints what never prints: stdin"; done
+# Boundaries: no unit, one unit, every line the same.
+: >"$tmp/empty.txt"; echo 'cat 1' >"$tmp/one.txt"; awk 'BEGIN { for (i = 1; i <= 50; i++) print "cat" }' >"$tmp/same.txt"
+for f in empty one same; do same3 "$f.txt" -n -e cat "$tmp/$f.txt"; done
+# A meaning that reads a value keeps that kind apart (the fake: "@k:num" in the meaning); folding it anyway is
+# the wrong fold #152 looks for: line 2 takes line 1's answer.
+printf '%s\n' 'usage 91 @k:num' 'usage 42 @k:num' >"$tmp/kept.txt"
+same3 "a kept kind" -n -e 'usage 91 @k:num' "$tmp/kept.txt"
+printf '%s\n' 'usage 91 @k:path' 'usage 42 @k:path' >"$tmp/folded.txt"
+eq "$($J --dedup=never -n -e 'usage 91 @k:path' "$tmp/folded.txt" | nums)" "1 " "never judges each value"
+eq "$($J --dedup=always -n -e 'usage 91 @k:path' "$tmp/folded.txt" | nums)" "1 2 " "always, num folded: the member takes the representative's answer"
+
 # SYS1GREP_URL: a compatible endpoint; the key goes there as a bearer token, no key means no header
 reset; $J -e cat "$F" >/dev/null; eq "$(stat auth)" "null" "no key, no authorization header"
 reset; $E SYS1GREP_URL=$base/v1 SYS1GREP_API_KEY=k1 node ../sys1grep.mjs -e cat "$F" >/dev/null; eq "$(stat auth)" "Bearer k1" "SYS1GREP_API_KEY"

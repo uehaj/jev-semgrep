@@ -2,6 +2,8 @@
 // scores 0.9, or N when the line carries "@N" (e.g. "a cat @0.4"). "@drop" answers without a noul;
 // A scope question ("Does the meaning "M" restrict its matches to …?") scores 0.9 when M carries "@s:KEY" for that
 // question's key (e.g. "@s:l_python", "@s:t_yesterday"), or N for "@s:KEY=N", else 0.05.
+// --dedup's question ("Could the value of … change whether that line matches the meaning "M"?") scores 0.9 for the
+// kind K (url, path, time, hex, num) when M carries "@k:K", else 0.05, so every kind folds unless a meaning says so.
 // A rank question ("Is result R000 relevant to: …?", #118) scores N when the result carries "@rN", else 0.5.
 // "@err" in any line fails the request with a 400 and a long body holding an escape sequence. Each request takes 30ms, so -j shows up;
 // "@slow" in any line makes it 400ms, so the spinner (drawn after 300ms) shows up.
@@ -51,6 +53,8 @@ const server = createServer(async (req, res) => {
   for (const [k, { instructions }] of Object.entries(questions)) {
     const t = instructions.match(/^Does the meaning "(.*)" restrict its matches to /s);
     if (t) { const s = t[1].match(new RegExp(`@s:${k}(?:=([\\d.]+))?(?![\\w.])`)); answers[k] = { noul: s ? Number(s[1] ?? 0.9) : 0.05 }; continue; }
+    const d = instructions.match(/^Log lines are grouped when .* the meaning "(.*)"\?$/s);
+    if (d) { answers[k] = { noul: d[1].includes(`@k:${k}`) ? 0.9 : 0.05 }; continue; }
     const r = instructions.match(/^Is result (R\d+) relevant to: .*\?$/s);
     if (r) { answers[k] = { noul: Number(String(state[r[1]]).match(/@r([\d.]+)/)?.[1] ?? 0.5) }; continue; }
     const m = instructions.match(/^Does line (L\d+) match the meaning: "(.*)"\?$/s);
