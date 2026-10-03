@@ -6,6 +6,7 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
+- A meaning may start with a dash on any search, not only around `--step-to`: `-e "--summarize hands the lines on"`, and the same for `-a`, `-v` and `-Q`. An option holds no space; a value that starts with `-` and is not an option is taken as the meaning.
 - Multi-step matching: `EXPRESSION --step-to EXPRESSION` finds the functions the expression before `--step-to`
   matches, walks the calls from them breadth first, and prints the paths to the reached functions the expression
   after it matches, as a tree of hop, `file:line` and name (#163). No score steers the walk: Jev judges every function

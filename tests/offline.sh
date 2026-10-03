@@ -398,6 +398,8 @@ eq "$($J --edges "$tmp/edges.tsv" -e alpha --step-to delta "$tmp/e.txt" 2>&1 >/d
 printf 'one\ttwo\n' >"$tmp/bad.tsv"
 code 2 "--edges: a malformed line" -- $J --edges="$tmp/bad.tsv" -e alpha --step-to delta "$tmp/e.txt"
 code 2 "--edges: no such file" -- $J --edges="$tmp/none" -e alpha --step-to delta "$tmp/e.txt"
+code 2 "--step-to given twice" -- $J -e alpha --step-to delta --step-to gamma "$tmp/e.txt"
+eq "$($J -e alpha --step-to delta --step-to gamma "$tmp/e.txt" 2>&1 | head -1)" "sys1grep: --step-to cannot be given twice: only one step is supported" "--step-to given twice: the message"
 # --max-cost counts the run: the end's requests are asked about with what the start already sent (no terminal: exit 2)
 eq "$($J -e 'a comment' --step-to 'raised here' --max-cost 0.00005 "$C" 2>&1 </dev/null | grep -c 'about 1,')" "1" "--max-cost: start and end together"
 code 0 "--max-cost: each alone under it" -- $J -e 'a comment' --step-to 'raised here' --max-cost 0.00008 "$C"

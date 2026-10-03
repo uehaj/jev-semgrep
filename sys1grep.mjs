@@ -730,7 +730,7 @@ const multiStep = tokens.some(tk => tk.kind === 'option' && tk.name === 'step-to
 let role = multiStep ? 'start' : undefined;
 for (const tk of tokens) {
   if (tk.kind === 'option' && tk.name === 'step-to') {
-    if (role === 'end') die('--step-to is given twice: one step for now');
+    if (role === 'end') die('--step-to cannot be given twice: only one step is supported');
     role = 'end';
     continue;
   }
@@ -2286,15 +2286,15 @@ if (multiStep) {
   if (dry) logPlan(`walk (a bound: every unit the start expression could hold for starts): ${walked}`);
   else if (!opt.quiet) console.error(`sys1grep: walk: ${walked}`);
   const inRange = [...reached].filter(([, r]) => r.hop >= hops.min).map(([u]) => u);
-  const toAsks = new Map(inRange.map(u => [u, asksOf(u, ending)]));
-  const toSend = inRange.filter(u => toAsks.get(u).size), toChunks = chunked(toSend);
-  guardCost(toChunks, toAsks, ending);
+  const endAsks = new Map(inRange.map(u => [u, asksOf(u, ending)]));
+  const endSend = inRange.filter(u => endAsks.get(u).size), endChunks = chunked(endSend);
+  guardCost(endChunks, endAsks, ending);
   let done = 0;
-  spin.set(`--step-to: 0 of ${toChunks.length} requests`);
-  await Promise.all(toChunks.map(c => pooled(() => evaluate(c, toAsks, ending, 'step-to').finally(() => spin.set(`--step-to: ${++done} of ${toChunks.length} requests`)))));
+  spin.set(`--step-to: 0 of ${endChunks.length} requests`);
+  await Promise.all(endChunks.map(c => pooled(() => evaluate(c, endAsks, ending, 'step-to').finally(() => spin.set(`--step-to: ${++done} of ${endChunks.length} requests`)))));
   spin.stop();
-  sent = [...new Set([...sent, ...toSend])];
-  const ends = new Set(inRange.filter(u => ending.some(term => termHolds(term, u, toAsks))));
+  sent = [...new Set([...sent, ...endSend])];
+  const ends = new Set(inRange.filter(u => ending.some(term => termHolds(term, u, endAsks))));
   matched = ends.size;
   // A Path: an End and the units it was reached through, back to its start; a branch with no End is left out.
   const onPath = new Set(), under = new Map(); // under: unit -> the units on a path reached from it
@@ -2304,7 +2304,7 @@ if (multiStep) {
     const { hop } = reached.get(u), sep = paint(36, ends.has(u) ? ':' : '-');
     const line = spansOf.get(u.file)?.[u.no - 1]?.[0]?.[0] ?? u.no;
     const name = u.name ?? cut(u.text.split('\n').find(l => l.trim())?.trim() ?? '', 60);
-    const tail = opt.p && toAsks.has(u) ? `\t[${displayRow(u, ending, toAsks).map(paintProb).join(' ')}]` : '';
+    const tail = opt.p && endAsks.has(u) ? `\t[${displayRow(u, ending, endAsks).map(paintProb).join(' ')}]` : '';
     return `${'  '.repeat(hop)}${hop} ${paint(35, u.file)}${sep}${paint(32, line)}${sep}${name}${tail}\n`;
   };
   const tree = u => { write(row(u)); (under.get(u) ?? []).forEach(tree); };

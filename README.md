@@ -635,6 +635,8 @@ expressions; no score decides which call to follow.
 $ sys1grep -e "--summarize hands the lines to the tool" --step-to "what happens when the tool fails to start or answer" sys1grep.mjs
 ```
 
+A meaning may start with a dash, as the first one does, on any search and for `-e`, `-a`, `-v` and `-Q`: a value that starts with `-` is taken as the meaning unless it is an option (an option holds no space).
+
 Each path prints as a tree: the hop (the number of calls from the start), `file:line` and the function's name,
 `:` after an end and `-` after a function on the way, as grep marks a match and its context. A regex-only
 start and end send nothing, which makes a free reachability search. In Python 3.6's `json`, the functions
