@@ -1,0 +1,6 @@
+disk.txt	disk usage is above 90%
+port-low.txt	a connection to port 443 was dropped
+port-mid.txt	a connection to port 443 was dropped
+status.txt	a request failed with HTTP 500
+night.txt	a job ran at night, between midnight and 6 am
+retry.txt	the last retry attempt (3/3)
