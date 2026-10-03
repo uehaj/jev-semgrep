@@ -2467,8 +2467,10 @@ if (process.exitCode === 1 && sent.length && !opt.quiet && !summarizer && !multi
   }
   if (best.l) {
     const at = `${best.l.file === '-' ? 'standard input' : best.l.file}:${spansOf.get(best.l.file)?.[best.l.no - 1]?.[0]?.[0] ?? best.l.no}`;
-    // -t overrides --level, so with -t only a lower -t changes the outcome
-    const loose = tPos <= levels.loose[0] ? '' : opt.t === undefined ? `--level loose takes ${levels.loose[0]}, ` : `-t ${levels.loose[0]} loosens it, `;
-    console.error(`sys1grep: no ${unitName.slice(0, -1)} reached ${tPos} for "${safe(best.meaning)}"; the highest was ${(Math.floor(best.p * 100 + 1e-9) / 100).toFixed(2)} (${safe(at)}). ${loose}-p shows every probability`);
+    // -t overrides --level, so with -t only a lower -t changes the outcome; advice that would not match is none
+    const loose = tPos <= levels.loose[0] || best.p < levels.loose[0] ? '' : opt.t === undefined ? `--level loose takes ${levels.loose[0]}, ` : `-t ${levels.loose[0]} loosens it, `;
+    // -p prints only what matches: -t 0 lets every unit match, -T 1 keeps a negation from dropping one
+    const every = `${opt.p ? '' : '-p '}-t 0${expr.some(term => term.some(lit => lit.kind === 'm' && lit.not)) ? ' -T 1' : ''}`;
+    console.error(`sys1grep: no ${unitName.slice(0, -1)} reached ${tPos} for "${safe(best.meaning)}"; the highest was ${(Math.floor(best.p * 100 + 1e-9) / 100).toFixed(2)} (${safe(at)}). ${loose}${every} shows every probability`);
   }
 }
