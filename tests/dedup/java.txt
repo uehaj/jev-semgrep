@@ -1,0 +1,220 @@
+2026-10-03 01:51:37,944 INFO  [pool-2-thread-16] c.x.OrderService - order 80836 saved in 78 ms
+2026-10-03 05:45:54,888 ERROR [pool-7-thread-5] c.x.OrderService - failed to save order 33183
+java.lang.IllegalStateException: bad state
+	at com.x.service.OrderService.save(PayService.java:111)
+	at com.x.service.OrderService.save(PayService.java:79)
+	at com.x.service.OrderService.load(PayService.java:141)
+2026-10-03 04:32:29,584 INFO  [pool-3-thread-7] c.x.OrderService - order 70180 saved in 34 ms
+2026-10-03 03:09:41,557 INFO  [pool-9-thread-27] c.x.OrderService - order 73649 saved in 4 ms
+2026-10-03 06:49:19,681 INFO  [pool-3-thread-35] c.x.OrderService - order 16567 saved in 27 ms
+2026-10-03 02:27:55,780 INFO  [pool-4-thread-2] c.x.OrderService - order 22839 saved in 63 ms
+2026-10-03 21:32:34,271 ERROR [pool-3-thread-17] c.x.OrderService - failed to save order 58196
+java.lang.IllegalStateException: bad state
+	at com.x.service.OrderService.load(OrderService.java:270)
+	at com.x.service.PayService.load(PayService.java:62)
+	at com.x.service.OrderService.pay(PayService.java:46)
+2026-10-03 11:50:51,354 INFO  [pool-5-thread-2] c.x.OrderService - order 28079 saved in 33 ms
+2026-10-03 19:16:30,978 INFO  [pool-5-thread-9] c.x.OrderService - order 42871 saved in 3 ms
+2026-10-03 21:58:18,939 INFO  [pool-9-thread-2] c.x.OrderService - order 85326 saved in 52 ms
+2026-10-03 19:50:41,445 INFO  [pool-3-thread-16] c.x.OrderService - order 86180 saved in 8 ms
+2026-10-03 15:21:52,284 INFO  [pool-5-thread-9] c.x.OrderService - order 14028 saved in 11 ms
+2026-10-03 11:42:31,282 INFO  [pool-2-thread-25] c.x.OrderService - order 25588 saved in 41 ms
+2026-10-03 20:50:41,528 INFO  [pool-5-thread-31] c.x.OrderService - order 68182 saved in 29 ms
+2026-10-03 00:21:15,554 INFO  [pool-7-thread-37] c.x.OrderService - order 54454 saved in 22 ms
+2026-10-03 09:53:19,333 WARN  [pool-8-thread-4] c.x.HttpClient - retry attempt 3/3 for 90cea583
+2026-10-03 05:14:33,716 WARN  [pool-3-thread-8] c.x.HttpClient - retry attempt 1/3 for 2c1c4c00
+2026-10-03 17:18:49,748 INFO  [pool-2-thread-19] c.x.OrderService - order 84048 saved in 21 ms
+2026-10-03 11:12:42,976 INFO  [pool-1-thread-28] c.x.OrderService - order 22876 saved in 57 ms
+2026-10-03 13:51:23,612 ERROR [pool-1-thread-19] c.x.OrderService - failed to save order 69770
+java.lang.NullPointerException: order is null
+	at com.x.service.PayService.load(PayService.java:325)
+	at com.x.service.PayService.save(OrderService.java:80)
+	at com.x.service.OrderService.pay(PayService.java:243)
+2026-10-03 09:00:42,572 ERROR [pool-8-thread-17] c.x.OrderService - failed to save order 18946
+java.lang.NullPointerException: bad state
+	at com.x.service.PayService.pay(OrderService.java:218)
+	at com.x.service.PayService.pay(OrderService.java:255)
+	at com.x.service.PayService.load(PayService.java:213)
+2026-10-03 03:29:18,128 INFO  [pool-2-thread-37] c.x.OrderService - order 92263 saved in 45 ms
+2026-10-03 10:27:23,604 ERROR [pool-6-thread-23] c.x.OrderService - failed to save order 53026
+java.lang.NullPointerException: order is null
+	at com.x.service.OrderService.save(OrderService.java:280)
+	at com.x.service.OrderService.pay(PayService.java:177)
+	at com.x.service.OrderService.pay(OrderService.java:354)
+2026-10-03 20:05:26,873 INFO  [pool-8-thread-8] c.x.OrderService - order 30404 saved in 47 ms
+2026-10-03 14:38:38,516 INFO  [pool-3-thread-38] c.x.OrderService - order 28965 saved in 18 ms
+2026-10-03 21:34:07,240 INFO  [pool-1-thread-22] c.x.OrderService - order 64587 saved in 40 ms
+2026-10-03 11:47:42,106 ERROR [pool-2-thread-39] c.x.OrderService - failed to save order 97056
+java.lang.IllegalStateException: order is null
+	at com.x.service.OrderService.load(PayService.java:377)
+	at com.x.service.OrderService.save(OrderService.java:67)
+	at com.x.service.PayService.pay(OrderService.java:284)
+2026-10-03 10:21:44,764 INFO  [pool-9-thread-6] c.x.OrderService - order 19014 saved in 78 ms
+2026-10-03 17:17:31,727 INFO  [pool-8-thread-30] c.x.OrderService - order 84932 saved in 68 ms
+2026-10-03 07:35:46,154 ERROR [pool-5-thread-19] c.x.OrderService - failed to save order 43454
+java.lang.IllegalStateException: bad state
+	at com.x.service.OrderService.pay(OrderService.java:59)
+	at com.x.service.OrderService.load(PayService.java:170)
+	at com.x.service.OrderService.load(OrderService.java:323)
+2026-10-03 14:00:12,666 ERROR [pool-4-thread-31] c.x.OrderService - failed to save order 33863
+java.lang.NullPointerException: bad state
+	at com.x.service.OrderService.pay(OrderService.java:155)
+	at com.x.service.PayService.pay(PayService.java:145)
+	at com.x.service.PayService.load(PayService.java:317)
+2026-10-03 08:09:24,877 INFO  [pool-1-thread-21] c.x.OrderService - order 42325 saved in 79 ms
+2026-10-03 12:16:14,649 WARN  [pool-4-thread-25] c.x.HttpClient - retry attempt 1/3 for a39b61ee
+2026-10-03 15:08:24,832 WARN  [pool-8-thread-6] c.x.HttpClient - retry attempt 3/3 for 3370b63a
+2026-10-03 16:04:29,226 INFO  [pool-3-thread-34] c.x.OrderService - order 79403 saved in 47 ms
+2026-10-03 19:51:50,315 ERROR [pool-4-thread-2] c.x.OrderService - failed to save order 19424
+java.lang.NullPointerException: order is null
+	at com.x.service.PayService.pay(OrderService.java:111)
+	at com.x.service.OrderService.load(OrderService.java:86)
+	at com.x.service.OrderService.save(PayService.java:357)
+2026-10-03 22:30:44,267 INFO  [pool-3-thread-15] c.x.OrderService - order 49172 saved in 18 ms
+2026-10-03 01:48:32,737 INFO  [pool-6-thread-24] c.x.OrderService - order 98714 saved in 43 ms
+2026-10-03 20:33:37,709 INFO  [pool-5-thread-18] c.x.OrderService - order 44943 saved in 52 ms
+2026-10-03 21:19:41,142 INFO  [pool-1-thread-11] c.x.OrderService - order 60145 saved in 45 ms
+2026-10-03 03:28:26,353 ERROR [pool-8-thread-25] c.x.OrderService - failed to save order 26184
+java.lang.NullPointerException: order is null
+	at com.x.service.PayService.pay(OrderService.java:238)
+	at com.x.service.OrderService.load(OrderService.java:148)
+	at com.x.service.OrderService.pay(PayService.java:170)
+2026-10-03 20:49:20,525 ERROR [pool-5-thread-24] c.x.OrderService - failed to save order 10512
+java.lang.NullPointerException: order is null
+	at com.x.service.PayService.pay(PayService.java:182)
+	at com.x.service.OrderService.save(OrderService.java:210)
+	at com.x.service.OrderService.save(OrderService.java:162)
+2026-10-03 05:15:18,177 INFO  [pool-5-thread-38] c.x.OrderService - order 96204 saved in 66 ms
+2026-10-03 21:03:21,595 INFO  [pool-1-thread-1] c.x.OrderService - order 39972 saved in 18 ms
+2026-10-03 09:10:21,912 INFO  [pool-5-thread-8] c.x.OrderService - order 46208 saved in 7 ms
+2026-10-03 09:35:21,410 WARN  [pool-5-thread-31] c.x.HttpClient - retry attempt 1/3 for a429d9c1
+2026-10-03 09:19:50,831 WARN  [pool-3-thread-12] c.x.HttpClient - retry attempt 1/3 for d4a0a439
+2026-10-03 20:49:54,336 INFO  [pool-2-thread-13] c.x.OrderService - order 36589 saved in 61 ms
+2026-10-03 23:20:58,767 WARN  [pool-8-thread-13] c.x.HttpClient - retry attempt 3/3 for 4823933f
+2026-10-03 11:00:36,453 INFO  [pool-9-thread-27] c.x.OrderService - order 12794 saved in 4 ms
+2026-10-03 19:08:17,200 WARN  [pool-7-thread-31] c.x.HttpClient - retry attempt 1/3 for 8f840b75
+2026-10-03 11:41:10,463 INFO  [pool-4-thread-32] c.x.OrderService - order 10673 saved in 46 ms
+2026-10-03 14:14:15,468 INFO  [pool-5-thread-23] c.x.OrderService - order 79092 saved in 21 ms
+2026-10-03 18:47:32,716 INFO  [pool-3-thread-19] c.x.OrderService - order 42993 saved in 8 ms
+2026-10-03 07:42:49,751 INFO  [pool-4-thread-9] c.x.OrderService - order 17553 saved in 11 ms
+2026-10-03 14:36:54,230 INFO  [pool-6-thread-36] c.x.OrderService - order 36658 saved in 33 ms
+2026-10-03 11:38:04,878 WARN  [pool-8-thread-30] c.x.HttpClient - retry attempt 2/3 for 26807d19
+2026-10-03 18:21:07,487 INFO  [pool-3-thread-28] c.x.OrderService - order 76337 saved in 74 ms
+2026-10-03 14:55:23,633 ERROR [pool-9-thread-8] c.x.OrderService - failed to save order 14949
+java.lang.IllegalStateException: bad state
+	at com.x.service.PayService.save(PayService.java:270)
+	at com.x.service.PayService.save(OrderService.java:293)
+	at com.x.service.PayService.pay(PayService.java:307)
+2026-10-03 18:19:28,744 INFO  [pool-3-thread-36] c.x.OrderService - order 27103 saved in 47 ms
+2026-10-03 23:51:05,489 WARN  [pool-4-thread-30] c.x.HttpClient - retry attempt 3/3 for 23e9937d
+2026-10-03 15:35:32,469 INFO  [pool-9-thread-9] c.x.OrderService - order 67060 saved in 15 ms
+2026-10-03 07:34:06,345 INFO  [pool-6-thread-23] c.x.OrderService - order 90032 saved in 31 ms
+2026-10-03 12:32:05,237 ERROR [pool-6-thread-34] c.x.OrderService - failed to save order 63007
+java.lang.IllegalStateException: order is null
+	at com.x.service.PayService.pay(PayService.java:387)
+	at com.x.service.PayService.pay(PayService.java:136)
+	at com.x.service.OrderService.load(OrderService.java:22)
+2026-10-03 06:37:39,555 INFO  [pool-8-thread-29] c.x.OrderService - order 15058 saved in 54 ms
+2026-10-03 12:23:40,333 INFO  [pool-7-thread-19] c.x.OrderService - order 32585 saved in 18 ms
+2026-10-03 11:14:12,985 INFO  [pool-2-thread-22] c.x.OrderService - order 81949 saved in 77 ms
+2026-10-03 15:41:53,836 WARN  [pool-7-thread-12] c.x.HttpClient - retry attempt 3/3 for 56abd29f
+2026-10-03 17:28:38,143 WARN  [pool-5-thread-9] c.x.HttpClient - retry attempt 2/3 for 4ddbf08d
+2026-10-03 07:57:11,575 INFO  [pool-2-thread-11] c.x.OrderService - order 64106 saved in 73 ms
+2026-10-03 11:16:45,924 INFO  [pool-2-thread-11] c.x.OrderService - order 93081 saved in 47 ms
+2026-10-03 00:00:23,951 INFO  [pool-1-thread-21] c.x.OrderService - order 31084 saved in 68 ms
+2026-10-03 09:13:58,820 INFO  [pool-1-thread-37] c.x.OrderService - order 62786 saved in 58 ms
+2026-10-03 11:45:59,143 ERROR [pool-4-thread-33] c.x.OrderService - failed to save order 16384
+java.lang.NullPointerException: order is null
+	at com.x.service.PayService.load(OrderService.java:58)
+	at com.x.service.OrderService.pay(PayService.java:375)
+	at com.x.service.PayService.pay(OrderService.java:190)
+2026-10-03 16:04:47,470 WARN  [pool-8-thread-30] c.x.HttpClient - retry attempt 1/3 for af5f58c1
+2026-10-03 13:04:57,437 INFO  [pool-4-thread-25] c.x.OrderService - order 43564 saved in 36 ms
+2026-10-03 08:12:59,676 INFO  [pool-8-thread-18] c.x.OrderService - order 70143 saved in 9 ms
+2026-10-03 13:14:24,138 INFO  [pool-9-thread-25] c.x.OrderService - order 91377 saved in 25 ms
+2026-10-03 20:33:04,657 INFO  [pool-6-thread-10] c.x.OrderService - order 17877 saved in 68 ms
+2026-10-03 13:41:05,281 INFO  [pool-2-thread-18] c.x.OrderService - order 19139 saved in 18 ms
+2026-10-03 04:50:07,485 INFO  [pool-1-thread-8] c.x.OrderService - order 66656 saved in 78 ms
+2026-10-03 15:33:06,157 INFO  [pool-3-thread-16] c.x.OrderService - order 53099 saved in 4 ms
+2026-10-03 21:53:51,570 INFO  [pool-2-thread-18] c.x.OrderService - order 63883 saved in 58 ms
+2026-10-03 17:03:16,955 WARN  [pool-7-thread-5] c.x.HttpClient - retry attempt 2/3 for edfa6cf5
+2026-10-03 09:09:28,131 INFO  [pool-2-thread-1] c.x.OrderService - order 55752 saved in 34 ms
+2026-10-03 06:29:22,299 INFO  [pool-3-thread-26] c.x.OrderService - order 81531 saved in 51 ms
+2026-10-03 10:37:54,605 INFO  [pool-1-thread-29] c.x.OrderService - order 28635 saved in 13 ms
+2026-10-03 20:59:08,823 INFO  [pool-1-thread-38] c.x.OrderService - order 61214 saved in 59 ms
+2026-10-03 22:39:41,497 INFO  [pool-7-thread-5] c.x.OrderService - order 32854 saved in 12 ms
+2026-10-03 13:02:08,678 INFO  [pool-3-thread-32] c.x.OrderService - order 74666 saved in 10 ms
+2026-10-03 20:56:54,452 INFO  [pool-1-thread-5] c.x.OrderService - order 88193 saved in 52 ms
+2026-10-03 14:30:31,974 INFO  [pool-8-thread-6] c.x.OrderService - order 86767 saved in 51 ms
+2026-10-03 05:49:01,729 INFO  [pool-5-thread-40] c.x.OrderService - order 70771 saved in 63 ms
+2026-10-03 15:59:36,902 INFO  [pool-4-thread-16] c.x.OrderService - order 18877 saved in 76 ms
+2026-10-03 14:52:01,449 WARN  [pool-1-thread-8] c.x.HttpClient - retry attempt 2/3 for 7d1f7a10
+2026-10-03 05:10:05,977 INFO  [pool-8-thread-35] c.x.OrderService - order 38669 saved in 36 ms
+2026-10-03 10:40:06,473 INFO  [pool-1-thread-24] c.x.OrderService - order 64159 saved in 10 ms
+2026-10-03 17:12:48,826 WARN  [pool-4-thread-20] c.x.HttpClient - retry attempt 2/3 for 160ab8f7
+2026-10-03 07:18:47,880 WARN  [pool-6-thread-30] c.x.HttpClient - retry attempt 2/3 for 492b0102
+2026-10-03 12:45:51,289 ERROR [pool-1-thread-31] c.x.OrderService - failed to save order 40450
+java.lang.IllegalStateException: order is null
+	at com.x.service.OrderService.load(PayService.java:381)
+	at com.x.service.PayService.pay(OrderService.java:62)
+	at com.x.service.OrderService.pay(OrderService.java:277)
+2026-10-03 02:56:04,695 WARN  [pool-8-thread-18] c.x.HttpClient - retry attempt 2/3 for aa56d8ed
+2026-10-03 20:50:53,670 INFO  [pool-5-thread-2] c.x.OrderService - order 35957 saved in 44 ms
+2026-10-03 15:22:29,339 INFO  [pool-6-thread-19] c.x.OrderService - order 37396 saved in 61 ms
+2026-10-03 03:33:48,927 INFO  [pool-1-thread-13] c.x.OrderService - order 36665 saved in 55 ms
+2026-10-03 01:51:03,570 INFO  [pool-6-thread-32] c.x.OrderService - order 37102 saved in 77 ms
+2026-10-03 07:23:22,329 INFO  [pool-2-thread-32] c.x.OrderService - order 88222 saved in 19 ms
+2026-10-03 12:43:33,347 INFO  [pool-4-thread-11] c.x.OrderService - order 20131 saved in 20 ms
+2026-10-03 07:27:24,166 INFO  [pool-1-thread-27] c.x.OrderService - order 34058 saved in 50 ms
+2026-10-03 18:55:20,973 INFO  [pool-8-thread-4] c.x.OrderService - order 44623 saved in 18 ms
+2026-10-03 05:24:36,149 WARN  [pool-5-thread-28] c.x.HttpClient - retry attempt 1/3 for 76668f96
+2026-10-03 14:11:15,768 INFO  [pool-6-thread-27] c.x.OrderService - order 94898 saved in 49 ms
+2026-10-03 02:30:32,394 WARN  [pool-9-thread-26] c.x.HttpClient - retry attempt 3/3 for 2f2a328d
+2026-10-03 21:16:20,415 INFO  [pool-3-thread-12] c.x.OrderService - order 12503 saved in 50 ms
+2026-10-03 02:06:48,484 INFO  [pool-5-thread-15] c.x.OrderService - order 37713 saved in 20 ms
+2026-10-03 11:52:53,771 INFO  [pool-8-thread-15] c.x.OrderService - order 89626 saved in 14 ms
+2026-10-03 07:18:01,443 INFO  [pool-5-thread-38] c.x.OrderService - order 91665 saved in 61 ms
+2026-10-03 23:22:58,283 INFO  [pool-2-thread-16] c.x.OrderService - order 90595 saved in 22 ms
+2026-10-03 14:59:52,204 INFO  [pool-9-thread-22] c.x.OrderService - order 42958 saved in 61 ms
+2026-10-03 21:32:43,453 INFO  [pool-2-thread-28] c.x.OrderService - order 74231 saved in 60 ms
+2026-10-03 20:12:09,278 INFO  [pool-3-thread-37] c.x.OrderService - order 60475 saved in 79 ms
+2026-10-03 07:59:45,895 INFO  [pool-5-thread-1] c.x.OrderService - order 18596 saved in 37 ms
+2026-10-03 21:01:41,887 INFO  [pool-4-thread-32] c.x.OrderService - order 80645 saved in 13 ms
+2026-10-03 03:53:53,870 ERROR [pool-7-thread-10] c.x.OrderService - failed to save order 22181
+java.lang.IllegalStateException: order is null
+	at com.x.service.PayService.save(OrderService.java:171)
+	at com.x.service.OrderService.save(OrderService.java:61)
+	at com.x.service.OrderService.pay(OrderService.java:91)
+2026-10-03 04:12:34,756 INFO  [pool-5-thread-12] c.x.OrderService - order 79211 saved in 16 ms
+2026-10-03 03:14:13,876 INFO  [pool-7-thread-2] c.x.OrderService - order 21258 saved in 26 ms
+2026-10-03 22:03:13,525 INFO  [pool-7-thread-22] c.x.OrderService - order 25298 saved in 26 ms
+2026-10-03 03:58:26,257 INFO  [pool-9-thread-25] c.x.OrderService - order 40590 saved in 19 ms
+2026-10-03 18:50:45,807 INFO  [pool-5-thread-3] c.x.OrderService - order 69549 saved in 21 ms
+2026-10-03 13:08:02,595 INFO  [pool-1-thread-26] c.x.OrderService - order 90059 saved in 55 ms
+2026-10-03 14:44:22,727 INFO  [pool-9-thread-32] c.x.OrderService - order 98125 saved in 26 ms
+2026-10-03 03:07:21,560 WARN  [pool-2-thread-38] c.x.HttpClient - retry attempt 2/3 for c7f4a6c3
+2026-10-03 18:45:21,646 INFO  [pool-8-thread-8] c.x.OrderService - order 74123 saved in 56 ms
+2026-10-03 12:53:35,144 INFO  [pool-9-thread-38] c.x.OrderService - order 94300 saved in 72 ms
+2026-10-03 15:49:00,688 INFO  [pool-1-thread-27] c.x.OrderService - order 53156 saved in 80 ms
+2026-10-03 09:32:14,313 WARN  [pool-6-thread-15] c.x.HttpClient - retry attempt 1/3 for a28d42d9
+2026-10-03 03:34:36,938 WARN  [pool-8-thread-19] c.x.HttpClient - retry attempt 2/3 for d6c904b3
+2026-10-03 03:43:55,127 INFO  [pool-6-thread-20] c.x.OrderService - order 77132 saved in 10 ms
+2026-10-03 08:13:32,359 INFO  [pool-5-thread-19] c.x.OrderService - order 90823 saved in 24 ms
+2026-10-03 18:47:32,373 ERROR [pool-2-thread-25] c.x.OrderService - failed to save order 23623
+java.lang.IllegalStateException: order is null
+	at com.x.service.PayService.pay(PayService.java:151)
+	at com.x.service.PayService.save(PayService.java:204)
+	at com.x.service.OrderService.pay(OrderService.java:77)
+2026-10-03 22:15:40,182 WARN  [pool-9-thread-26] c.x.HttpClient - retry attempt 2/3 for 376642ce
+2026-10-03 14:52:54,711 INFO  [pool-7-thread-32] c.x.OrderService - order 43914 saved in 77 ms
+2026-10-03 13:42:03,867 INFO  [pool-3-thread-21] c.x.OrderService - order 28745 saved in 51 ms
+2026-10-03 14:02:45,517 INFO  [pool-4-thread-40] c.x.OrderService - order 20189 saved in 68 ms
+2026-10-03 14:54:03,231 INFO  [pool-1-thread-19] c.x.OrderService - order 37184 saved in 77 ms
+2026-10-03 12:56:26,588 INFO  [pool-7-thread-31] c.x.OrderService - order 22500 saved in 41 ms
+2026-10-03 23:03:22,130 WARN  [pool-6-thread-5] c.x.HttpClient - retry attempt 3/3 for 7c9c1ccc
+2026-10-03 02:54:50,303 ERROR [pool-4-thread-4] c.x.OrderService - failed to save order 45949
+java.lang.NullPointerException: bad state
+	at com.x.service.OrderService.pay(PayService.java:339)
+	at com.x.service.PayService.pay(OrderService.java:127)
+	at com.x.service.PayService.load(OrderService.java:50)
+2026-10-03 20:03:03,312 INFO  [pool-6-thread-9] c.x.OrderService - order 20058 saved in 47 ms

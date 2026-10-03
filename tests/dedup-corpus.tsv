@@ -1,0 +1,33 @@
+nginx.txt	a request failed with a server error
+nginx.txt	a request to the admin area
+nginx.txt	a response larger than 1 MB
+nginx.txt	a request that succeeded
+syslog.txt	a login failed
+syslog.txt	a login failed from outside the 10.0.0.0/8 network
+syslog.txt	the kernel killed a process for lack of memory
+syslog.txt	something happened between midnight and 6 am
+java.txt	an exception was thrown
+java.txt	a NullPointerException
+java.txt	the last retry attempt (3/3)
+java.txt	an order took longer than 50 ms to save
+k8s.txt	a container keeps restarting
+k8s.txt	a container was killed for exceeding its memory limit of 1024Mi
+k8s.txt	a readiness probe failed with a server error
+app.jsonl	a request took longer than 3000 ms
+app.jsonl	an error was logged
+app.jsonl	the billing upstream timed out
+export.csv	a refund of more than 10000 yen
+export.csv	a cancelled order
+export.csv	an order paid by Sato
+app-ja.txt	決済が失敗した
+app-ja.txt	ディスク使用率が 90% を超えた
+app-ja.txt	外部 API の最後の再試行 (3/3 回目)
+app-ja.txt	処理に 60 秒以上かかった
+tickets.txt	the customer is angry
+tickets.txt	返金を求めている
+tickets.txt	asks how to reset a password on Android
+unique.txt	a sentence about an animal
+unique.txt	something happens in March
+disk.txt	disk usage is above 90%
+disk.txt	the root filesystem is nearly full
+disk.txt	no disk problem at all

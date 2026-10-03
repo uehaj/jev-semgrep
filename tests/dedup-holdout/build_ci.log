@@ -1,0 +1,260 @@
+added 356 packages in 50s
+Step 8/13 : RUN npm ci
+#28 427d59ebff1a: Pulling fs layer
+Successfully built c58d58b8f9c5
+Successfully tagged registry.example.com/app:81738ce
+retrying step 'push image' attempt 3/3 after network timeout
+Step 13/13 : RUN npm ci
+added 300 packages in 21s
+Step 4/13 : RUN npm ci
+Job finished with exit code 0
+Tests: 283 passed, 5 failed, 288 total
+Tests: 153 passed, 1 failed, 154 total
+Step 1/13 : RUN npm ci
+#7 591f7508efda: Pulling fs layer
+#30 9e85fa42662c: Pulling fs layer
+Job finished with exit code 0
+Step 5/13 : RUN npm ci
+added 574 packages in 73s
+Tests: 295 passed, 0 failed, 295 total
+added 248 packages in 42s
+Job finished with exit code 0
+Step 2/13 : RUN npm ci
+Step 12/13 : RUN npm ci
+ERROR: failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 1
+Step 4/13 : RUN npm ci
+retrying step 'push image' attempt 2/3 after network timeout
+Step 7/13 : RUN npm ci
+added 677 packages in 61s
+added 384 packages in 39s
+added 870 packages in 69s
+retrying step 'push image' attempt 2/3 after network timeout
+Successfully built c1ce82874a67
+Successfully tagged registry.example.com/app:3f74216
+Successfully built bf13413f092c
+Successfully tagged registry.example.com/app:952dff3
+ERROR: failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 1
+Job finished with exit code 0
+added 781 packages in 59s
+Successfully built 2539a5fe2c8b
+Successfully tagged registry.example.com/app:0b74908
+Successfully built 184189376cf4
+Successfully tagged registry.example.com/app:c5fdbf4
+#3 92ffaa36d80a: Pulling fs layer
+added 186 packages in 27s
+Tests: 148 passed, 1 failed, 149 total
+Pushing image to registry.example.com, 87MB, 55s elapsed
+ERROR: failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 2
+Job finished with exit code 0
+Step 2/13 : RUN npm ci
+#31 139ea0124bea: Pulling fs layer
+Pushing image to registry.example.com, 122MB, 60s elapsed
+Job finished with exit code 0
+Job finished with exit code 0
+Step 11/13 : RUN npm ci
+Tests: 223 passed, 2 failed, 225 total
+Successfully built 7eebe2cb74f2
+Successfully tagged registry.example.com/app:9b950ed
+Job finished with exit code 1
+ERROR: failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 127
+added 730 packages in 44s
+ERROR: failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 127
+Successfully built 906a3a146c74
+Successfully tagged registry.example.com/app:9b83400
+#16 58a29754bd3f: Pulling fs layer
+#31 ad06b715bc33: Pulling fs layer
+#20 757756d8f4a8: Pulling fs layer
+Tests: 257 passed, 0 failed, 257 total
+Job finished with exit code 0
+Pushing image to registry.example.com, 141MB, 14s elapsed
+Pushing image to registry.example.com, 294MB, 29s elapsed
+Pushing image to registry.example.com, 122MB, 113s elapsed
+Job finished with exit code 0
+Job finished with exit code 0
+Successfully built 30d0e2018b77
+Successfully tagged registry.example.com/app:f44d3d4
+added 630 packages in 45s
+#40 773a4dcfc416: Pulling fs layer
+Tests: 389 passed, 0 failed, 389 total
+Successfully built 7d48b4219534
+Successfully tagged registry.example.com/app:566cc55
+Tests: 271 passed, 0 failed, 271 total
+Tests: 65 passed, 0 failed, 65 total
+Job finished with exit code 0
+added 548 packages in 65s
+Job finished with exit code 0
+retrying step 'push image' attempt 2/3 after network timeout
+Tests: 170 passed, 0 failed, 170 total
+#22 769afd23b5f8: Pulling fs layer
+#25 847c3fe3f244: Pulling fs layer
+Pushing image to registry.example.com, 61MB, 11s elapsed
+Step 12/13 : RUN npm ci
+Step 9/13 : RUN npm ci
+Tests: 92 passed, 5 failed, 97 total
+retrying step 'push image' attempt 1/3 after network timeout
+Step 3/13 : RUN npm ci
+Step 5/13 : RUN npm ci
+Job finished with exit code 0
+Successfully built ea39b6ad771c
+Successfully tagged registry.example.com/app:79c5118
+Successfully built 1b7772a03799
+Successfully tagged registry.example.com/app:9e91d13
+added 152 packages in 7s
+Job finished with exit code 0
+Job finished with exit code 1
+Step 4/13 : RUN npm ci
+Pushing image to registry.example.com, 210MB, 106s elapsed
+Job finished with exit code 0
+#34 3cdb58084cda: Pulling fs layer
+Step 10/13 : RUN npm ci
+#39 9ac545beadf7: Pulling fs layer
+Pushing image to registry.example.com, 90MB, 83s elapsed
+Successfully built 9a2ef16fe0a2
+Successfully tagged registry.example.com/app:694855c
+#26 8e064e3bf915: Pulling fs layer
+Pushing image to registry.example.com, 350MB, 21s elapsed
+Successfully built db591b5ffd65
+Successfully tagged registry.example.com/app:472c731
+ERROR: failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 2
+retrying step 'push image' attempt 2/3 after network timeout
+Tests: 170 passed, 0 failed, 170 total
+Successfully built 99d454dc70df
+Successfully tagged registry.example.com/app:a3e2f83
+Successfully built 61792ec9afb8
+Successfully tagged registry.example.com/app:ceae522
+Pushing image to registry.example.com, 85MB, 14s elapsed
+Job finished with exit code 0
+Step 2/13 : RUN npm ci
+#21 b0179ae2ae35: Pulling fs layer
+ERROR: failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 127
+Tests: 259 passed, 0 failed, 259 total
+Job finished with exit code 1
+Successfully built 422fec258fac
+Successfully tagged registry.example.com/app:532d424
+Job finished with exit code 0
+added 450 packages in 27s
+added 100 packages in 7s
+Pushing image to registry.example.com, 139MB, 50s elapsed
+#26 e36fbf95196b: Pulling fs layer
+Pushing image to registry.example.com, 175MB, 58s elapsed
+Step 6/13 : RUN npm ci
+Successfully built bfe048af64d9
+Successfully tagged registry.example.com/app:af8b9d9
+Job finished with exit code 1
+Pushing image to registry.example.com, 104MB, 1s elapsed
+Pushing image to registry.example.com, 94MB, 33s elapsed
+Tests: 299 passed, 0 failed, 299 total
+Step 3/13 : RUN npm ci
+#18 9a82766cfe2b: Pulling fs layer
+Job finished with exit code 0
+Tests: 49 passed, 5 failed, 54 total
+added 401 packages in 81s
+added 52 packages in 16s
+Tests: 306 passed, 0 failed, 306 total
+#33 0e2a30b7e684: Pulling fs layer
+#34 f40cadf2eb71: Pulling fs layer
+Job finished with exit code 1
+Job finished with exit code 0
+Tests: 69 passed, 1 failed, 70 total
+Job finished with exit code 1
+ERROR: failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 127
+Job finished with exit code 0
+Step 6/13 : RUN npm ci
+Step 10/13 : RUN npm ci
+retrying step 'push image' attempt 1/3 after network timeout
+Tests: 262 passed, 1 failed, 263 total
+Job finished with exit code 1
+ERROR: failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 2
+Pushing image to registry.example.com, 124MB, 58s elapsed
+#3 b089a5036487: Pulling fs layer
+Pushing image to registry.example.com, 352MB, 116s elapsed
+ERROR: failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 2
+#3 153bc24176f5: Pulling fs layer
+#16 3f0e7af026f2: Pulling fs layer
+added 490 packages in 9s
+Job finished with exit code 0
+ERROR: failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 127
+Job finished with exit code 0
+ERROR: failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 127
+Pushing image to registry.example.com, 337MB, 101s elapsed
+added 664 packages in 87s
+Step 10/13 : RUN npm ci
+#19 8601319daf31: Pulling fs layer
+Successfully built 849c796cc85d
+Successfully tagged registry.example.com/app:5e4aa81
+added 793 packages in 45s
+#1 df9fbd973ddb: Pulling fs layer
+Successfully built 87df6cf3e627
+Successfully tagged registry.example.com/app:4828873
+Job finished with exit code 0
+Step 12/13 : RUN npm ci
+Successfully built b992a273b335
+Successfully tagged registry.example.com/app:7e2bd28
+#28 f850193ba1a0: Pulling fs layer
+#7 028b70b64863: Pulling fs layer
+Successfully built 2a99cd868ef3
+Successfully tagged registry.example.com/app:ce0a61a
+Successfully built fc54f71f6f7d
+Successfully tagged registry.example.com/app:82ee301
+#1 1ddfc375a990: Pulling fs layer
+Job finished with exit code 0
+Successfully built 3b9f501688af
+Successfully tagged registry.example.com/app:517a2d4
+Job finished with exit code 0
+Successfully built 2c30f922f040
+Successfully tagged registry.example.com/app:0c76dad
+Pushing image to registry.example.com, 283MB, 60s elapsed
+ERROR: failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 2
+Successfully built 7ad5d7c136bb
+Successfully tagged registry.example.com/app:7cc0199
+Pushing image to registry.example.com, 190MB, 23s elapsed
+added 243 packages in 72s
+Job finished with exit code 0
+Job finished with exit code 1
+Pushing image to registry.example.com, 54MB, 9s elapsed
+#34 59b92c7db5aa: Pulling fs layer
+Pushing image to registry.example.com, 283MB, 25s elapsed
+Tests: 373 passed, 0 failed, 373 total
+Step 7/13 : RUN npm ci
+Pushing image to registry.example.com, 231MB, 14s elapsed
+Pushing image to registry.example.com, 216MB, 28s elapsed
+#31 b8eb25e991d7: Pulling fs layer
+Successfully built 1eaea59dde28
+Successfully tagged registry.example.com/app:af957ff
+Job finished with exit code 0
+Pushing image to registry.example.com, 263MB, 72s elapsed
+Successfully built 0ea824827eab
+Successfully tagged registry.example.com/app:2284c65
+#29 a3ec7c6ac32d: Pulling fs layer
+#2 abb063fb214a: Pulling fs layer
+Job finished with exit code 0
+retrying step 'push image' attempt 2/3 after network timeout
+Successfully built 1611c1254927
+Successfully tagged registry.example.com/app:68a74e5
+Tests: 118 passed, 0 failed, 118 total
+retrying step 'push image' attempt 3/3 after network timeout
+Successfully built df6240c8f753
+Successfully tagged registry.example.com/app:da65507
+ERROR: failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 127
+Successfully built 2559e1d50457
+Successfully tagged registry.example.com/app:159a05d
+Step 11/13 : RUN npm ci
+added 369 packages in 71s
+Pushing image to registry.example.com, 160MB, 5s elapsed
+Pushing image to registry.example.com, 38MB, 39s elapsed
+Successfully built cfd648f8fc2d
+Successfully tagged registry.example.com/app:237784c
+Pushing image to registry.example.com, 88MB, 36s elapsed
+added 471 packages in 12s
+Job finished with exit code 0
+Step 5/13 : RUN npm ci
+Successfully built e2b3114bca3f
+Successfully tagged registry.example.com/app:663a501
+#6 e5faaa5cc53a: Pulling fs layer
+Pushing image to registry.example.com, 278MB, 78s elapsed
+retrying step 'push image' attempt 1/3 after network timeout
+added 147 packages in 36s
+Successfully built 5a838aec3c67
+Successfully tagged registry.example.com/app:0343ef5
+ERROR: failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 127
+Pushing image to registry.example.com, 128MB, 7s elapsed

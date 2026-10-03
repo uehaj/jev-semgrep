@@ -1,0 +1,260 @@
+# Time: 2026-09-09T09:53:48.000Z
+# User@Host: app_user[app_user] @ db01 [192.152.152.26]
+# Query_time: 6.625  Lock_time: 0.270653  Rows_sent: 652  Rows_examined: 187511
+DELETE FROM sessions WHERE created_at < '2026-01-01';
+# Time: 2026-09-13T01:19:58.000Z
+# User@Host: app_user[app_user] @ db01 [10.35.48.243]
+# Query_time: 10.542  Lock_time: 0.046484  Rows_sent: 2730  Rows_examined: 73259
+SELECT * FROM admin_users WHERE status = 'closed' ORDER BY created_at DESC LIMIT 10;
+# Time: 2026-09-04T15:02:30.000Z
+# User@Host: app_user[app_user] @ db01 [192.126.41.86]
+# Query_time: 9.724  Lock_time: 0.202994  Rows_sent: 875  Rows_examined: 70155
+DELETE FROM users WHERE created_at < '2026-01-01';
+# Time: 2026-09-06T05:41:58.000Z
+# User@Host: app_user[app_user] @ db01 [192.64.86.189]
+# Query_time: 6.85  Lock_time: 0.433346  Rows_sent: 137  Rows_examined: 123427
+INSERT INTO users (id, created_at) VALUES (862114, NOW());
+# Time: 2026-09-28T21:32:15.000Z
+# User@Host: app_user[app_user] @ db01 [10.252.121.16]
+# Query_time: 11.876  Lock_time: 0.002643  Rows_sent: 4284  Rows_examined: 75931
+INSERT INTO sessions (id, created_at) VALUES (450598, NOW());
+# Time: 2026-09-07T19:42:24.000Z
+# User@Host: app_user[app_user] @ db01 [172.147.137.64]
+# Query_time: 2.35  Lock_time: 0.263891  Rows_sent: 2820  Rows_examined: 38526
+DELETE FROM payments WHERE created_at < '2026-01-01';
+# Time: 2026-09-20T03:45:26.000Z
+# User@Host: app_user[app_user] @ db01 [10.129.65.148]
+# Query_time: 3.097  Lock_time: 0.302628  Rows_sent: 11  Rows_examined: 30055
+DELETE FROM payments WHERE created_at < '2026-01-01';
+# Time: 2026-09-06T20:37:07.000Z
+# User@Host: app_user[app_user] @ db01 [10.36.202.35]
+# Query_time: 11.608  Lock_time: 0.12439  Rows_sent: 329  Rows_examined: 60846
+INSERT INTO users (id, created_at) VALUES (228732, NOW());
+# Time: 2026-09-09T03:36:00.000Z
+# User@Host: app_user[app_user] @ db01 [10.228.73.38]
+# Query_time: 7.84  Lock_time: 0.358618  Rows_sent: 112  Rows_examined: 108470
+SELECT * FROM orders WHERE status = 'closed' ORDER BY created_at DESC LIMIT 92;
+# Time: 2026-09-26T03:55:23.000Z
+# User@Host: app_user[app_user] @ db01 [192.103.74.53]
+# Query_time: 3.935  Lock_time: 0.205563  Rows_sent: 4250  Rows_examined: 182590
+UPDATE admin_audit_log SET updated_at = NOW() WHERE id = 408118;
+# Time: 2026-09-12T06:55:42.000Z
+# User@Host: app_user[app_user] @ db01 [10.129.1.111]
+# Query_time: 10.304  Lock_time: 0.331152  Rows_sent: 4013  Rows_examined: 132178
+UPDATE admin_audit_log SET updated_at = NOW() WHERE id = 486102;
+# Time: 2026-09-06T01:50:56.000Z
+# User@Host: app_user[app_user] @ db01 [10.147.72.73]
+# Query_time: 10.013  Lock_time: 0.374162  Rows_sent: 4294  Rows_examined: 80072
+UPDATE users SET updated_at = NOW() WHERE id = 292897;
+# Time: 2026-09-06T13:49:00.000Z
+# User@Host: app_user[app_user] @ db01 [172.114.230.52]
+# Query_time: 5.705  Lock_time: 0.381317  Rows_sent: 534  Rows_examined: 154277
+SELECT * FROM payments WHERE status = 'closed' ORDER BY created_at DESC LIMIT 45;
+# Time: 2026-09-27T15:24:17.000Z
+# User@Host: app_user[app_user] @ db01 [172.196.112.253]
+# Query_time: 1.967  Lock_time: 0.110283  Rows_sent: 1093  Rows_examined: 5587
+INSERT INTO users (id, created_at) VALUES (994591, NOW());
+# Time: 2026-09-18T16:41:59.000Z
+# User@Host: app_user[app_user] @ db01 [10.139.158.192]
+# Query_time: 1.779  Lock_time: 0.133838  Rows_sent: 3037  Rows_examined: 139883
+INSERT INTO admin_audit_log (id, created_at) VALUES (423326, NOW());
+# Time: 2026-09-01T02:36:56.000Z
+# User@Host: app_user[app_user] @ db01 [192.93.254.251]
+# Query_time: 1.33  Lock_time: 0.449388  Rows_sent: 2065  Rows_examined: 66105
+DELETE FROM admin_users WHERE created_at < '2026-01-01';
+# Time: 2026-09-17T00:09:01.000Z
+# User@Host: app_user[app_user] @ db01 [10.246.99.48]
+# Query_time: 3.962  Lock_time: 0.344819  Rows_sent: 4537  Rows_examined: 114565
+SELECT * FROM sessions WHERE status = 'active' ORDER BY created_at DESC LIMIT 49;
+# Time: 2026-09-24T13:16:44.000Z
+# User@Host: app_user[app_user] @ db01 [192.182.49.98]
+# Query_time: 9.665  Lock_time: 0.293096  Rows_sent: 3292  Rows_examined: 178885
+DELETE FROM sessions WHERE created_at < '2026-01-01';
+# Time: 2026-09-16T19:12:56.000Z
+# User@Host: app_user[app_user] @ db01 [192.170.252.59]
+# Query_time: 2.976  Lock_time: 0.022902  Rows_sent: 2753  Rows_examined: 96307
+SELECT * FROM payments WHERE status = 'pending' ORDER BY created_at DESC LIMIT 81;
+# Time: 2026-09-01T22:04:06.000Z
+# User@Host: app_user[app_user] @ db01 [172.37.52.175]
+# Query_time: 6.804  Lock_time: 0.068498  Rows_sent: 3364  Rows_examined: 14866
+UPDATE users SET updated_at = NOW() WHERE id = 575216;
+# Time: 2026-09-15T22:08:14.000Z
+# User@Host: app_user[app_user] @ db01 [192.209.61.254]
+# Query_time: 8.869  Lock_time: 0.109235  Rows_sent: 793  Rows_examined: 10391
+SELECT * FROM admin_audit_log WHERE status = 'pending' ORDER BY created_at DESC LIMIT 92;
+# Time: 2026-09-19T14:57:13.000Z
+# User@Host: app_user[app_user] @ db01 [192.123.22.122]
+# Query_time: 1.167  Lock_time: 0.461784  Rows_sent: 973  Rows_examined: 25486
+DELETE FROM admin_audit_log WHERE created_at < '2026-01-01';
+# Time: 2026-09-23T08:34:10.000Z
+# User@Host: app_user[app_user] @ db01 [172.51.45.129]
+# Query_time: 7.905  Lock_time: 0.347934  Rows_sent: 52  Rows_examined: 128384
+UPDATE users SET updated_at = NOW() WHERE id = 611194;
+# Time: 2026-09-08T18:17:00.000Z
+# User@Host: app_user[app_user] @ db01 [192.84.13.190]
+# Query_time: 5.154  Lock_time: 0.174479  Rows_sent: 2923  Rows_examined: 200403
+DELETE FROM payments WHERE created_at < '2026-01-01';
+# Time: 2026-09-04T20:36:01.000Z
+# User@Host: app_user[app_user] @ db01 [192.91.100.212]
+# Query_time: 8.024  Lock_time: 0.096272  Rows_sent: 1285  Rows_examined: 62684
+SELECT * FROM admin_users WHERE status = 'active' ORDER BY created_at DESC LIMIT 35;
+# Time: 2026-09-05T09:29:03.000Z
+# User@Host: app_user[app_user] @ db01 [192.104.187.161]
+# Query_time: 7.957  Lock_time: 0.112813  Rows_sent: 1101  Rows_examined: 9356
+INSERT INTO orders (id, created_at) VALUES (793342, NOW());
+# Time: 2026-09-25T09:53:43.000Z
+# User@Host: app_user[app_user] @ db01 [10.191.17.137]
+# Query_time: 5.21  Lock_time: 0.343959  Rows_sent: 1303  Rows_examined: 125488
+SELECT * FROM payments WHERE status = 'active' ORDER BY created_at DESC LIMIT 97;
+# Time: 2026-09-27T13:06:05.000Z
+# User@Host: app_user[app_user] @ db01 [10.85.136.183]
+# Query_time: 9.185  Lock_time: 0.105893  Rows_sent: 1259  Rows_examined: 110062
+UPDATE orders SET updated_at = NOW() WHERE id = 545535;
+# Time: 2026-09-23T17:56:43.000Z
+# User@Host: app_user[app_user] @ db01 [10.110.229.109]
+# Query_time: 6.394  Lock_time: 0.450457  Rows_sent: 4847  Rows_examined: 158363
+UPDATE admin_audit_log SET updated_at = NOW() WHERE id = 180497;
+# Time: 2026-09-20T14:17:20.000Z
+# User@Host: app_user[app_user] @ db01 [172.238.46.224]
+# Query_time: 3.16  Lock_time: 0.107074  Rows_sent: 164  Rows_examined: 51614
+SELECT * FROM payments WHERE status = 'closed' ORDER BY created_at DESC LIMIT 24;
+# Time: 2026-09-26T22:08:57.000Z
+# User@Host: app_user[app_user] @ db01 [172.69.27.133]
+# Query_time: 0.693  Lock_time: 0.368502  Rows_sent: 4370  Rows_examined: 34035
+UPDATE sessions SET updated_at = NOW() WHERE id = 188527;
+# Time: 2026-09-18T07:51:08.000Z
+# User@Host: app_user[app_user] @ db01 [192.42.173.135]
+# Query_time: 2.924  Lock_time: 0.025379  Rows_sent: 4971  Rows_examined: 147490
+SELECT * FROM orders WHERE status = 'closed' ORDER BY created_at DESC LIMIT 21;
+# Time: 2026-09-09T08:21:35.000Z
+# User@Host: app_user[app_user] @ db01 [10.45.75.160]
+# Query_time: 1.677  Lock_time: 0.089155  Rows_sent: 3503  Rows_examined: 132086
+SELECT * FROM users WHERE status = 'pending' ORDER BY created_at DESC LIMIT 19;
+# Time: 2026-09-14T23:40:34.000Z
+# User@Host: app_user[app_user] @ db01 [172.15.16.196]
+# Query_time: 1.008  Lock_time: 0.38007  Rows_sent: 3775  Rows_examined: 46932
+SELECT * FROM admin_users WHERE status = 'active' ORDER BY created_at DESC LIMIT 13;
+# Time: 2026-09-25T21:44:01.000Z
+# User@Host: app_user[app_user] @ db01 [192.41.42.177]
+# Query_time: 10.361  Lock_time: 0.361545  Rows_sent: 685  Rows_examined: 85225
+INSERT INTO users (id, created_at) VALUES (199672, NOW());
+# Time: 2026-09-16T03:28:50.000Z
+# User@Host: app_user[app_user] @ db01 [10.76.180.81]
+# Query_time: 10.737  Lock_time: 0.323774  Rows_sent: 468  Rows_examined: 165840
+DELETE FROM admin_users WHERE created_at < '2026-01-01';
+# Time: 2026-09-13T21:07:50.000Z
+# User@Host: app_user[app_user] @ db01 [192.75.244.74]
+# Query_time: 10.975  Lock_time: 0.322804  Rows_sent: 2393  Rows_examined: 70761
+SELECT * FROM users WHERE status = 'pending' ORDER BY created_at DESC LIMIT 76;
+# Time: 2026-09-25T02:09:11.000Z
+# User@Host: app_user[app_user] @ db01 [10.222.239.7]
+# Query_time: 9.901  Lock_time: 0.144489  Rows_sent: 347  Rows_examined: 82690
+UPDATE payments SET updated_at = NOW() WHERE id = 46291;
+# Time: 2026-09-20T01:00:42.000Z
+# User@Host: app_user[app_user] @ db01 [172.140.76.104]
+# Query_time: 3.172  Lock_time: 0.122806  Rows_sent: 2829  Rows_examined: 169727
+SELECT * FROM admin_audit_log WHERE status = 'pending' ORDER BY created_at DESC LIMIT 82;
+# Time: 2026-09-04T07:26:09.000Z
+# User@Host: app_user[app_user] @ db01 [172.158.87.201]
+# Query_time: 9.583  Lock_time: 0.255841  Rows_sent: 2634  Rows_examined: 99513
+SELECT * FROM admin_users WHERE status = 'closed' ORDER BY created_at DESC LIMIT 58;
+# Time: 2026-09-24T01:35:45.000Z
+# User@Host: app_user[app_user] @ db01 [192.235.181.202]
+# Query_time: 0.521  Lock_time: 0.234885  Rows_sent: 3331  Rows_examined: 57835
+UPDATE users SET updated_at = NOW() WHERE id = 17820;
+# Time: 2026-09-25T19:49:40.000Z
+# User@Host: app_user[app_user] @ db01 [10.137.24.238]
+# Query_time: 11.44  Lock_time: 0.428078  Rows_sent: 4307  Rows_examined: 52742
+SELECT * FROM users WHERE status = 'active' ORDER BY created_at DESC LIMIT 60;
+# Time: 2026-09-09T16:07:56.000Z
+# User@Host: app_user[app_user] @ db01 [172.90.242.128]
+# Query_time: 6.692  Lock_time: 0.264645  Rows_sent: 40  Rows_examined: 68618
+INSERT INTO admin_users (id, created_at) VALUES (923223, NOW());
+# Time: 2026-09-08T16:12:24.000Z
+# User@Host: app_user[app_user] @ db01 [10.33.72.179]
+# Query_time: 8.632  Lock_time: 0.093842  Rows_sent: 525  Rows_examined: 105306
+SELECT * FROM admin_audit_log WHERE status = 'pending' ORDER BY created_at DESC LIMIT 89;
+# Time: 2026-09-22T09:46:10.000Z
+# User@Host: app_user[app_user] @ db01 [10.124.214.194]
+# Query_time: 6.285  Lock_time: 0.322593  Rows_sent: 2519  Rows_examined: 109379
+SELECT * FROM admin_audit_log WHERE status = 'closed' ORDER BY created_at DESC LIMIT 26;
+# Time: 2026-09-12T23:46:54.000Z
+# User@Host: app_user[app_user] @ db01 [10.199.149.243]
+# Query_time: 6.363  Lock_time: 0.106937  Rows_sent: 2536  Rows_examined: 68556
+UPDATE orders SET updated_at = NOW() WHERE id = 662315;
+# Time: 2026-09-13T05:22:48.000Z
+# User@Host: app_user[app_user] @ db01 [192.188.174.140]
+# Query_time: 4.515  Lock_time: 0.145306  Rows_sent: 346  Rows_examined: 49259
+SELECT * FROM payments WHERE status = 'closed' ORDER BY created_at DESC LIMIT 33;
+# Time: 2026-09-10T06:55:58.000Z
+# User@Host: app_user[app_user] @ db01 [172.148.11.198]
+# Query_time: 8.764  Lock_time: 0.334332  Rows_sent: 3848  Rows_examined: 102747
+UPDATE admin_audit_log SET updated_at = NOW() WHERE id = 236839;
+# Time: 2026-09-24T03:23:15.000Z
+# User@Host: app_user[app_user] @ db01 [10.238.31.173]
+# Query_time: 6.695  Lock_time: 0.250485  Rows_sent: 1461  Rows_examined: 73664
+INSERT INTO admin_audit_log (id, created_at) VALUES (721691, NOW());
+# Time: 2026-09-11T01:18:43.000Z
+# User@Host: app_user[app_user] @ db01 [10.181.99.213]
+# Query_time: 7.687  Lock_time: 0.496563  Rows_sent: 2386  Rows_examined: 64990
+SELECT * FROM users WHERE status = 'closed' ORDER BY created_at DESC LIMIT 42;
+# Time: 2026-09-19T10:56:45.000Z
+# User@Host: app_user[app_user] @ db01 [192.232.238.185]
+# Query_time: 1.51  Lock_time: 0.364226  Rows_sent: 1158  Rows_examined: 27942
+SELECT * FROM orders WHERE status = 'active' ORDER BY created_at DESC LIMIT 79;
+# Time: 2026-09-02T19:12:15.000Z
+# User@Host: app_user[app_user] @ db01 [172.165.115.11]
+# Query_time: 7.14  Lock_time: 0.315437  Rows_sent: 1621  Rows_examined: 130748
+SELECT * FROM users WHERE status = 'pending' ORDER BY created_at DESC LIMIT 14;
+# Time: 2026-09-24T02:05:58.000Z
+# User@Host: app_user[app_user] @ db01 [10.236.208.200]
+# Query_time: 9.013  Lock_time: 0.380677  Rows_sent: 4068  Rows_examined: 202877
+UPDATE admin_audit_log SET updated_at = NOW() WHERE id = 579391;
+# Time: 2026-09-24T16:57:00.000Z
+# User@Host: app_user[app_user] @ db01 [172.212.57.141]
+# Query_time: 0.178  Lock_time: 0.092414  Rows_sent: 217  Rows_examined: 7923
+SELECT * FROM sessions WHERE status = 'active' ORDER BY created_at DESC LIMIT 86;
+# Time: 2026-09-17T00:15:44.000Z
+# User@Host: app_user[app_user] @ db01 [192.61.212.235]
+# Query_time: 4.559  Lock_time: 0.236137  Rows_sent: 4074  Rows_examined: 73250
+SELECT * FROM admin_users WHERE status = 'active' ORDER BY created_at DESC LIMIT 89;
+# Time: 2026-09-22T06:25:23.000Z
+# User@Host: app_user[app_user] @ db01 [10.63.146.28]
+# Query_time: 7.336  Lock_time: 0.172896  Rows_sent: 474  Rows_examined: 20462
+DELETE FROM admin_audit_log WHERE created_at < '2026-01-01';
+# Time: 2026-09-18T09:14:14.000Z
+# User@Host: app_user[app_user] @ db01 [10.87.80.242]
+# Query_time: 4.794  Lock_time: 0.238673  Rows_sent: 216  Rows_examined: 153978
+UPDATE users SET updated_at = NOW() WHERE id = 226058;
+# Time: 2026-09-20T19:32:09.000Z
+# User@Host: app_user[app_user] @ db01 [10.130.18.179]
+# Query_time: 0.928  Lock_time: 0.225646  Rows_sent: 2745  Rows_examined: 91269
+SELECT * FROM payments WHERE status = 'closed' ORDER BY created_at DESC LIMIT 47;
+# Time: 2026-09-05T16:34:26.000Z
+# User@Host: app_user[app_user] @ db01 [10.252.202.110]
+# Query_time: 11.291  Lock_time: 0.021427  Rows_sent: 3005  Rows_examined: 168281
+SELECT * FROM orders WHERE status = 'pending' ORDER BY created_at DESC LIMIT 15;
+# Time: 2026-09-17T22:06:07.000Z
+# User@Host: app_user[app_user] @ db01 [192.104.184.100]
+# Query_time: 8.969  Lock_time: 0.213258  Rows_sent: 147  Rows_examined: 11198
+SELECT * FROM users WHERE status = 'pending' ORDER BY created_at DESC LIMIT 87;
+# Time: 2026-09-03T00:24:09.000Z
+# User@Host: app_user[app_user] @ db01 [172.174.182.14]
+# Query_time: 8.235  Lock_time: 0.03634  Rows_sent: 1743  Rows_examined: 27943
+SELECT * FROM users WHERE status = 'pending' ORDER BY created_at DESC LIMIT 75;
+# Time: 2026-09-18T05:27:36.000Z
+# User@Host: app_user[app_user] @ db01 [10.107.135.75]
+# Query_time: 1.35  Lock_time: 0.313189  Rows_sent: 3975  Rows_examined: 115248
+INSERT INTO sessions (id, created_at) VALUES (786079, NOW());
+# Time: 2026-09-02T03:15:19.000Z
+# User@Host: app_user[app_user] @ db01 [172.121.244.221]
+# Query_time: 10.762  Lock_time: 0.00248  Rows_sent: 4323  Rows_examined: 121614
+SELECT * FROM users WHERE status = 'closed' ORDER BY created_at DESC LIMIT 80;
+# Time: 2026-09-24T16:08:26.000Z
+# User@Host: app_user[app_user] @ db01 [10.52.189.116]
+# Query_time: 0.601  Lock_time: 0.116874  Rows_sent: 3066  Rows_examined: 164155
+SELECT * FROM admin_users WHERE status = 'closed' ORDER BY created_at DESC LIMIT 98;
+# Time: 2026-09-01T19:52:03.000Z
+# User@Host: app_user[app_user] @ db01 [172.93.8.183]
+# Query_time: 6.113  Lock_time: 0.496595  Rows_sent: 4758  Rows_examined: 190237
+SELECT * FROM orders WHERE status = 'pending' ORDER BY created_at DESC LIMIT 42;

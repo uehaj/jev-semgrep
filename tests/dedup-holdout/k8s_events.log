@@ -1,0 +1,200 @@
+2026-09-13T14:20:54Z billing	Warning	OOMKilled	pod/api-c75ff	Container api-c75ff was OOMKilled, memory limit 512Mi exceeded
+2026-09-18T21:55:49Z staging	Warning	BackOff	pod/worker-0861a	Back-off restarting failed container, retry 3/3
+2026-09-13T15:48:07Z billing	Normal	Killing	pod/api-3d1f3	Stopping container api-3d1f3
+2026-09-17T01:25:16Z billing	Normal	Pulling	pod/api-aa18f	Pulling image "registry.example.com/app:aba5577"
+2026-09-11T01:01:37Z default	Normal	Pulling	pod/worker-6d27f	Pulling image "registry.example.com/app:e4159be"
+2026-09-01T20:21:24Z default	Normal	Pulling	pod/api-4993d	Pulling image "registry.example.com/app:518678f"
+2026-09-22T07:15:15Z staging	Warning	OOMKilled	pod/web-714aa	Container web-714aa was OOMKilled, memory limit 512Mi exceeded
+2026-09-10T03:21:10Z default	Normal	Started	pod/batch-24ba5	Started container batch-24ba5
+2026-09-14T18:32:57Z billing	Normal	Scheduled	pod/batch-ffc82	Successfully assigned billing/batch-ffc82 to node-1
+2026-09-11T12:36:24Z staging	Warning	BackOff	pod/web-01d51	Back-off restarting failed container, retry 3/3
+2026-09-07T10:31:32Z staging	Normal	Pulling	pod/worker-69255	Pulling image "registry.example.com/app:170ca55"
+2026-09-16T20:54:50Z default	Warning	OOMKilled	pod/worker-6223e	Container worker-6223e was OOMKilled, memory limit 512Mi exceeded
+2026-09-19T12:51:14Z default	Warning	Unhealthy	pod/web-d2c6c	Readiness probe failed: HTTP probe failed with statuscode: 200
+2026-09-26T16:30:27Z prod	Normal	Started	pod/batch-28330	Started container batch-28330
+2026-09-10T16:51:19Z billing	Normal	Pulling	pod/batch-a1a2d	Pulling image "registry.example.com/app:b32cf97"
+2026-09-15T21:48:35Z prod	Normal	Scheduled	pod/web-5a2e4	Successfully assigned prod/web-5a2e4 to node-3
+2026-09-19T15:13:42Z billing	Normal	Scheduled	pod/batch-d6ae4	Successfully assigned billing/batch-d6ae4 to node-10
+2026-09-28T13:59:36Z default	Warning	BackOff	pod/worker-54dad	Back-off restarting failed container, retry 1/3
+2026-09-24T21:48:19Z billing	Normal	Killing	pod/api-e151c	Stopping container api-e151c
+2026-09-03T20:13:54Z billing	Normal	Started	pod/batch-071c4	Started container batch-071c4
+2026-09-09T21:38:15Z billing	Warning	BackOff	pod/worker-35d5e	Back-off restarting failed container, retry 1/3
+2026-09-26T09:29:31Z billing	Warning	OOMKilled	pod/api-316da	Container api-316da was OOMKilled, memory limit 512Mi exceeded
+2026-09-06T08:08:01Z staging	Warning	BackOff	pod/batch-76920	Back-off restarting failed container, retry 1/3
+2026-09-24T15:50:01Z default	Warning	Unhealthy	pod/web-9848f	Readiness probe failed: HTTP probe failed with statuscode: 500
+2026-09-14T11:42:42Z default	Warning	Evicted	pod/api-602c3	Pod evicted because node node-3 had disk pressure
+2026-09-08T03:36:47Z default	Warning	OOMKilled	pod/batch-be898	Container batch-be898 was OOMKilled, memory limit 512Mi exceeded
+2026-09-20T03:49:51Z staging	Warning	Evicted	pod/batch-20749	Pod evicted because node node-12 had disk pressure
+2026-09-24T07:59:27Z prod	Warning	BackOff	pod/worker-80652	Back-off restarting failed container, retry 2/3
+2026-09-15T13:16:55Z default	Normal	Started	pod/api-0f5e9	Started container api-0f5e9
+2026-09-04T10:34:27Z billing	Normal	Killing	pod/worker-ec2e1	Stopping container worker-ec2e1
+2026-09-05T11:30:45Z staging	Normal	Killing	pod/batch-2c768	Stopping container batch-2c768
+2026-09-20T01:53:47Z default	Normal	Pulling	pod/worker-83c30	Pulling image "registry.example.com/app:a117870"
+2026-09-23T11:57:51Z default	Normal	Pulling	pod/worker-bf466	Pulling image "registry.example.com/app:74ce369"
+2026-09-13T08:19:05Z prod	Normal	Killing	pod/batch-2be57	Stopping container batch-2be57
+2026-09-15T20:20:56Z billing	Warning	OOMKilled	pod/web-f67b3	Container web-f67b3 was OOMKilled, memory limit 512Mi exceeded
+2026-09-25T15:30:47Z billing	Normal	Killing	pod/batch-d0924	Stopping container batch-d0924
+2026-09-27T03:52:10Z staging	Normal	Started	pod/web-81bd1	Started container web-81bd1
+2026-09-27T17:47:20Z billing	Normal	Started	pod/web-b7f4c	Started container web-b7f4c
+2026-09-06T20:28:50Z prod	Normal	Started	pod/web-d757a	Started container web-d757a
+2026-09-11T18:05:07Z prod	Normal	Killing	pod/worker-31509	Stopping container worker-31509
+2026-09-27T20:48:08Z billing	Normal	Killing	pod/batch-a7d6b	Stopping container batch-a7d6b
+2026-09-05T08:11:43Z staging	Normal	Pulling	pod/batch-4d67d	Pulling image "registry.example.com/app:4c63a5b"
+2026-09-13T18:14:01Z default	Normal	Killing	pod/worker-0ef20	Stopping container worker-0ef20
+2026-09-07T08:44:54Z prod	Normal	Pulling	pod/web-9390a	Pulling image "registry.example.com/app:e24eb68"
+2026-09-03T11:10:36Z default	Normal	Pulling	pod/web-6a3b8	Pulling image "registry.example.com/app:cbeabbf"
+2026-09-15T21:31:07Z prod	Normal	Killing	pod/worker-15d90	Stopping container worker-15d90
+2026-09-26T08:18:47Z billing	Normal	Killing	pod/api-466a0	Stopping container api-466a0
+2026-09-20T06:52:18Z prod	Warning	Evicted	pod/api-e8799	Pod evicted because node node-1 had disk pressure
+2026-09-10T08:15:39Z billing	Normal	Started	pod/worker-4fa01	Started container worker-4fa01
+2026-09-15T02:00:30Z prod	Normal	Pulling	pod/batch-11994	Pulling image "registry.example.com/app:69c5697"
+2026-09-13T22:27:47Z staging	Warning	OOMKilled	pod/web-9df0d	Container web-9df0d was OOMKilled, memory limit 512Mi exceeded
+2026-09-11T07:30:58Z staging	Normal	Scheduled	pod/web-d62bd	Successfully assigned staging/web-d62bd to node-7
+2026-09-10T12:42:23Z prod	Warning	Unhealthy	pod/web-4f5ed	Readiness probe failed: HTTP probe failed with statuscode: 200
+2026-09-16T10:56:29Z prod	Normal	Scheduled	pod/web-06dcc	Successfully assigned prod/web-06dcc to node-3
+2026-09-09T03:20:02Z prod	Normal	Killing	pod/api-217f5	Stopping container api-217f5
+2026-09-24T11:59:27Z staging	Warning	Evicted	pod/batch-f5536	Pod evicted because node node-5 had disk pressure
+2026-09-17T10:27:57Z prod	Normal	Scheduled	pod/batch-58d2f	Successfully assigned prod/batch-58d2f to node-3
+2026-09-18T21:40:51Z billing	Warning	OOMKilled	pod/web-45fd3	Container web-45fd3 was OOMKilled, memory limit 512Mi exceeded
+2026-09-06T01:30:16Z prod	Normal	Killing	pod/api-8b538	Stopping container api-8b538
+2026-09-16T01:28:22Z billing	Normal	Killing	pod/api-d874c	Stopping container api-d874c
+2026-09-28T04:07:22Z default	Warning	BackOff	pod/worker-93864	Back-off restarting failed container, retry 1/3
+2026-09-24T16:52:17Z prod	Normal	Scheduled	pod/web-ec64e	Successfully assigned prod/web-ec64e to node-7
+2026-09-03T07:49:31Z default	Normal	Started	pod/batch-a3451	Started container batch-a3451
+2026-09-22T03:25:23Z default	Warning	OOMKilled	pod/batch-49c0e	Container batch-49c0e was OOMKilled, memory limit 512Mi exceeded
+2026-09-27T22:42:30Z billing	Warning	OOMKilled	pod/batch-f9abe	Container batch-f9abe was OOMKilled, memory limit 512Mi exceeded
+2026-09-02T20:39:28Z staging	Warning	OOMKilled	pod/worker-2bbcf	Container worker-2bbcf was OOMKilled, memory limit 512Mi exceeded
+2026-09-21T09:20:51Z default	Normal	Started	pod/web-8c1de	Started container web-8c1de
+2026-09-03T12:16:11Z prod	Normal	Killing	pod/api-abbd7	Stopping container api-abbd7
+2026-09-06T12:49:25Z staging	Normal	Scheduled	pod/worker-e18a8	Successfully assigned staging/worker-e18a8 to node-7
+2026-09-24T09:57:43Z prod	Normal	Killing	pod/batch-bc590	Stopping container batch-bc590
+2026-09-17T06:31:28Z billing	Normal	Started	pod/api-5d0fa	Started container api-5d0fa
+2026-09-03T13:51:23Z prod	Warning	OOMKilled	pod/api-55d87	Container api-55d87 was OOMKilled, memory limit 512Mi exceeded
+2026-09-17T10:29:43Z prod	Normal	Scheduled	pod/worker-fa78b	Successfully assigned prod/worker-fa78b to node-11
+2026-09-17T02:18:29Z billing	Normal	Scheduled	pod/web-7f36f	Successfully assigned billing/web-7f36f to node-3
+2026-09-05T21:57:19Z prod	Warning	OOMKilled	pod/api-44828	Container api-44828 was OOMKilled, memory limit 512Mi exceeded
+2026-09-03T01:32:06Z billing	Normal	Started	pod/api-5bf4d	Started container api-5bf4d
+2026-09-19T08:22:16Z default	Normal	Started	pod/web-121ce	Started container web-121ce
+2026-09-06T05:53:25Z default	Warning	Evicted	pod/web-af996	Pod evicted because node node-6 had disk pressure
+2026-09-19T23:29:48Z billing	Normal	Killing	pod/batch-d4001	Stopping container batch-d4001
+2026-09-26T05:13:11Z default	Warning	BackOff	pod/batch-7c5c4	Back-off restarting failed container, retry 3/3
+2026-09-01T00:25:07Z default	Normal	Scheduled	pod/worker-f6d2a	Successfully assigned default/worker-f6d2a to node-7
+2026-09-28T21:47:38Z billing	Normal	Killing	pod/batch-4bb6e	Stopping container batch-4bb6e
+2026-09-12T22:43:44Z billing	Warning	BackOff	pod/batch-3c57f	Back-off restarting failed container, retry 1/3
+2026-09-04T00:44:12Z default	Warning	BackOff	pod/worker-d5c25	Back-off restarting failed container, retry 1/3
+2026-09-14T20:54:50Z prod	Normal	Scheduled	pod/web-2cc89	Successfully assigned prod/web-2cc89 to node-8
+2026-09-14T00:07:10Z prod	Normal	Scheduled	pod/api-0fc0d	Successfully assigned prod/api-0fc0d to node-8
+2026-09-19T07:12:18Z billing	Warning	BackOff	pod/web-1d47a	Back-off restarting failed container, retry 3/3
+2026-09-14T13:54:31Z staging	Normal	Scheduled	pod/web-54722	Successfully assigned staging/web-54722 to node-10
+2026-09-24T19:59:43Z billing	Normal	Scheduled	pod/worker-45f59	Successfully assigned billing/worker-45f59 to node-7
+2026-09-19T10:35:04Z staging	Warning	BackOff	pod/api-9e3f4	Back-off restarting failed container, retry 3/3
+2026-09-21T11:28:44Z billing	Warning	Evicted	pod/web-d9a52	Pod evicted because node node-8 had disk pressure
+2026-09-12T14:14:32Z prod	Normal	Killing	pod/batch-0baf7	Stopping container batch-0baf7
+2026-09-23T21:29:08Z staging	Normal	Killing	pod/api-a0900	Stopping container api-a0900
+2026-09-22T20:47:23Z billing	Warning	Unhealthy	pod/worker-c90a4	Readiness probe failed: HTTP probe failed with statuscode: 200
+2026-09-03T21:30:08Z prod	Normal	Scheduled	pod/worker-dc42c	Successfully assigned prod/worker-dc42c to node-7
+2026-09-16T09:15:13Z default	Warning	Unhealthy	pod/web-6f6c9	Readiness probe failed: HTTP probe failed with statuscode: 200
+2026-09-06T05:52:55Z default	Warning	BackOff	pod/web-54989	Back-off restarting failed container, retry 1/3
+2026-09-04T17:14:31Z staging	Warning	Evicted	pod/batch-418df	Pod evicted because node node-9 had disk pressure
+2026-09-09T04:54:44Z default	Normal	Pulling	pod/web-bff31	Pulling image "registry.example.com/app:901171c"
+2026-09-27T03:06:50Z default	Warning	BackOff	pod/web-3a5a8	Back-off restarting failed container, retry 1/3
+2026-09-28T06:58:23Z prod	Warning	Evicted	pod/batch-fc3e3	Pod evicted because node node-8 had disk pressure
+2026-09-24T03:09:41Z staging	Warning	BackOff	pod/batch-cd53c	Back-off restarting failed container, retry 1/3
+2026-09-15T13:49:49Z default	Normal	Scheduled	pod/worker-9c9e9	Successfully assigned default/worker-9c9e9 to node-5
+2026-09-17T05:05:17Z staging	Normal	Started	pod/api-5f4ae	Started container api-5f4ae
+2026-09-05T16:26:50Z prod	Normal	Pulling	pod/worker-9b198	Pulling image "registry.example.com/app:4a46f79"
+2026-09-15T16:50:43Z staging	Warning	Evicted	pod/web-f3375	Pod evicted because node node-12 had disk pressure
+2026-09-26T16:04:05Z staging	Warning	Evicted	pod/batch-4b2aa	Pod evicted because node node-7 had disk pressure
+2026-09-02T12:48:02Z prod	Normal	Killing	pod/web-45bc8	Stopping container web-45bc8
+2026-09-26T21:56:33Z staging	Normal	Started	pod/api-497f1	Started container api-497f1
+2026-09-18T09:46:47Z staging	Warning	Unhealthy	pod/batch-3bf5a	Readiness probe failed: HTTP probe failed with statuscode: 200
+2026-09-20T04:44:25Z billing	Normal	Started	pod/worker-770fc	Started container worker-770fc
+2026-09-20T20:28:44Z staging	Normal	Killing	pod/api-bcfd4	Stopping container api-bcfd4
+2026-09-03T01:34:21Z billing	Normal	Scheduled	pod/worker-e2b48	Successfully assigned billing/worker-e2b48 to node-4
+2026-09-03T16:35:19Z staging	Normal	Killing	pod/worker-afb5c	Stopping container worker-afb5c
+2026-09-18T18:16:15Z staging	Warning	BackOff	pod/api-3b585	Back-off restarting failed container, retry 1/3
+2026-09-27T11:16:40Z staging	Normal	Started	pod/web-fae4c	Started container web-fae4c
+2026-09-04T14:19:36Z default	Warning	Unhealthy	pod/api-52bd5	Readiness probe failed: HTTP probe failed with statuscode: 200
+2026-09-19T18:45:57Z prod	Normal	Started	pod/batch-f9c26	Started container batch-f9c26
+2026-09-27T22:36:43Z prod	Warning	Unhealthy	pod/api-66abe	Readiness probe failed: HTTP probe failed with statuscode: 503
+2026-09-17T18:12:52Z staging	Warning	Evicted	pod/api-74756	Pod evicted because node node-7 had disk pressure
+2026-09-03T02:03:27Z prod	Warning	OOMKilled	pod/api-733f1	Container api-733f1 was OOMKilled, memory limit 512Mi exceeded
+2026-09-22T16:25:37Z billing	Normal	Started	pod/batch-92ad0	Started container batch-92ad0
+2026-09-15T22:59:31Z billing	Warning	BackOff	pod/worker-39d8f	Back-off restarting failed container, retry 3/3
+2026-09-15T04:45:32Z default	Warning	OOMKilled	pod/worker-3b2b7	Container worker-3b2b7 was OOMKilled, memory limit 512Mi exceeded
+2026-09-06T17:23:58Z default	Normal	Pulling	pod/api-01ae5	Pulling image "registry.example.com/app:5838e96"
+2026-09-17T04:07:23Z staging	Normal	Scheduled	pod/batch-e9526	Successfully assigned staging/batch-e9526 to node-3
+2026-09-05T18:26:03Z staging	Normal	Killing	pod/batch-f2a3d	Stopping container batch-f2a3d
+2026-09-16T00:07:35Z staging	Normal	Pulling	pod/web-3bbec	Pulling image "registry.example.com/app:0d726ab"
+2026-09-19T14:57:21Z billing	Normal	Killing	pod/api-f38cc	Stopping container api-f38cc
+2026-09-05T04:32:40Z billing	Warning	BackOff	pod/api-de1f0	Back-off restarting failed container, retry 3/3
+2026-09-11T02:51:39Z billing	Normal	Pulling	pod/api-b8ede	Pulling image "registry.example.com/app:4d18644"
+2026-09-22T14:47:17Z default	Normal	Scheduled	pod/worker-23266	Successfully assigned default/worker-23266 to node-12
+2026-09-10T17:41:07Z default	Normal	Scheduled	pod/worker-6be67	Successfully assigned default/worker-6be67 to node-1
+2026-09-19T16:12:48Z billing	Normal	Killing	pod/web-706a8	Stopping container web-706a8
+2026-09-06T00:17:50Z prod	Normal	Killing	pod/worker-6c726	Stopping container worker-6c726
+2026-09-19T14:05:51Z staging	Normal	Scheduled	pod/api-2a1e7	Successfully assigned staging/api-2a1e7 to node-1
+2026-09-11T13:11:26Z default	Warning	OOMKilled	pod/batch-f8e60	Container batch-f8e60 was OOMKilled, memory limit 512Mi exceeded
+2026-09-04T17:10:18Z prod	Warning	OOMKilled	pod/worker-2b3ce	Container worker-2b3ce was OOMKilled, memory limit 512Mi exceeded
+2026-09-10T13:43:10Z default	Warning	Evicted	pod/batch-36d97	Pod evicted because node node-5 had disk pressure
+2026-09-13T03:20:09Z billing	Normal	Killing	pod/batch-03452	Stopping container batch-03452
+2026-09-04T01:12:15Z prod	Normal	Scheduled	pod/api-24bbe	Successfully assigned prod/api-24bbe to node-2
+2026-09-09T01:20:29Z billing	Normal	Pulling	pod/web-9f1d5	Pulling image "registry.example.com/app:a1ed439"
+2026-09-01T08:35:37Z default	Normal	Started	pod/worker-79da8	Started container worker-79da8
+2026-09-05T09:36:26Z billing	Normal	Scheduled	pod/web-f99ba	Successfully assigned billing/web-f99ba to node-3
+2026-09-12T17:10:50Z prod	Normal	Scheduled	pod/api-02a75	Successfully assigned prod/api-02a75 to node-1
+2026-09-01T14:53:39Z staging	Normal	Killing	pod/worker-d2fbd	Stopping container worker-d2fbd
+2026-09-16T08:38:16Z billing	Warning	BackOff	pod/batch-65ebb	Back-off restarting failed container, retry 3/3
+2026-09-10T01:10:47Z default	Normal	Started	pod/batch-84c40	Started container batch-84c40
+2026-09-27T04:46:35Z staging	Normal	Scheduled	pod/api-486cf	Successfully assigned staging/api-486cf to node-6
+2026-09-22T10:40:16Z billing	Normal	Killing	pod/batch-d5ea0	Stopping container batch-d5ea0
+2026-09-11T06:29:38Z staging	Warning	BackOff	pod/web-7a4b2	Back-off restarting failed container, retry 1/3
+2026-09-20T15:00:57Z default	Normal	Killing	pod/worker-dd040	Stopping container worker-dd040
+2026-09-23T15:48:25Z default	Normal	Killing	pod/web-9845f	Stopping container web-9845f
+2026-09-27T21:28:43Z default	Normal	Pulling	pod/batch-4b738	Pulling image "registry.example.com/app:e8567b0"
+2026-09-13T05:53:49Z default	Normal	Killing	pod/web-ecd7a	Stopping container web-ecd7a
+2026-09-15T00:14:47Z default	Warning	Evicted	pod/batch-72219	Pod evicted because node node-4 had disk pressure
+2026-09-03T19:40:19Z prod	Normal	Killing	pod/worker-8edd2	Stopping container worker-8edd2
+2026-09-02T08:31:57Z prod	Normal	Killing	pod/web-adc76	Stopping container web-adc76
+2026-09-13T03:55:17Z billing	Normal	Started	pod/worker-0ba3b	Started container worker-0ba3b
+2026-09-19T21:43:38Z prod	Warning	Evicted	pod/web-47691	Pod evicted because node node-3 had disk pressure
+2026-09-09T18:54:14Z staging	Warning	OOMKilled	pod/worker-ebe54	Container worker-ebe54 was OOMKilled, memory limit 512Mi exceeded
+2026-09-23T21:34:39Z staging	Normal	Pulling	pod/api-6e77d	Pulling image "registry.example.com/app:af69248"
+2026-09-21T01:54:20Z billing	Normal	Started	pod/api-86f0b	Started container api-86f0b
+2026-09-15T15:23:33Z default	Normal	Killing	pod/worker-a5b18	Stopping container worker-a5b18
+2026-09-18T14:20:00Z billing	Normal	Killing	pod/worker-14964	Stopping container worker-14964
+2026-09-26T00:47:14Z billing	Warning	BackOff	pod/web-a955d	Back-off restarting failed container, retry 2/3
+2026-09-10T02:40:40Z default	Normal	Killing	pod/web-997d8	Stopping container web-997d8
+2026-09-19T20:59:21Z staging	Warning	Unhealthy	pod/worker-ac8ba	Readiness probe failed: HTTP probe failed with statuscode: 503
+2026-09-27T01:52:21Z prod	Normal	Started	pod/web-3b951	Started container web-3b951
+2026-09-25T03:40:28Z default	Normal	Killing	pod/web-553dd	Stopping container web-553dd
+2026-09-13T10:56:54Z default	Normal	Killing	pod/worker-dc505	Stopping container worker-dc505
+2026-09-02T09:39:40Z billing	Warning	OOMKilled	pod/web-a907f	Container web-a907f was OOMKilled, memory limit 512Mi exceeded
+2026-09-02T09:54:24Z billing	Normal	Pulling	pod/web-c6fdd	Pulling image "registry.example.com/app:267de4f"
+2026-09-26T21:39:00Z billing	Normal	Pulling	pod/api-4e597	Pulling image "registry.example.com/app:a525f17"
+2026-09-04T10:41:43Z default	Normal	Started	pod/api-fb5ec	Started container api-fb5ec
+2026-09-04T03:00:38Z default	Warning	BackOff	pod/worker-7d02f	Back-off restarting failed container, retry 3/3
+2026-09-09T11:26:30Z billing	Warning	Evicted	pod/worker-5ff3d	Pod evicted because node node-1 had disk pressure
+2026-09-05T09:37:27Z staging	Normal	Scheduled	pod/batch-b6671	Successfully assigned staging/batch-b6671 to node-3
+2026-09-05T15:19:38Z staging	Warning	OOMKilled	pod/batch-b1a8e	Container batch-b1a8e was OOMKilled, memory limit 512Mi exceeded
+2026-09-19T21:43:09Z default	Normal	Killing	pod/worker-74447	Stopping container worker-74447
+2026-09-28T01:27:22Z prod	Warning	BackOff	pod/worker-bce75	Back-off restarting failed container, retry 1/3
+2026-09-11T06:42:30Z billing	Normal	Scheduled	pod/batch-a56c7	Successfully assigned billing/batch-a56c7 to node-6
+2026-09-20T09:26:21Z prod	Warning	Evicted	pod/web-d028b	Pod evicted because node node-1 had disk pressure
+2026-09-16T07:58:00Z prod	Warning	BackOff	pod/worker-c392a	Back-off restarting failed container, retry 2/3
+2026-09-24T10:51:47Z billing	Normal	Killing	pod/worker-81a13	Stopping container worker-81a13
+2026-09-01T11:00:04Z staging	Warning	BackOff	pod/web-b09da	Back-off restarting failed container, retry 2/3
+2026-09-07T20:37:58Z staging	Warning	BackOff	pod/web-6cba6	Back-off restarting failed container, retry 2/3
+2026-09-06T07:56:16Z prod	Warning	Unhealthy	pod/batch-d6b8e	Readiness probe failed: HTTP probe failed with statuscode: 500
+2026-09-01T05:53:16Z default	Warning	BackOff	pod/web-8425e	Back-off restarting failed container, retry 3/3
+2026-09-26T03:21:59Z prod	Normal	Pulling	pod/batch-14e97	Pulling image "registry.example.com/app:bd26bc4"
+2026-09-06T16:51:39Z billing	Normal	Killing	pod/web-f9e79	Stopping container web-f9e79
+2026-09-05T06:12:34Z billing	Normal	Pulling	pod/batch-a600e	Pulling image "registry.example.com/app:c04fc08"
+2026-09-02T19:37:12Z staging	Warning	OOMKilled	pod/worker-8e219	Container worker-8e219 was OOMKilled, memory limit 512Mi exceeded
+2026-09-26T08:55:08Z billing	Warning	Evicted	pod/worker-6cbe8	Pod evicted because node node-11 had disk pressure
+2026-09-20T02:10:32Z billing	Normal	Scheduled	pod/batch-0f14b	Successfully assigned billing/batch-0f14b to node-6
+2026-09-23T11:33:44Z billing	Normal	Started	pod/api-34958	Started container api-34958
+2026-09-21T18:41:02Z prod	Normal	Scheduled	pod/worker-ecebf	Successfully assigned prod/worker-ecebf to node-4
+2026-09-13T06:19:27Z billing	Normal	Pulling	pod/worker-ecadb	Pulling image "registry.example.com/app:c90e2e6"
+2026-09-05T02:18:28Z staging	Normal	Scheduled	pod/worker-008d9	Successfully assigned staging/worker-008d9 to node-10
+2026-09-11T13:28:29Z billing	Normal	Scheduled	pod/api-52d57	Successfully assigned billing/api-52d57 to node-5

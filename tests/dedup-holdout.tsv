@@ -1,0 +1,50 @@
+nginx_access.log	HTTPステータスコードが500のリクエスト
+nginx_access.log	/admin 配下のパスへのアクセス
+nginx_access.log	リファラが外部ドメイン（mirror.example.net、partner-cdn.example.org、thirdparty.example.io、sketchy-upload.example.biz のいずれか）からのリクエスト
+nginx_access.log	存在しないリソースへのアクセス（レスポンスコード404）
+nginx_access.log	HTTP/1.1 プロトコルでのリクエスト
+syslog.log	ディスク使用率が90%を超えている
+syslog.log	ポート443への接続がファイアウォールで拒否(DROP)された
+syslog.log	sudoコマンドが実行された
+syslog.log	深夜0時から5時台に発生したイベント
+syslog.log	DHCPによるIPアドレスの割り当てが行われた
+app_stacktrace.log	ユーザーのログイン認証に失敗した
+app_stacktrace.log	リクエストの処理時間が3000msを超えた
+app_stacktrace.log	NullPointerExceptionが発生した
+app_stacktrace.log	在庫同期（InventorySync）に関するログ
+app_ja.log	ログインに失敗した
+app_ja.log	ディスク使用率が90%以上に達した
+app_ja.log	/admin 配下へのアクセス権限が無くエラーになった
+app_ja.log	外部サービスへの通信に失敗した
+k8s_events.log	コンテナがメモリ超過で強制終了(OOMKilled)された
+k8s_events.log	コンテナの再起動リトライが3回目(3/3)に達した
+k8s_events.log	Podが正常にノードへスケジュールされた（Normalイベント）
+k8s_events.log	ディスク圧迫が原因でPodが退避(Evicted)された
+events.jsonl	レイテンシ（latency_ms）が3000msを超えている
+events.jsonl	宛先ポート(dest_port)が443である
+events.jsonl	HTTPステータスが500である
+events.jsonl	HTTPステータスが200である
+events.jsonl	リトライ回数(retry)が3回に達している
+events.jsonl	/admin 配下のパスへのリクエスト
+export.csv	取引ステータスがrefunded（返金済み）である
+export.csv	金額(amount_jpy)が100000円を超えている
+export.csv	メールドメインが外部ドメイン（mirror.example.net、partner-cdn.example.org、thirdparty.example.io、sketchy-upload.example.biz のいずれか）である
+export.csv	取引ステータスがfailed（失敗）である
+tickets.log	顧客が強い不満や怒りを表明している問い合わせ
+tickets.log	パスワードやログインに関する問い合わせ
+tickets.log	課金・請求に関する問い合わせ
+unique_lines.txt	キャッシュ層（cache layer）に関する変更
+unique_lines.txt	パフォーマンス改善を目的とした変更
+build_ci.log	ビルドやデプロイがエラーで失敗した
+build_ci.log	ネットワークタイムアウトによりリトライが発生した
+build_ci.log	テストが1件以上失敗した
+slow_query.log	クエリ実行時間(Query_time)が5秒を超えている
+slow_query.log	admin関連のテーブルに対するクエリである
+slow_query.log	DELETE文によるクエリである
+auth.log	パスワード認証に失敗した
+auth.log	公開鍵認証で正常にログインできた
+auth.log	宛先ポート443への接続がファイアウォールで拒否された
+auth.log	OAuthのトークンリフレッシュに失敗した
+auth.log	存在しないユーザー（invalid user）でのログイン試行
+nginx_access.log	サーバがクラッシュして全リクエストがタイムアウトした
+app_ja.log	サーバのハードウェア故障を報告するログ
