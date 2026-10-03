@@ -84,6 +84,11 @@ const OPTIONS = {
   p: { type: 'boolean', default: false }, // print each meaning's probability
   dedup: { type: 'string', default: 'never' }, // auto|always|never: judge one representative per template, reuse its answer
   rank: { type: 'string' }, // jev|match: print the results best first, scored by Jev's answer on each or by its best match
+  // multi-step matching (#163): the expression before --step-to finds the start, the one after it the end
+  'step-to': { type: 'boolean', multiple: true },
+  edges: { type: 'string' }, // FILE: the edges to walk, one per line; default: the calls between functions
+  reverse: { type: 'boolean', default: false }, // walk the edges backwards
+  hops: { type: 'string', default: '0..' }, // N, M..N or M..: the hops an end may be at
   'dry-run': { type: 'boolean', default: false }, // print the files and requests, send nothing
   verbose: { type: 'boolean', default: false }, // print the files and requests to stderr while searching
   interactive: { type: 'boolean', short: 'i', default: false }, // show what --dry-run would send, search on a yes
@@ -114,16 +119,35 @@ const OPTIONS = {
 // SYS1GREP_OPTS holds default options only: no meanings, no files, no --. It goes in front of the arguments, so the
 // command line wins (a later value counts; --no-X clears a flag).
 const defaults = SYS1GREP_OPTS.split(/\s+/).filter(Boolean).map(fill);
+// --step-to X (#163) is --step-to -e X, and so is --step-to=X; a bare --step-to (followed by an option) opens the end
+// expression for the -e / -a / -v / -Q after it. After --, every argument is a file. X, and the MEANING of -e / -a /
+// -v / -Q, may start with a dash ("--summarize hands the lines on"): an option holds no space, and is -- and a word or
+// a known short one. parseArgs refuses a separate value starting with -, so such a value is attached.
+const SHORTS = new Set(Object.entries(OPTIONS).map(([k, o]) => o.short ?? (k.length === 1 ? k : null)).filter(Boolean));
+const isOption = a => !/\s/.test(a) && (a.startsWith('--') || (/^-[^-]/.test(a) && SHORTS.has(a[1])));
+const openStep = args => {
+  const out = [];
+  for (let i = 0; i < args.length; i++) {
+    const m = !out.includes('--') && /^--step-to(?:=([\s\S]*))?$/.exec(args[i]);
+    const dashed = i + 1 < args.length && args[i + 1].startsWith('-') && !isOption(args[i + 1]);
+    if (!out.includes('--') && dashed && ['-e', '-a', '-v', '-Q', '--question'].includes(args[i])) { out.push(`${args[i]}${args[i] === '--question' ? '=' : ''}${args[++i]}`); continue; }
+    if (!m) { out.push(args[i]); continue; }
+    const value = m[1] ?? (i + 1 < args.length && !isOption(args[i + 1]) ? args[++i] : undefined);
+    if (value !== undefined && !value.trim()) die('--step-to: MEANING must not be empty');
+    out.push('--step-to', ...(value === undefined ? [] : [`-e${value}`]));
+  }
+  return out;
+};
 let optsInteractive = false; // -i from SYS1GREP_OPTS: a script without a terminal is told where it came from
 try {
   const { tokens: t } = parseArgs({ args: defaults, options: OPTIONS, allowPositionals: true, allowNegative: true, tokens: true });
   optsInteractive = t.some(k => k.name === 'interactive' && !k.rawName.startsWith('--no-'));
   const command = k => k.name === 'install-templates' || (k.name === 'template' && k.value === 'list');
-  const bad = t.find(k => k.kind !== 'option' || ['e', 'a', 'v', 'question', 'cached', 'untracked'].includes(k.name) || command(k));
-  if (bad) die(`SYS1GREP_OPTS: ${bad.kind !== 'option' ? `'${bad.value ?? '--'}' is not an option` : command(bad) ? `${bad.rawName}${bad.value === undefined ? '' : `=${bad.value}`} is not allowed (it does something instead of searching)` : ['cached', 'untracked'].includes(bad.name) ? `--${bad.name} is not allowed (what is searched goes on the command line)` : `${bad.name.length > 1 ? '--' : '-'}${bad.name} is not allowed (meanings go on the command line)`}`);
+  const bad = t.find(k => k.kind !== 'option' || ['e', 'a', 'v', 'question', 'step-to', 'cached', 'untracked'].includes(k.name) || command(k));
+  if (bad) die(`SYS1GREP_OPTS: ${bad.kind !== 'option' ? `'${bad.value ?? '--'}' is not an option` : command(bad) ? `${bad.rawName}${bad.value === undefined ? '' : `=${bad.value}`} is not allowed (it does something instead of searching)` : ['cached', 'untracked'].includes(bad.name) ? `--${bad.name} is not allowed (what is searched goes on the command line)` : `${bad.name.length > 1 ? '--' : '-'}${bad.name} is not allowed (${bad.name === 'step-to' ? 'expressions' : 'meanings'} go on the command line)`}`);
 } catch (e) { die(`SYS1GREP_OPTS: ${e.message}`); }
 const { values: opt, positionals: files, tokens } = parseArgs({
-  args: [...defaults, ...process.argv.slice(2).map(fill)],
+  args: [...defaults, ...openStep(process.argv.slice(2)).map(fill)],
   options: OPTIONS,
   allowPositionals: true,
   allowNegative: true,
@@ -140,6 +164,7 @@ const optSrc = name => {
 };
 // --help: Japanese when the locale starts with ja, English otherwise
 const HELP_EN = `usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
+       sys1grep [OPTION]... EXPRESSION --step-to EXPRESSION [FILE...]
 grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is omitted.
 As git sys1grep, FILE arguments are pathspecs and every tracked file is searched, like git grep.
 
@@ -250,6 +275,26 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                    line before the next, as git grep -W: the diff=<driver> attribute and diff.<driver>.xfuncname
                    pick the funcname lines, else sys1grep's rule for .js/.ts/.py, else a line starting with a
                    letter, _ or $. -M defaults to 8000. Not with -z, -g or -o
+  --step-to EXPRESSION  multi-step matching: the expression before --step-to finds the start units; walk the
+               edges from them breadth first, and print the paths to the reached units that match the expression
+               after it (the ends). A step is a search, not a hop: every -e / -a / -v / -Q after --step-to is the
+               end expression. --step-to MEANING or --step-to '/RE/' is --step-to -e MEANING. No score steers the
+               walk; the units reached within --hops are judged against the end expression in one batch. A
+               regex-only start and end send nothing.
+               Without --edges the unit is a function (--unit=function) and an edge is a call: name( in a
+               function's body (comments, docstrings and strings left out) links to every function of that name.
+               Each path prints as a tree: the hop, file:line and the function's name, : for an end and - for a
+               unit on the way; -p adds the end expression's scores. stderr gets the units reached at each hop
+               and why the walk stopped. Not with -z, -g, -o, -c, -l, -A/-B/-C, --rank, --summarize or --dedup.
+               --max-cost asks again before the end's requests, counting what the start sent; --dry-run walks
+               from every unit the start expression could hold for, a bound
+                 sys1grep -e "--summarize hands the lines to the tool" --step-to "what happens when it fails" sys1grep.mjs
+  --edges=FILE the edges to walk instead of calls, one per line: FROM_FILE:LINE<TAB>FROM_NAME<TAB>TO_FILE:LINE
+               <TAB>TO_NAME. A line stands for the unit holding it, of any --unit but zero. Any relation works
+               (imports, links, log ids); write an undirected one both ways
+  --reverse    walk the edges backwards (callee to caller)
+  --hops=N|M..N|M..  the hops an end may be at: exactly N, M to N, or M and more (default 0..). A unit's hop is
+               its shortest distance from any start; hop 0 is a start itself
   -o           print only what matched, one per line: each regex match, as grep -o (a line only meanings
                matched prints whole; no context). With --unit=sentence-by-*, the matching sentences; -n gives the
                line where the sentence starts, -c and -A/-B/-C count sentences
@@ -360,6 +405,7 @@ Environment (read from the environment, else from ~/.config/sys1grep/.env; ./.en
   The key goes to SYS1GREP_URL, whatever it is. With SYS1GREP_URL set and no key, no auth header is sent.
   e.g.  mkdir -p ~/.config/sys1grep && echo 'SYS1GREP_API_KEY=your-key' > ~/.config/sys1grep/.env`;
 const HELP_JA = `usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
+       sys1grep [OPTION]... EXPRESSION --step-to EXPRESSION [FILE...]
 jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE 省略時は stdin。
 git sys1grep として呼ぶと git grep と同じく FILE は pathspec になり、追跡中のファイルを全部探す。
 
@@ -467,6 +513,25 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                  (git grep -W と同じ)。関数名の行は diff=<driver> 属性と diff.<driver>.xfuncname で決め、
                  無ければ .js/.ts/.py は sys1grep の規則、それ以外は英字・_・$ で始まる行。-M の既定は 8000。
                  -z・-g・-o とは併用できない
+  --step-to EXPRESSION  多段階マッチング: --step-to の前の式で開始ユニットを探し、そこから辺を幅優先でたどり、
+               たどり着いたユニットのうち後ろの式に当たるもの (終点) までのパスを出す。step はホップではなく
+               検索の段: --step-to の後の -e / -a / -v / -Q はすべて終点の式。--step-to 意味 や --step-to '/RE/' は
+               --step-to -e 意味 と同じ。たどる道はスコアで決めない。--hops の範囲でたどり着いたユニットを 1 回の
+               バッチで終点の式と照らす。開始と終点の式が正規表現だけなら何も送らない。
+               --edges が無ければ単位は関数 (--unit=function) で、辺は呼び出し: 関数本体 (コメント・docstring・
+               文字列は除く) の 名前( が、その名前の関数すべてにつながる。
+               パスは木の形で出す: ホップ数、file:line、関数名。終点は :、途中のユニットは - で区切る。-p は
+               終点の式の確率を足す。stderr にはホップごとにたどり着いたユニットの数と、止まった理由を出す。
+               -z・-g・-o・-c・-l・-A/-B/-C・--rank・--summarize・--dedup とは併用できない。
+               --max-cost は終点のリクエストの前にもう一度、開始で送った分を含めて確かめる。--dry-run は
+               開始の式が当たりうるユニットすべてから歩く (上限の見積もり)
+                 sys1grep -e "--summarize が行をツールに渡している" --step-to "ツールの起動や応答が失敗したときの処理" sys1grep.mjs
+  --edges=FILE 呼び出しの代わりにたどる辺。1 行 1 本: FROM_FILE:LINE<TAB>FROM_NAME<TAB>TO_FILE:LINE<TAB>TO_NAME。
+               行はそれを含むユニットを指す (--unit は zero 以外ならどれでもよい)。import、リンク、ログ ID など
+               どんな関係でもよい。向きの無い関係は両向きに書く
+  --reverse    辺を逆向きにたどる (呼ばれる側から呼ぶ側へ)
+  --hops=N|M..N|M..  終点のホップ数: ちょうど N、M から N、M 以上 (既定 0..)。ユニットのホップ数は、どれかの
+               開始ユニットからの最短距離。ホップ 0 は開始ユニットそのもの
   -o           当たった部分だけを 1 行ずつ出す。正規表現の一致をそれぞれ出す (grep -o と同じ。意味だけで
                当たった行は行全体。前後の行は出さない)。--unit=sentence-by-* と併用すると当たった文を出し、
                -n は文が始まる行、-c と -A/-B/-C は文の数で数える
@@ -631,7 +696,7 @@ if (dry) opt.quiet = false;
 // File names and file contents come from whatever is searched, maybe an untrusted checkout: the lines about them
 // show control characters as \xNN, so an escape sequence cannot redraw what -i asks about.
 const safe = s => String(s).replace(/[\x00-\x1f\x7f-\x9f]/g, c => `\\x${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
-const trace = dry ? s => console.log(`sys1grep: ${safe(s)}`) : opt.verbose ? s => console.error(`sys1grep: ${safe(s)}`) : null;
+const logPlan = dry ? s => console.log(`sys1grep: ${safe(s)}`) : opt.verbose ? s => console.error(`sys1grep: ${safe(s)}`) : null;
 // While waiting on Jev or the summarizer, a one-line spinner on stderr (#89), drawn after 300 ms so a fast search never
 // flickers. Only where nothing else would show: a terminal, and not -q, --dry-run or --verbose (its trace lines). Any
 // write to stdout or stderr erases it first, and so does exit, so no half-drawn line stays behind.
@@ -658,10 +723,20 @@ function compileRegex(pattern, flags) {
   catch (e) { die(`invalid regex '/${pattern}/${flags}': ${e.message}`, false); } // one line, like grep: the pattern is the problem, not the usage
   return { re, names: new Set(Object.keys(probe.groups ?? {})), count: probe.length - 1 };
 }
+// Multi-step matching (#163): a term before --step-to is the start expression's, one after it the end's, and
+// --step-to starts a new expression, so -a or -v right after it never joins a start term.
 const expr = [];
+const multiStep = tokens.some(tk => tk.kind === 'option' && tk.name === 'step-to');
+let role = multiStep ? 'start' : undefined;
 for (const tk of tokens) {
+  if (tk.kind === 'option' && tk.name === 'step-to') {
+    if (role === 'end') die('--step-to is given twice: one step for now');
+    role = 'end';
+    continue;
+  }
   if (tk.kind !== 'option' || !['e', 'a', 'v', 'question'].includes(tk.name)) continue;
-  if (tk.name === 'a' && expr.length === 0) die('-a needs a preceding -e');
+  const fresh = expr.at(-1)?.role !== role;
+  if (tk.name === 'a' && (expr.length === 0 || fresh)) die(`-a needs a preceding -e${role === 'end' ? ' after --step-to' : ''}`);
   const bang = tk.value.startsWith('!'); // per-literal negation: "!MEANING" / "!/re/"
   const bare = bang ? tk.value.slice(1) : tk.value;
   if (!bare.trim()) die(`${tk.name.length > 1 ? '--' : '-'}${tk.name}: MEANING must not be empty`);
@@ -669,10 +744,16 @@ for (const tk of tokens) {
   const shape = tk.name !== 'question' && RE_SHAPE.exec(bare); // -Q is always a question, never a regex
   const lit = shape ? { kind: 'r', not, ...compileRegex(shape[1], shape[2]) }
     : { kind: 'm', not, text: tk.name === 'question' ? `the line answers: ${bare}` : bare };
-  if (tk.name === 'e' || tk.name === 'question' || expr.length === 0) expr.push([lit]);
+  if (tk.name === 'e' || tk.name === 'question' || expr.length === 0 || fresh) expr.push(Object.assign([lit], { role }));
   else expr.at(-1).push(lit);
 }
+if (multiStep && !expr.some(term => term.role === 'start')) die('--step-to needs an expression before it to start from: -e MEANING --step-to ...');
+if (multiStep && !expr.some(term => term.role === 'end')) die("--step-to needs an expression: --step-to MEANING, --step-to '/RE/', or --step-to -e ...");
 if (!expr.length) die('no -e MEANING or -Q QUESTION given');
+// What a run judges first: the whole expression, or with --step-to the start expression; the end expression
+// is judged later, on the units the walk reaches.
+const starting = multiStep ? expr.filter(term => term.role === 'start') : expr;
+const ending = expr.filter(term => term.role === 'end');
 // Captures: $<name>, $1-$99, $&, $$ (ECMAScript's GetSubstitution), scoped to one AND term's non-negated
 // regexes. Deviation from ECMAScript: $<name> naming no group is an error, not an empty string. A group of
 // a negated regex can't be referenced either. $n naming no group stays literal, as in ECMAScript.
@@ -736,6 +817,36 @@ if (!['auto', 'always', 'never'].includes(opt.dedup)) die('--dedup must be auto,
 if (opt.gitlog && (opt.r || globalThis.SYS1GREP_GIT)) die('-g searches commits, not files: it cannot be combined with -r or git sys1grep');
 // --unit=zero is -z. -z also combines with --unit=sentence-by-*: each record is split into sentences.
 if (opt.unit === 'zero' || opt.gitlog) opt.z = true; // -g: a commit is a record
+// Multi-step matching (#163) prints paths of units, so what shapes or cuts the printed lines does not apply. The calls
+// it walks by default are between functions: without --edges the unit is a function. --edges names lines, so any
+// unit holding lines works with it. --dedup and --unit from SYS1GREP_OPTS give way; on the command line they are refused.
+const hops = (h => {
+  const m = /^(\d+)(\.\.(\d*))?$/.exec(h);
+  if (!m || (m[3] && +m[3] < +m[1])) die(`--hops: '${h}' is not N, M..N (M <= N) or M..`);
+  return { min: +m[1], max: !m[2] ? +m[1] : m[3] ? +m[3] : Infinity };
+})(opt.hops);
+let edgeList = null; // [{ at: [file, line], to: [file, line], name, toName }] from --edges, read before anything is sent
+if (multiStep) {
+  const off = [['z', opt.gitlog ? '-g' : '-z'], ['o', '-o'], ['c', '-c'], ['l', '-l'], ['A', '-A'], ['B', '-B'], ['C', '-C'], ['rank', '--rank'], ['summarize', '--summarize']]
+    .find(([k]) => opt[k] !== undefined && opt[k] !== false);
+  if (off) die(`--step-to cannot be combined with ${off[1]}: it prints paths, not lines`);
+  if (opt.dedup !== 'never' && optSrc('dedup') === '') die('--step-to cannot be combined with --dedup: each unit is judged as itself');
+  opt.dedup = 'never';
+  if (opt.edges === undefined && opt.unit !== 'function') {
+    if (optSrc('unit') === '') die(`--step-to walks calls between functions: --unit=${opt.unit} needs --edges`);
+    opt.unit = 'function';
+  }
+  if (opt.edges !== undefined) {
+    let text;
+    try { text = readFileSync(opt.edges, 'utf8'); } catch (e) { die(`--edges: ${e.message}`, false); }
+    const place = s => { const m = /^(.+):(\d+)$/.exec(s); return m && [m[1], +m[2]]; };
+    edgeList = text.split('\n').map((l, i) => [l.replace(/\r$/, ''), i + 1]).filter(([l]) => l.trim()).map(([l, row]) => {
+      const [at, name, to, toName, ...rest] = l.split('\t');
+      if (rest.length || toName === undefined || !place(at) || !place(to)) die(`--edges: ${opt.edges}:${row}: not FROM_FILE:LINE<TAB>FROM_NAME<TAB>TO_FILE:LINE<TAB>TO_NAME`, false);
+      return { at: place(at), to: place(to), name, toName };
+    });
+  }
+} else for (const k of ['edges', 'reverse', 'hops']) if (optSrc(k) === '') die(`--${k} needs --step-to`);
 // A function's boundaries are lines of one file; -o would print a whole function as one "part".
 if (opt.unit === 'function' && (opt.z || opt.o)) die(`--unit=function cannot be combined with ${opt.gitlog ? '-g' : opt.z ? '-z' : '-o'}`);
 // How much of one unit is sent, -M/--max-columns. A line rarely reaches 2000 characters; a commit message with
@@ -916,24 +1027,24 @@ const wanted = (path, st) => {
 // only which option or variable supplied it. optTag: the "(SYS1GREP_OPTS)" suffix options: lists a setting
 // with, or '' for the command line or a default (this line only marks the one source that isn't obvious).
 const optTag = name => (optSrc(name) === 'SYS1GREP_OPTS' ? ' (SYS1GREP_OPTS)' : '');
-if (trace) {
+if (logPlan) {
   const envTag = (cliVal, meta) => (cliVal ? '' : ` (${meta.name === null ? 'default' : envLabel(meta.name)})`);
   // key: the name only; a value from the .env file gets the file in parens, same as elsewhere, but the value
   // itself is never shown, so a real-environment variable gets no parens at all (it needs no further source).
   const keyFileTag = name => (shellEnv.has(name) ? '' : ` (${tildeEnvFile})`);
-  trace(`endpoint ${apiHost}${new URL(apiUrl).pathname}${envTag(opt['sys1-url'], envURL)}, model ${model}${envTag(opt['sys1-model'], envMODEL)}`);
+  logPlan(`endpoint ${apiHost}${new URL(apiUrl).pathname}${envTag(opt['sys1-url'], envURL)}, model ${model}${envTag(opt['sys1-model'], envMODEL)}`);
   if (hasMeanings) {
-    if (opt['sys1-api-key']) trace('key: --sys1-api-key');
-    else if (envAPI_KEY.name) trace(`key: ${envAPI_KEY.name}${keyFileTag(envAPI_KEY.name)}`);
-    else if (TYPESAFE_API_KEY !== undefined) trace(`key: TYPESAFE_API_KEY${keyFileTag('TYPESAFE_API_KEY')}`);
-    else trace('key: none (no auth header sent)');
+    if (opt['sys1-api-key']) logPlan('key: --sys1-api-key');
+    else if (envAPI_KEY.name) logPlan(`key: ${envAPI_KEY.name}${keyFileTag(envAPI_KEY.name)}`);
+    else if (TYPESAFE_API_KEY !== undefined) logPlan(`key: TYPESAFE_API_KEY${keyFileTag('TYPESAFE_API_KEY')}`);
+    else logPlan('key: none (no auth header sent)');
   }
   // --sys1-api-key's value is masked here too: SYS1GREP_OPTS is not on the rejected-option list (only
   // e/a/v/question/summarize are), so a key placed there would otherwise leak in full, unlike the option
   // typed on the command line, which only ever shows as its name (line above).
   if (SYS1GREP_OPTS) {
     const masked = SYS1GREP_OPTS.split(/\s+/).filter(Boolean).map((tok, i, toks) => (toks[i - 1] === '--sys1-api-key' ? '***' : tok.replace(/^--sys1-api-key=.*$/, '--sys1-api-key=***'))).join(' ');
-    trace(`${envOPTS.name}: ${masked}`);
+    logPlan(`${envOPTS.name}: ${masked}`);
   }
   const thresholds = optSrc('t') === null && optSrc('T') === null
     ? `--level ${opt.level}${optTag('level')} = -t ${tPos} -T ${tNeg}`
@@ -944,6 +1055,7 @@ if (trace) {
     opt.dedup !== 'never' && `--dedup=${opt.dedup}${optTag('dedup')}`,
     opt.z && `-z${opt.gitlog && optSrc('z') === null ? ' (-g)' : optTag(optSrc('z') !== null ? 'z' : 'unit')}`,
     `scope ${opt['auto-scope'] ? 'on' : 'off'}${optTag('auto-scope')}`,
+    multiStep && `--hops=${opt.hops}${optTag('hops')}`, multiStep && opt.reverse && `--reverse${optTag('reverse')}`, multiStep && opt.edges !== undefined && `--edges=${opt.edges}${optTag('edges')}`,
     ...(opt.include ?? []).map(g => `--include=${g}`), ...(opt.exclude ?? []).map(g => `--exclude=${g}`),
     opt['changed-within'] && `--changed-within=${opt['changed-within']}`,
     // #58's limits: always shown, like --chunk; -M's default follows -z (-g's records included)
@@ -952,7 +1064,7 @@ if (trace) {
     // #50: what git sys1grep searches instead of the working tree; only ever from the command line (SYS1GREP_OPTS rejects them)
     opt.cached && '--cached', opt.untracked && '--untracked', trees.length && `<tree> ${trees.join(' ')}`,
   ].filter(Boolean);
-  trace(`options: ${options.join(', ')}`);
+  logPlan(`options: ${options.join(', ')}`);
   if (summarizer) {
     const raw = [...SYS1GREP_OPTS.split(/\s+/), ...process.argv.slice(2)].filter(a => a === '--summarize' || a.startsWith('--summarize='));
     const bare = raw.at(-1) === '--summarize';
@@ -965,8 +1077,8 @@ if (trace) {
     const keyTag = Array.isArray(summarizer) || !/^https?:\/\//.test(opt.summarize) ? ''
       : envSUMMARIZER_API_KEY.name ? `, key ${envSUMMARIZER_API_KEY.name}${keyFileTag(envSUMMARIZER_API_KEY.name)}` : ', key none (no auth header sent)';
     const promptTag = opt['summarize-prompt'] ? `, --summarize-prompt${optTag('summarize-prompt')}` : '';
-    trace(`summarize: ${opt.summarize}${toolTag}${optTag('summarize')}, model ${summModel}${keyTag}${promptTag}`);
-    trace(`summarize: ${Array.isArray(summarizer) ? summarizer.map(a => (/^[\w./=:-]+$/.test(a) ? a : JSON.stringify(a))).join(' ')
+    logPlan(`summarize: ${opt.summarize}${toolTag}${optTag('summarize')}, model ${summModel}${keyTag}${promptTag}`);
+    logPlan(`summarize: ${Array.isArray(summarizer) ? summarizer.map(a => (/^[\w./=:-]+$/.test(a) ? a : JSON.stringify(a))).join(' ')
       : `POST ${summarizer.url} model=${summarizer.model}`} (stops over ${SUMMARY_MAX / 1024} KB)`);
   }
 }
@@ -1146,13 +1258,13 @@ function traceScope(text, answers, pool) {
   const listed = CANDIDATES.filter(c => answers[c.key].noul >= 0.2).sort((x, y) => answers[y.key].noul - answers[x.key].noul);
   const times = CANDIDATES.filter(c => c.cat === 'time' && answers[c.key].noul >= SCOPE_AT);
   const narrowest = times.length ? pickTime(times) : null;
-  trace(`scope "${cut(text, 40)}":`);
-  if (!listed.length) return trace('  (no candidate answered 0.2 or more)');
+  logPlan(`scope "${cut(text, 40)}":`);
+  if (!listed.length) return logPlan('  (no candidate answered 0.2 or more)');
   const names = listed.map(c => `${c.what} (${cut(c.label, 40)})`), width = Math.max(...names.map(n => n.length));
   listed.forEach((c, i) => {
     const p = answers[c.key].noul, applied = p >= SCOPE_AT && (c.cat !== 'time' || c === narrowest);
     const tail = applied ? `keeps ${pool.filter(f => c.test(f, statSync(f))).length} of ${pool.length} files` : p >= SCOPE_AT ? '(another span applied)' : `(below ${SCOPE_AT}, not applied)`;
-    trace(`  ${applied ? '✓' : '·'} ${names[i].padEnd(width)}  ${p.toFixed(2)}  ${tail}`);
+    logPlan(`  ${applied ? '✓' : '·'} ${names[i].padEnd(width)}  ${p.toFixed(2)}  ${tail}`);
   });
 }
 // Each scope goes into its meaning's AND term as { kind: 's', label, words, admits(file) }; negated meanings say
@@ -1309,7 +1421,7 @@ if (opt.interactive && !dry) {
   // A file that could not be read shows up only while reading, in the dry run: say so next to the question. What
   // this process already printed (the file list's warnings, the option warnings) is not repeated.
   const errors = plan.stderr.split('\n').filter(l => l.startsWith('sys1grep: ') && !l.startsWith('sys1grep: warning: ') && !l.includes(' is deprecated; use ') && !warned.includes(l));
-  const shown = [...plan.stdout.split('\n').filter(l => /^sys1grep: (file |dry run: |summarize: |rank: |endpoint |key: |options: |SYS1GREP_OPTS: |SEMGREP_OPTS: )/.test(l)), ...errors].map(safe);
+  const shown = [...plan.stdout.split('\n').filter(l => /^sys1grep: (file |dry run: |walk |summarize: |rank: |endpoint |key: |options: |SYS1GREP_OPTS: |SEMGREP_OPTS: )/.test(l)), ...errors].map(safe);
   warned.push(...errors); // its scope lines among them: not printed again after the answer
   if (!/^sys1grep: dry run: 0 requests/.test(shown.findLast(l => l.startsWith('sys1grep: dry run: ')))) {
     writeSync(tty, `${shown.join('\n')}\nSearch, sending the above${opt.rank === 'jev' ? ', then a question per result' : ''}${summarizer ? `, then the matching lines to ${opt.summarize}` : ''}? [y/N] `);
@@ -1342,16 +1454,16 @@ function show(state, questions, label) {
   const count = new Map();
   for (const q of Object.values(questions)) { const k = q.instructions.replace(/\bL\d{3}\b/g, 'Lnnn'); count.set(k, (count.get(k) ?? 0) + 1); }
   const n = Object.keys(questions).length, chars = Object.values(state).join('').length;
-  trace(`request ${++traced} ${label}, ${n} question${n === 1 ? '' : 's'}, ${chars} chars`);
-  if (state.note) trace(`  ${cut(state.note, 110)}`);
-  [...count].slice(0, 3).forEach(([q, k]) => trace(`  ${String(k).padStart(3)}× ${cut(q, 100)}`));
-  if (count.size > 3) trace(`       (+${count.size - 3} more)`);
+  logPlan(`request ${++traced} ${label}, ${n} question${n === 1 ? '' : 's'}, ${chars} chars`);
+  if (state.note) logPlan(`  ${cut(state.note, 110)}`);
+  [...count].slice(0, 3).forEach(([q, k]) => logPlan(`  ${String(k).padStart(3)}× ${cut(q, 100)}`));
+  if (count.size > 3) logPlan(`       (+${count.size - 3} more)`);
   const body = JSON.stringify({ model, state, questions });
   tracedQuestions += n; tracedChars += chars; tracedBytes += Buffer.byteLength(body); tracedCjkBytes += cjkBytesOf(body);
 }
 // One request with retries: 429 / 529 / 5xx, connection errors and timeouts back off exponentially.
 async function post(state, questions, label) {
-  if (trace) show(state, questions, label);
+  if (logPlan) show(state, questions, label);
   if (dry) return Object.fromEntries(Object.keys(questions).map(k => [k, { noul: 0 }]));
   const body = JSON.stringify({ model, state, questions });
   sentBytes += Buffer.byteLength(body); sentCjkBytes += cjkBytesOf(body); sentRequests++;
@@ -1454,7 +1566,7 @@ let gitlogBuf = null;
 if (opt.gitlog) {
   const args = gitlogArgs();
   const cmd = `git ${args.map(a => (/^[\w@:.=/<>-]+$/.test(a) ? a : `'${a}'`)).join(' ')}`;
-  if (trace) trace(cmd); else if (!opt.quiet && expr[0]?.some(l => l.kind === 's')) console.error(`sys1grep: ${cmd}`);
+  if (logPlan) logPlan(cmd); else if (!opt.quiet && expr[0]?.some(l => l.kind === 's')) console.error(`sys1grep: ${cmd}`);
   try { gitlogBuf = execFileSync('git', args, { maxBuffer: Infinity, stdio: ['ignore', 'pipe', 'inherit'] }); }
   catch (e) { if (e.status == null) die(`git log: ${e.message}`); process.exit(2); } // git exited non-zero: it has said why
 }
@@ -1618,7 +1730,13 @@ const POSIX = { alpha: 'A-Za-z', digit: '0-9', alnum: 'A-Za-z0-9', upper: 'A-Z',
 // ponytail: the swap ignores bracket expressions, where a BRE's ( or { would wrongly gain a backslash
 const fromBre = src => src.replace(/\\?[(){}|+?]/g, c => (c.length === 2 ? c[1] : `\\${c}`));
 const fromPosix = src => src.replace(/\[:(\w+):\]/g, (m, c) => { if (!POSIX[c]) throw new Error(`unknown class [:${c}:]`); return POSIX[c]; });
-const isFuncname = pats => line => { for (const { not, re } of pats) if (re.test(line)) return !not; return false; };
+const funcnameOf = pats => line => { for (const { not, re } of pats) { const m = re.exec(line); if (m) return not ? null : m; } return null; };
+// A function's name (#163): from the funcname pattern's first group when a name is in it, else the line; the identifier
+// after def / function / class / func / fn / const..., or before the first (. A keyword is no name: "function (" is anonymous.
+// ponytail: a method (indented, or "name(...) {" in a class body) is not a funcname line, so it has no unit or name of its own
+const NAME = /\b(?:(?:async\s+)?(?:def|function\*?|class|func|fn|sub)\s+(?:\([^)]*\)\s*)?|(?:const|let|var)\s+)([A-Za-z_$][\w$]*)|([A-Za-z_$][\w$]*)\s*\(/;
+const KEYWORDS = new Set(['async', 'await', 'catch', 'class', 'def', 'do', 'elif', 'else', 'for', 'fn', 'func', 'function', 'if', 'in', 'lambda', 'new', 'return', 'sub', 'switch', 'typeof', 'while', 'with', 'yield']);
+const nameIn = m => { const [, a, b] = (m[1] && NAME.exec(m[1])) || NAME.exec(m.input) || []; return a ?? b ?? null; };
 const funcnamesOf = new Map(); // file -> patterns
 if (opt.unit === 'function') {
   const git = (args, input) => { try { return execFileSync('git', args, { input, encoding: 'utf8', maxBuffer: Infinity, stdio: ['pipe', 'pipe', 'ignore'] }); } catch { return ''; } };
@@ -1643,8 +1761,9 @@ if (opt.unit === 'function') {
     funcnamesOf.set(f, configured.get(driver) ?? FUNCNAMES[driver] ?? FUNCNAMES[ext] ?? DEFAULT_FUNCNAME);
   });
 }
-// lines -> [{ text, spans }], one per function; a span covers a whole line, as toSentences' spans do part of one.
-const toFunctions = (lines, isName, decorators) => {
+// lines -> [{ text, spans, name, def }], one per function; a span covers a whole line, as toSentences' spans do part of
+// one. name: from its funcname line (with a decorator, the def or class line under it); def: that line's index in the unit.
+const toFunctions = (lines, funcname, decorators) => {
   const out = [];
   // decorators (sys1grep's own JavaScript and Python rules, which take an @ line as a funcname line): a decorator line
   // starts its function, which stays open through the decorator's arguments (inside brackets nothing is a funcname)
@@ -1652,21 +1771,23 @@ const toFunctions = (lines, isName, decorators) => {
   // ponytail: a string over several lines (triple quotes, template literals) still counts its brackets
   let open = false, depth = 0;
   lines.forEach((line, i) => {
-    const name = depth <= 0 && isName(line), decorator = decorators && name && /^\s*@/.test(line);
-    if (!out.length || (name && !open)) { out.push({ lines: [], spans: [] }); open = decorator; }
-    else if (name && !decorator) open = false;
+    const m = depth <= 0 ? funcname(line) : null, decorator = decorators && m && /^\s*@/.test(line);
+    if (!out.length || (m && !open)) { out.push({ lines: [], spans: [], name: null, def: null }); open = decorator; }
+    else if (m && !decorator) open = false;
+    const u = out.at(-1);
+    if (m && !decorator && u.def === null) { const n = nameIn(m); u.def = u.lines.length; u.name = KEYWORDS.has(n) ? null : n; }
     const code = line.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, '');
     depth = open ? depth + (code.match(/[([{]/g) ?? []).length - (code.match(/[)\]}]/g) ?? []).length : 0;
-    out.at(-1).lines.push(line);
-    out.at(-1).spans.push([i + 1, 0, line.length]);
+    u.lines.push(line);
+    u.spans.push([i + 1, 0, line.length]);
   });
   // Blank lines before the next funcname line are judged with the function but not printed, as git grep -W.
-  return out.map(u => ({ text: u.lines.join('\n'), spans: u.spans.slice(0, u.lines.findLastIndex(l => l.trim()) + 1 || 1) }));
+  return out.map(u => ({ text: u.lines.join('\n'), spans: u.spans.slice(0, u.lines.findLastIndex(l => l.trim()) + 1 || 1), name: u.name, def: u.def }));
 };
 const unitName = opt.unit === 'function' ? 'functions' : opt.unit.startsWith('sentence') ? 'sentences' : opt.z ? 'records' : 'lines';
 for (const [file, src] of read) {
   sources.set(file, src);
-  let units = src;
+  let units = src, functions = [];
   if (opt.unit.startsWith('sentence')) {
     // With -z a record is a hard boundary, and lines inside it are joined like any wrapped prose.
     const sentences = runsByFile.get(file).flatMap(run => toSentences(run.lines, run.unitOf, run.baseOf, splits.get(run)));
@@ -1674,7 +1795,7 @@ for (const [file, src] of read) {
     if (opt.o) sources.set(file, sentences.map(u => u.text));
     units = sentences.map(u => u.text);
   } else if (opt.unit === 'function') {
-    const functions = toFunctions(src, isFuncname(funcnamesOf.get(file) ?? DEFAULT_FUNCNAME), Object.values(FUNCNAMES).includes(funcnamesOf.get(file)));
+    functions = toFunctions(src, funcnameOf(funcnamesOf.get(file) ?? DEFAULT_FUNCNAME), Object.values(FUNCNAMES).includes(funcnamesOf.get(file)));
     spansOf.set(file, functions.map(u => u.spans));
     units = functions.map(u => u.text);
   }
@@ -1682,9 +1803,10 @@ for (const [file, src] of read) {
   // #125 review (item 9): -M/--max-columns bounds only what is sent (see requestOf() and judgeBreaks() below,
   // both .slice(0, MAX_UNIT_CHARS)); a unit past it is still searched and judged on its truncated text, not
   // dropped, so a very long line or commit body can still match, just not past character MAX_UNIT_CHARS.
+  // --step-to: every unit is a place the walk can pass through, so each is kept, with its function's name
   units.forEach((text, i) => {
-    const u = { file, no: i + 1, text };
-    if (expr.some(term => regexPart(term, u).ok)) allLines.push(u);
+    const u = { file, no: i + 1, text, ...(multiStep && { name: functions[i]?.name ?? null, def: functions[i]?.def ?? null }) };
+    if (multiStep || starting.some(term => regexPart(term, u).ok)) allLines.push(u);
   });
 }
 // Local regex evaluation + prefilter: a term is only asked its meanings for a unit once every regex
@@ -1720,30 +1842,30 @@ function expandCaptures(text, matches) {
   });
 }
 // asksByUnit: unit -> Map(expanded meaning text -> probability, null until answered)
-const asksByUnit = new Map();
-for (const l of allLines) {
+const asksOf = (l, terms) => {
   const asks = new Map();
-  if (l.text.trim()) for (const term of expr) {
+  if (l.text.trim()) for (const term of terms) {
     const { ok, matches } = regexPart(term, l);
     if (ok) for (const lit of term) if (lit.kind === 'm') asks.set(expandCaptures(lit.text, matches), null);
   }
-  asksByUnit.set(l, asks);
-}
+  return asks;
+};
+const asksByUnit = new Map(allLines.map(l => [l, asksOf(l, starting)]));
 const lines = allLines.filter(l => asksByUnit.get(l).size);
 const totalUnits = [...unitCount.values()].reduce((a, b) => a + b, 0);
-if (trace) for (const file of read.keys())
-  trace(`file ${file}${opt.cached ? ' (index)' : ''}: ${unitCount.get(file)} ${unitName}, ${lines.filter(l => l.file === file).length} to send`);
+if (logPlan) for (const file of read.keys())
+  logPlan(`file ${file}${opt.cached ? ' (index)' : ''}: ${unitCount.get(file)} ${unitName}, ${lines.filter(l => l.file === file).length} to send`);
 // --rank=jev asks after the search, so which results there are is not known yet: at most one per unit that could match.
 // ponytail: --max-cost does not count these; the estimate would be this bound, far over what a search usually finds
-if (trace && opt.rank === 'jev') {
+if (logPlan && opt.rank === 'jev') {
   const reqs = Math.ceil(allLines.length / chunkLines);
-  trace(`rank: at most ${allLines.length} results, ~${reqs} request${reqs === 1 ? '' : 's'} after the search, a question each`);
+  logPlan(`rank: at most ${allLines.length} results, ~${reqs} request${reqs === 1 ? '' : 's'} after the search, a question each`);
 }
 // -q stops at the first match, like grep -q. Known before any request, --dedup's included: unsent units (blank, or
 // no term's regexes hold; their meanings score 0) and regex-only terms.
 // ponytail: process.exit may drop a warning still buffered for a stderr pipe; the exit status is what -q promises
 const regexOnly = term => term.every(lit => lit.kind === 'r');
-if (opt.quiet && allLines.some(l => expr.some(term => (!asksByUnit.get(l).size || regexOnly(term)) && termHolds(term, l)))) process.exit(0);
+if (opt.quiet && !multiStep && allLines.some(l => expr.some(term => (!asksByUnit.get(l).size || regexOnly(term)) && termHolds(term, l)))) process.exit(0);
 
 // --dedup: machine-generated logs repeat one skeleton with a different id or number in it. Mask the parts
 // whose value carries no meaning, group by the result, and judge one member per group. The mask is only
@@ -1810,7 +1932,7 @@ const chunked = units => {
 // today's measured shape (#19). "at most" in every message using this: the real fold (below) usually keeps some
 // kinds apart on Jev's answer, so it groups less than this estimate does.
 let dedupEstimate = null;
-if (sent.length) {
+if (sent.length && !multiStep) {
   const meanings = [...new Set(expr.flat().filter(lit => lit.kind === 'm').map(lit => lit.text))];
   const rep = new Map(), members = [];
   for (const l of sent) {
@@ -1838,9 +1960,9 @@ if (summarizer && opt.dedup === 'auto' && !willFold) {
   if (Array.isArray(summarizer)) summarizer = summarizer.map(strip);
   else summarizer.prompt = strip(summarizer.prompt);
 }
-if (trace && dedupEstimate) {
+if (logPlan && dedupEstimate) {
   const state = opt.dedup === 'always' ? 'on (always)' : opt.dedup === 'never' ? 'off (never)' : dedupEstimate.pays ? 'on' : 'off (auto)';
-  trace(`dedup: ${dedupEstimate.units} units fold to at most ${dedupEstimate.templates} templates (~${dedupEstimate.requests} requests, ~${kify(dedupEstimate.saved)} tokens saved): ${state}`);
+  logPlan(`dedup: ${dedupEstimate.units} units fold to at most ${dedupEstimate.templates} templates (~${dedupEstimate.requests} requests, ~${kify(dedupEstimate.saved)} tokens saved): ${state}`);
 }
 if (willFold && sent.length) {
   // Asked with the unexpanded meaning, for meanings only; a regex-only expression sends nothing and gets here with no lines.
@@ -1868,30 +1990,31 @@ const id = i => `L${String(i).padStart(3, '0')}`;
 // language by the extension its meaning wrote (".mjs files"). A line cannot show when it changed, where it lives or
 // who wrote it, so without the note the meaning's words for that pull Jev's verdicts down.
 const extIn = (x, text) => new RegExp(`${x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?!\\w)`, 'i').test(text);
-function noteOf(chunk) {
+function noteOf(chunk, terms) {
   // -g's git log took the scopes as its arguments, all but a language when FILE pathspecs were given
   const holds = (l, f) => (f === GITLOG ? !(files.length && l.cs.some(c => c.cat === 'language')) : !named(f) && l.admits(f));
-  const lits = [...new Set(expr.flat())].filter(l => l.kind === 's' && chunk.every(u => holds(l, u.file)));
+  const lits = [...new Set(terms.flat())].filter(l => l.kind === 's' && chunk.every(u => holds(l, u.file)));
   const said = [...new Set(lits.map(l => l.cs.map(c => {
     const exts = c.cat === 'language' ? [...new Set(c.label.split(' ').filter(g => g.startsWith('*.')).map(g => g.slice(1).toLowerCase()))].filter(x => extIn(x, l.meaning)) : [];
     return exts.length ? `${exts.join(' or ')} files` : c.what;
   }).join(' or ')))];
   return said.length ? `note: every ${unitName.slice(0, -1)} here is from ${said.join(', ')}.` : null;
 }
-function requestOf(chunk) { // -> { state, questions }: one judging request; question i_k asks unit i its k-th meaning
-  const note = noteOf(chunk);
+// asks: unit -> Map(meaning -> answer), asksByUnit, or with --step-to the end expression's; terms: the expression asked
+function requestOf(chunk, asks = asksByUnit, terms = starting) { // -> { state, questions }: one judging request; question i_k asks unit i its k-th meaning
+  const note = noteOf(chunk, terms);
   const state = { ...(note && { note }), ...Object.fromEntries(chunk.map((l, i) => [id(i), l.text.slice(0, MAX_UNIT_CHARS)])) };
   const questions = {};
-  chunk.forEach((l, i) => [...asksByUnit.get(l).keys()].forEach((text, k) => {
+  chunk.forEach((l, i) => [...asks.get(l).keys()].forEach((text, k) => {
     questions[`${id(i)}_${k}`] = { type: 'noul', instructions: `Does line ${id(i)} match the meaning: "${text}"?` };
   }));
   return { state, questions };
 }
-async function evaluate(chunk) {
-  const { state, questions } = requestOf(chunk);
+async function evaluate(chunk, asks = asksByUnit, terms = starting, tag = 'judge') {
+  const { state, questions } = requestOf(chunk, asks, terms);
   const [a, b] = [chunk[0], chunk.at(-1)];
-  const answers = await post(state, questions, `[judge] ${a.file}:${a.no}-${a.file === b.file ? '' : `${b.file}:`}${b.no}, ${chunk.length} ${unitName}`);
-  chunk.forEach((l, i) => [...asksByUnit.get(l).keys()].forEach((text, k) => asksByUnit.get(l).set(text, answers[`${id(i)}_${k}`].noul)));
+  const answers = await post(state, questions, `[${tag}] ${a.file}:${a.no}-${a.file === b.file ? '' : `${b.file}:`}${b.no}, ${chunk.length} ${unitName}`);
+  chunk.forEach((l, i) => [...asks.get(l).keys()].forEach((text, k) => asks.get(l).set(text, answers[`${id(i)}_${k}`].noul)));
 }
 // #58: the cost of what is actually about to be sent (after the regex prefilter and --dedup grouping above),
 // PLUS the setup requests already sent for real above (auto-scope, --dedup, and --unit=sentence-by-jev's judgeBreaks(),
@@ -1901,9 +2024,11 @@ async function evaluate(chunk) {
 // -i already asked earlier, unconditionally and before anything at all is sent, which covers this; -y answers
 // this question yes without asking (it does not also answer -i's). An oversized file was skipped outright
 // above, not asked about, so this is the only question a run can show.
-if (!dry && !opt.interactive && !opt.yes) {
+// --step-to (#163) asks it again before the end expression's requests, which then count with everything sent before.
+function guardCost(chunks, asks, terms) {
+  if (dry || opt.interactive || opt.yes) return;
   const bits = chunks.reduce((t, c) => {
-    const body = JSON.stringify({ model, ...requestOf(c) });
+    const body = JSON.stringify({ model, ...requestOf(c, asks, terms) });
     return { bytes: t.bytes + Buffer.byteLength(body), cjk: t.cjk + cjkBytesOf(body) };
   }, { bytes: sentBytes, cjk: sentCjkBytes });
   const estTokens = estimateTokens(sentRequests + chunks.length, bits.bytes, bits.cjk);
@@ -1914,12 +2039,13 @@ if (!dry && !opt.interactive && !opt.yes) {
   const at = customUrl ? " at TypeSafe's list price (SYS1GREP_URL is another endpoint)" : '';
   if (estPrice > MAX_COST) askToContinue(`sys1grep: about ${estTokens.toLocaleString('en-US')} input tokens, ~$${estPrice.toFixed(2)}${at}  (--max-cost ${MAX_COST})`);
 }
-const isHit = l => expr.some(term => termHolds(term, l));
+guardCost(chunks, asksByUnit, starting);
+const isHit = l => starting.some(term => termHolds(term, l));
 // -q: a failed request is reported and the rest still run, since a later match means exit 0 (grep -q).
 let answered = 0;
 spin.set(`0 of ${chunks.length} requests`);
 await Promise.all(chunks.map(chunk => pooled(() => evaluate(chunk).then(() => {
-  if (opt.quiet && chunk.some(isHit)) process.exit(0);
+  if (opt.quiet && !multiStep && chunk.some(isHit)) process.exit(0);
 }, e => { if (!opt.quiet) throw e; console.error(`sys1grep: ${e.message}`); hadError = true; }).finally(() => spin.set(`${++answered} of ${chunks.length} requests`)))));
 spin.stop();
 
@@ -1931,21 +2057,20 @@ const paint = (code, s) => (color ? `\x1b[${code}m${s}\x1b[0m` : s);
 const paintProb = x => paint(x >= tPos ? 32 : x < tNeg ? 31 : 33, x.toFixed(2));
 // -p: one column per literal, in the order it was written. Regex: 1.00/0.00 for whether it matched.
 // Meaning: the answer, or 0 if no surviving term of this unit ever asked it.
-function displayRow(l) {
+function displayRow(l, terms = expr, asks = asksByUnit) {
   const out = [];
-  for (const term of expr) {
+  for (const term of terms) {
     const { ok, matches } = regexPart(term, l); // a failed term was never asked, and its matches hold nulls
-    for (const lit of term) if (lit.kind !== 's') out.push(lit.kind === 'r' ? (execAt(lit, l.text) ? 1 : 0) : ok ? (asksByUnit.get(l).get(expandCaptures(lit.text, matches)) ?? 0) : 0);
+    for (const lit of term) if (lit.kind !== 's') out.push(lit.kind === 'r' ? (execAt(lit, l.text) ? 1 : 0) : ok ? (asks.get(l).get(expandCaptures(lit.text, matches)) ?? 0) : 0);
   }
   return out;
 }
 // A term holds when its regex literals all hold and every meaning literal cleared its threshold.
-function termHolds(term, l) {
+function termHolds(term, l, asks = asksByUnit) {
   const { ok, matches } = regexPart(term, l);
   if (!ok) return false;
-  const asks = asksByUnit.get(l);
   for (const lit of term) if (lit.kind === 'm') {
-    const p = asks.get(expandCaptures(lit.text, matches)) ?? 0;
+    const p = asks.get(l).get(expandCaptures(lit.text, matches)) ?? 0;
     if (lit.not ? !(p < tNeg) : !(p >= tPos)) return false;
   }
   return true;
@@ -1953,7 +2078,7 @@ function termHolds(term, l) {
 // Collect matches as file -> (line number -> matching unit), then print in file and line order with context.
 const hits = new Map();
 let matched = 0;
-for (const l of allLines) {
+for (const l of multiStep ? [] : allLines) {
   if (!isHit(l)) continue;
   matched++;
   if (!hits.has(l.file)) hits.set(l.file, new Map());
@@ -2059,6 +2184,131 @@ for (const file of opt.quiet || dry ? [] : targets) {
     last = Math.max(last, to);
     lastHit = h.get(no);
   }
+}
+// JavaScript without its comments, strings and regex literals; a template literal's ${...} stays, being code. stack: a `
+// for each template literal open, a { for each brace open inside one's ${...}. A / is a regex where an operand is due:
+// at the start, after an operator or bracket, or after return.
+function jsCode(t) {
+  let out = '';
+  const stack = [];
+  for (let i = 0; i < t.length;) {
+    const c = t[i], top = stack.at(-1);
+    if (top === '`') {
+      if (c === '\\') i += 2;
+      else if (c === '`') { stack.pop(); i++; }
+      else if (c === '$' && t[i + 1] === '{') { stack.push('{'); i += 2; }
+      else i++;
+      continue;
+    }
+    if (c === '/' && (t[i + 1] === '/' || t[i + 1] === '*')) {
+      const end = t[i + 1] === '/' ? t.indexOf('\n', i) : t.indexOf('*/', i + 2) + 2;
+      if (end < 2) break;
+      i = end;
+      continue;
+    }
+    if (c === '/' && /(?:^|[(,=:[!&|?{};+\-*%<>~^]|\breturn)$/.test(out.trimEnd().slice(-7))) {
+      let j = i + 1, inClass = false;
+      for (; j < t.length && t[j] !== '\n' && (inClass || t[j] !== '/'); j++) {
+        if (t[j] === '\\') j++;
+        else if (t[j] === '[') inClass = true;
+        else if (t[j] === ']') inClass = false;
+      }
+      i = j + 1;
+      out += ' ';
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < t.length && t[j] !== c && t[j] !== '\n') j += t[j] === '\\' ? 2 : 1;
+      i = j + 1;
+      out += ' ';
+      continue;
+    }
+    if (c === '`') stack.push('`');
+    else if (c === '{' && stack.length) stack.push('{');
+    else if (c === '}' && top === '{') stack.pop();
+    out += c === '`' ? ' ' : c;
+    i++;
+  }
+  return out;
+}
+// Multi-step matching (#163). The Start: the units the start expression holds for; --dry-run answers every question
+// 0, so there it is every unit sent that the expression could hold for, a bound. The walk goes breadth first from
+// every start at once, so a unit's hop is its shortest distance from any start, and each unit is reached once, which
+// ends a cycle. No score steers it (#161: a route gated on scores stopped at its first hop). The units it reaches
+// within --hops are judged against the end expression in one batch, and the paths from a start to each End print as a tree.
+if (multiStep) {
+  const unitAt = new Map(); // file -> (line number -> the unit holding it)
+  for (const u of allLines) {
+    if (!unitAt.has(u.file)) unitAt.set(u.file, new Map());
+    for (const [line] of spansOf.get(u.file)?.[u.no - 1] ?? [[u.no]]) if (!unitAt.get(u.file).has(line)) unitAt.get(u.file).set(line, u);
+  }
+  const edges = new Map(allLines.map(u => [u, new Set()]));
+  const link = (a, b) => (opt.reverse ? edges.get(b).add(a) : edges.get(a).add(b));
+  if (edgeList) {
+    const byPath = new Map([...unitAt.keys()].map(f => [resolve(f), f]));
+    let missed = 0;
+    for (const e of edgeList) {
+      const [a, b] = [e.at, e.to].map(([f, line]) => unitAt.get(byPath.get(resolve(f)))?.get(line));
+      if (!a || !b) { missed++; continue; }
+      a.name ??= e.name || null;
+      b.name ??= e.toName || null;
+      link(a, b);
+    }
+    if (missed && !opt.quiet) console.error(`sys1grep: warning: --edges: ${missed} of ${edgeList.length} edges name a line not searched`);
+  } else {
+    // A call: name( in a function's body, its comments, docstrings and strings left out (one pass, so a # or // in a
+    // string is no comment) and its own funcname line skipped. It links to every function of that name in the files read.
+    // ponytail: a Python f-string's {call()} is a string, so its call is dropped
+    const defs = new Map();
+    for (const u of allLines) if (u.name) defs.set(u.name, [...(defs.get(u.name) ?? []), u]);
+    const call = new RegExp(`(?<![\\w$])(${[...defs.keys()].map(n => n.replace(/\$/g, '\\$')).join('|')})\\(`, 'g');
+    const code = (text, file) => (DRIVER_OF_EXT[/\.(\w+)$/.exec(file)?.[1]] === 'python'
+      ? text.replace(/("""|''')[\s\S]*?\1|(["'])(?:\\.|(?!\2)[^\\\n])*\2|#.*/g, ' ') : jsCode(text));
+    for (const u of defs.size ? allLines : []) {
+      const body = u.text.split('\n').filter((_, i) => i !== u.def).join('\n');
+      for (const [, n] of code(body, u.file).matchAll(call)) for (const d of defs.get(n)) link(u, d);
+    }
+  }
+  const starts = allLines.filter(u => starting.some(term => termHolds(term, u) || (dry && asksByUnit.get(u).size && regexPart(term, u).ok)));
+  const reached = new Map(starts.map(u => [u, { hop: 0, via: null }])); // unit -> its hop, and the unit it was reached from
+  const perHop = [starts.length];
+  let frontier = starts;
+  for (let hop = 1; frontier.length && hop <= hops.max; hop++) {
+    const next = [];
+    for (const u of frontier) for (const v of edges.get(u)) if (!reached.has(v)) { reached.set(v, { hop, via: u }); next.push(v); }
+    if (next.length) perHop.push(next.length);
+    frontier = next;
+  }
+  const beyond = frontier.some(u => [...edges.get(u)].some(v => !reached.has(v)));
+  const walked = !starts.length ? 'no unit matched the start expression'
+    : `${perHop.map((n, h) => `${n} at hop ${h}`).join(', ')}; stopped: ${beyond ? `--hops=${opt.hops}` : 'no new unit'}`;
+  if (dry) logPlan(`walk (a bound: every unit the start expression could hold for starts): ${walked}`);
+  else if (!opt.quiet) console.error(`sys1grep: walk: ${walked}`);
+  const inRange = [...reached].filter(([, r]) => r.hop >= hops.min).map(([u]) => u);
+  const toAsks = new Map(inRange.map(u => [u, asksOf(u, ending)]));
+  const toSend = inRange.filter(u => toAsks.get(u).size), toChunks = chunked(toSend);
+  guardCost(toChunks, toAsks, ending);
+  let done = 0;
+  spin.set(`--step-to: 0 of ${toChunks.length} requests`);
+  await Promise.all(toChunks.map(c => pooled(() => evaluate(c, toAsks, ending, 'step-to').finally(() => spin.set(`--step-to: ${++done} of ${toChunks.length} requests`)))));
+  spin.stop();
+  sent = [...new Set([...sent, ...toSend])];
+  const ends = new Set(inRange.filter(u => ending.some(term => termHolds(term, u, toAsks))));
+  matched = ends.size;
+  // A Path: an End and the units it was reached through, back to its start; a branch with no End is left out.
+  const onPath = new Set(), under = new Map(); // under: unit -> the units on a path reached from it
+  for (let u of ends) for (; u && !onPath.has(u); u = reached.get(u).via) onPath.add(u);
+  for (const [u, r] of reached) if (r.via && onPath.has(u)) under.set(r.via, [...(under.get(r.via) ?? []), u]);
+  const row = u => {
+    const { hop } = reached.get(u), sep = paint(36, ends.has(u) ? ':' : '-');
+    const line = spansOf.get(u.file)?.[u.no - 1]?.[0]?.[0] ?? u.no;
+    const name = u.name ?? cut(u.text.split('\n').find(l => l.trim())?.trim() ?? '', 60);
+    const tail = opt.p && toAsks.has(u) ? `\t[${displayRow(u, ending, toAsks).map(paintProb).join(' ')}]` : '';
+    return `${'  '.repeat(hop)}${hop} ${paint(35, u.file)}${sep}${paint(32, line)}${sep}${name}${tail}\n`;
+  };
+  const tree = u => { write(row(u)); (under.get(u) ?? []).forEach(tree); };
+  if (!opt.quiet && !dry) starts.filter(u => onPath.has(u)).forEach((u, i) => { if (i) write(`${paint(36, '--')}\n`); tree(u); });
 }
 if (!opt.rank) results.forEach((r, i) => { if (i && (after || before)) write(`${paint(36, '--')}\n`); r.rows.forEach(write); });
 // --rank=match: a result's best match probability, over the meanings that are not negated of the terms that held.
@@ -2167,7 +2417,7 @@ if (dry) {
   // #125 review: the size guard is gone (an oversized file is skipped outright above, not asked about); --dry-run
   // and -i show only the cost guard's verdict here, consistent with what a real run would ask.
   const guard = (tokens * 0.042) / 1e6 > MAX_COST ? `; over --max-cost ${MAX_COST}, would ask` : '';
-  trace(`dry run: ${traced} request${traced === 1 ? '' : 's'}, ${sent.length} of ${totalUnits} ${unitName} to send, ${tracedQuestions} questions, ${tracedChars} chars, ~${tokens} input tokens${price}; nothing sent${assumed.length ? ` (${assumed.join(' and ')} questions assumed no)` : ''}${guard}`);
+  logPlan(`dry run: ${traced} request${traced === 1 ? '' : 's'}, ${sent.length} of ${totalUnits} ${unitName} to send, ${tracedQuestions} questions, ${tracedChars} chars, ~${tokens} input tokens${price}; nothing sent${assumed.length ? ` (${assumed.join(' and ')} questions assumed no)` : ''}${guard}`);
 } else if ((process.stderr.isTTY || opt.verbose) && !opt.quiet) {
   // #143: dedup off by default until real-run stats say auto should be it; meanwhile a run that would have paid
   // says so, once, so a user stuck on the default default learns --dedup=auto exists.

@@ -24,22 +24,22 @@ _Avoid_: source (the code uses `sources` for the units printed)
 
 ### What is judged, and multi-step matching
 
-Multi-step matching (`--from`, `--to`, `--edges`, `--reverse`, `--hops`) is planned in #163 and not built yet. The terms below fix its words first.
+Multi-step matching (`--step-to`, `--edges`, `--reverse`, `--hops`) came in #163. The terms below are its words.
 
 **Unit**:
 What one question judges, and what decides which lines are printed for a match: a line, a record (`--unit=zero`, `-z`), a sentence (`--unit=sentence-by-jev` or `sentence-by-rule`), or a function (`--unit=function`). A regex term judges it locally; a meaning is judged by Jev.
 _Avoid_: chunk (a chunk is a batch of units sent in one request, `--chunk`), block
 
 **Multi-step matching**:
-A search that finds the Start, walks Edges from it breadth first, and finds the End among the Units it reaches. The `--from` and `--to` expressions decide Start and End (Jev for meanings, locally for regexes); no score decides the route.
+A search that finds the Start, walks Edges from it breadth first, and finds the End among the Units it reaches. The expressions before and after `--step-to` decide Start and End (Jev for meanings, locally for regexes); no score decides the route.
 _Avoid_: trace, chaining, explain (the `--explain` loop of PR #160, in which an LLM chose the next search)
 
 **Start**:
-The Units that match the `--from` expression. Their Hop is 0.
+The Units that match the expression before `--step-to`. Their Hop is 0.
 _Avoid_: seed, root, source
 
 **End**:
-The reached Units within `--hops` that match the `--to` expression.
+The reached Units within `--hops` that match the expression after `--step-to`.
 _Avoid_: target (a Target is a searched file or blob), sink, goal
 
 **Edge**:
@@ -48,7 +48,7 @@ _Avoid_: call (only one kind of Edge), reference, arc
 
 **Hop**:
 A Unit's distance from the Start: the smallest number of Edges from any Start Unit to it. `--hops` selects Units by it: `N` exactly, `M..N` with both ends included, `M..` with no upper bound.
-_Avoid_: step, depth, round, level (`--level` is the strict/loose threshold)
+_Avoid_: step (a step is one search of Multi-step matching: `--step-to` starts the next), depth, round, level (`--level` is the strict/loose threshold)
 
 **Path**:
 The Units from a Start Unit to an End Unit along Edges, printed with each Unit's Hop.

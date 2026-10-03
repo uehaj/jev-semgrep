@@ -623,6 +623,54 @@ $ git config diff.golang.xfuncname '^(func|type)[[:space:]]'
 `--chunk` counts functions, `-A`/`-B`/`-C` and `-c` count lines, as with the sentence units. `-z`, `-g` and
 `-o` are refused.
 
+### From one function to another (`--step-to`)
+
+A question about code often comes in two steps: where does `--summarize` hand the lines to the tool, and then,
+what happens when that fails. The "that" in the second step is what the first one found. Multi-step matching
+answers both in one run: the expression before `--step-to` finds the start, sys1grep walks the calls from it,
+and the expression after `--step-to` picks the functions it reaches that match. Jev judges the two
+expressions; no score decides which call to follow.
+
+```sh
+$ sys1grep -e "--summarize hands the lines to the tool" --step-to "what happens when the tool fails to start or answer" sys1grep.mjs
+```
+
+Each path prints as a tree: the hop (the number of calls from the start), `file:line` and the function's name,
+`:` after an end and `-` after a function on the way, as grep marks a match and its context. A regex-only
+start and end send nothing, which makes a free reachability search. In Python 3.6's `json`, the functions
+that `load` reaches and that hold a `raise`:
+
+```
+$ cd /usr/lib64/python3.6/json && sys1grep -e '/^\s*def load\b/' --step-to '/\braise\b/' *.py
+sys1grep: walk: 1 at hop 0, 1 at hop 1, 3 at hop 2, 1 at hop 3, 1 at hop 4, 1 at hop 5; stopped: no new unit
+0 __init__.py-274-load
+  1 __init__.py:302:loads
+    2 decoder.py:334:decode
+      3 decoder.py:345:raw_decode
+        4 scanner.py-65-scan_once
+          5 scanner.py:28:_scan_once
+```
+
+- **The expressions.** The expression before `--step-to` is the start's, as in any search; every `-e` / `-a` /
+  `-v` / `-Q` after it is the end's. `--step-to MEANING` and `--step-to '/RE/'` are `--step-to -e ...`; the file
+  names follow. A step is a search, not a hop: one `--step-to` is two steps, whatever the hops between them.
+- **The edges.** Without `--edges` the unit is a function (`--unit=function`) and an edge is a call: `name(` in
+  a function's body, its comments, docstrings and strings left out, links to every function of that name. A name
+  comes from the funcname line (the `def` under a decorator). `--edges=FILE` walks any other relation instead,
+  one edge per line, `FROM_FILE:LINE<TAB>FROM_NAME<TAB>TO_FILE:LINE<TAB>TO_NAME`; a line stands for the unit that
+  holds it. `--reverse` walks the edges backwards, callee to caller.
+- **The walk.** Breadth first from every start at once. A function's hop is its shortest distance from any
+  start, and each function is reached once, so a cycle ends. `--hops=N`, `--hops=M..N` and `--hops=M..` pick the
+  hops an end may be at (default `0..`: a start that matches the end expression is an end at hop 0). A path that
+  reaches no end is left out. stderr says how many functions each hop reached and why the walk stopped: no new
+  function, or `--hops`.
+- **The cost.** Jev judges every function against the start expression in one batch, then the functions reached
+  within `--hops` against the end expression in another. `--max-cost` asks again before the second, counting the
+  first. `--dry-run` answers every question 0, so it walks from every function the start expression could hold
+  for and shows that bound.
+- **Not with** `-z`, `-g`, `-o`, `-c`, `-l`, `-A`/`-B`/`-C`, `--rank`, `--summarize` or `--dedup`. `-p` adds the
+  end expression's scores to each function judged against it; `-q` prints nothing and exits 0 when there is an end.
+
 ### One line per template (`--dedup`)
 
 Cost is proportional to the text sent, and machine-generated logs are mostly one skeleton with a different
@@ -895,6 +943,10 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
                with --unit=sentence-by-*, each record is split into sentences
   --unit=sentence-by-jev|sentence-by-rule  judge each sentence instead of each line (see "One sentence at a time" above)
   --unit=function  judge each function and print its lines (see "One function at a time" above)
+  --step-to EXPRESSION  print the paths from the functions the expression before it matches, along the
+               calls, to the functions the expression after it matches (see "From one function to another" above)
+  --edges=FILE walk the edges in FILE instead of the calls; --reverse walks them backwards
+  --hops=N|M..N|M..  the hops an end may be at (default 0..)
   -o           with --unit=sentence-by-*, print only the matching sentences
   -p           print each meaning's probability at the end of the line
   --dry-run    send nothing; print the settings the search would run with (and their source, when not the
