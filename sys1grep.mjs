@@ -276,12 +276,10 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                    pick the funcname lines, else sys1grep's rule for .js/.ts/.py, else a line starting with a
                    letter, _ or $. -M defaults to 8000. Not with -z, -g or -o
   --step-to END1 [-e END2]...  multi-step matching, -e START1 [-e START2]... --step-to END1 [-e END2]...: find the
-               units (functions, by default) that match START, then the units they reach through calls (or any
-               --edges) that match END, and print each path between them: two searches (steps) joined by any
-               number of calls (hops). Each side is an expression of its own, and several -e on a side are OR'd.
-               The expression before --step-to finds the start units; walk the edges from them breadth first, and
-               print the paths to the reached units that match the expression after it (the ends). A step is a
-               search, not a hop: every -e / -a / -v / -Q after --step-to is the end expression.
+               units (functions, by default) that match START, walk the edges (calls, or --edges) from them breadth
+               first, and print each path to a reached unit that matches END (an end): two searches (steps) joined
+               by any number of calls (hops). Each side is an expression of its own, and several -e on a side are
+               OR'd. A step is a search, not a hop: every -e / -a / -v / -Q after --step-to is the end expression.
                --step-to MEANING or --step-to '/RE/' is --step-to -e MEANING. No score steers the
                walk; the units reached within --hops are judged against the end expression in one batch. A
                regex-only start and end send nothing.
@@ -295,7 +293,7 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                Examples:
                  # where --summarize hands lines to the tool, and what a function it reaches does when the tool fails
                  sys1grep -e "--summarize hands the lines to the tool" --step-to "what happens when it fails" sys1grep.mjs
-                 # regex only, nothing is sent: the functions main reaches that hold a raise
+                 # regex only, nothing is sent: main itself (hop 0) and the functions it reaches that hold a raise
                  sys1grep -e '/^ *def main/' --step-to '/raise /' *.py
                  # backwards: does main reach helper? (--reverse walks callee to caller)
                  sys1grep -e '/^ *def helper/' --reverse --step-to '/^ *def main/' *.py
@@ -526,13 +524,12 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                  無ければ .js/.ts/.py は sys1grep の規則、それ以外は英字・_・$ で始まる行。-M の既定は 8000。
                  -z・-g・-o とは併用できない
   --step-to END1 [-e END2]...  多段階マッチング、-e START1 [-e START2]... --step-to END1 [-e END2]...: START に当たる
-               ユニット (既定では関数) を探し、そこから呼び出し (または --edges) をたどって着くユニットのうち
-               END に当たるものを探し、その間のパスを出す。2 回の検索 (step) を、何段でもよい呼び出し (hop) で
-               つなぐ。両側はそれぞれ別の式で、片側に -e を複数並べると OR。--step-to の前の式で開始ユニットを
-               探し、そこから辺を幅優先でたどり、たどり着いたユニットのうち後ろの式に当たるもの (終点) までの
-               パスを出す。step はホップではなく検索の段: --step-to の後の -e / -a / -v / -Q はすべて終点の式。
-               --step-to 意味 や --step-to '/RE/' は --step-to -e 意味 と同じ。たどる道はスコアで決めない。--hops の範囲でたどり着いたユニットを 1 回の
-               バッチで終点の式と照らす。開始と終点の式が正規表現だけなら何も送らない。
+               ユニット (既定では関数) を探し、そこから辺 (呼び出し、または --edges) を幅優先でたどり、たどり
+               着いたユニットのうち END に当たるもの (終点) までのパスを出す。2 回の検索 (step) を、何段でも
+               よい呼び出し (hop) でつなぐ。両側はそれぞれ別の式で、片側に -e を複数並べると OR。step は
+               ホップではなく検索の段: --step-to の後の -e / -a / -v / -Q はすべて終点の式。--step-to 意味 や
+               --step-to '/RE/' は --step-to -e 意味 と同じ。たどる道はスコアで決めない。--hops の範囲で
+               たどり着いたユニットを 1 回のバッチで終点の式と照らす。開始と終点の式が正規表現だけなら何も送らない。
                --edges が無ければ単位は関数 (--unit=function) で、辺は呼び出し: 関数本体 (コメント・docstring・
                文字列は除く) の 名前( が、その名前の関数すべてにつながる。
                パスは木の形で出す: ホップ数、file:line、関数名。終点は :、途中のユニットは - で区切る。-p は
@@ -543,7 +540,7 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                例:
                  # --summarize が行をツールに渡す所と、そこから呼ぶ関数のうちツールの失敗を扱うもの
                  sys1grep -e "--summarize が行をツールに渡している" --step-to "ツールの起動や応答が失敗したときの処理" sys1grep.mjs
-                 # 正規表現だけなので何も送らない: main から呼ばれる関数のうち raise を含むもの
+                 # 正規表現だけなので何も送らない: main 自身 (hop 0) と、main から呼ばれる関数のうち raise を含むもの
                  sys1grep -e '/^ *def main/' --step-to '/raise /' *.py
                  # 逆向き: main から helper に届くか (--reverse は呼ばれる側から呼ぶ側へたどる)
                  sys1grep -e '/^ *def helper/' --reverse --step-to '/^ *def main/' *.py
