@@ -3,27 +3,28 @@
 import { createServer } from 'node:http';
 import { execFile } from 'node:child_process';
 import { parseArgs } from 'node:util';
+import { randomBytes } from 'node:crypto';
 
 // The page's controls. toArgv() (below) turns their values into command-line tokens, in the server to run a search and
 // in the browser to print the command: one function, so the two cannot drift. A value equal to its launch value is left out.
 // re: what the server accepts; bool: a checkbox, neg its negation; words: one token per word; step: only with a --step-to field.
 const CONTROLS = [
-  { k: 'rank', flag: '--rank', re: '^(jev|match)?$' },
+  { k: 'rank', flag: '--rank', re: '^(jev|match)?$', nostep: true, def: '' },
   { k: 'level', flag: '--level', re: '^(loose|normal|strict)$' },
   { k: 't', flag: '-t', re: '^(\\d+(\\.\\d+)?)?$' },
   { k: 'T', flag: '-T', re: '^(\\d+(\\.\\d+)?)?$' },
-  { k: 'C', flag: '-C', re: '^\\d*$' },
-  { k: 'dedup', flag: '--dedup', re: '^(never|auto|always)$', nostep: true },
-  { k: 'unit', flag: '--unit', re: '^(line|sentence-by-jev|sentence-by-rule)$', nostep: true },
+  { k: 'C', flag: '-C', re: '^\\d*$', nostep: true },
+  { k: 'dedup', flag: '--dedup', re: '^(never|auto|always)$', nostep: true, def: 'never' },
+  { k: 'unit', flag: '--unit', re: '^(line|sentence-by-jev|sentence-by-rule)$', nostep: true, def: 'line' },
   { k: 'auto-scope', flag: '--auto-scope', neg: '--no-auto-scope', bool: true },
   { k: 'n', flag: '-n', neg: '--no-n', bool: true },
   { k: 'p', flag: '-p', neg: '--no-p', bool: true },
-  { k: 'g', flag: '-g', neg: '--no-g', bool: true },
+  { k: 'g', flag: '-g', neg: '--no-gitlog', bool: true, nostep: true, def: false },
   { k: 'include', flag: '--include', words: true },
   { k: 'exclude', flag: '--exclude', words: true },
   { k: 'changed-within', flag: '--changed-within' },
-  { k: 'hops', flag: '--hops', re: '^[\\d.]*$', step: true },
-  { k: 'reverse', flag: '--reverse', neg: '--no-reverse', bool: true, step: true },
+  { k: 'hops', flag: '--hops', re: '^[\\d.]*$', step: true, def: '0..' },
+  { k: 'reverse', flag: '--reverse', neg: '--no-reverse', bool: true, step: true, def: false },
 ];
 const FIELD = /^[eavQS]:/; // an expression field: e:MEANING (-e), a, v, Q (-Q), S: (--step-to)
 
@@ -36,39 +37,47 @@ const toArgv = (p, init) => {
     else if (f.slice(2)) out.push(`-${f[0]}`, f.slice(2));
   }
   for (const c of CONTROLS) {
-    if ((c.step && !step) || (c.nostep && step)) continue;
-    const now = v(c.k), was = init[c.k];
+    const off = (c.step && !step) || (c.nostep && step); // what does not apply goes back to its default, over a launch value
+    if (off && c.def === undefined) continue;
+    const now = off ? c.def : v(c.k), was = init[c.k];
     if (now === was) continue;
     if (c.bool) out.push(now ? c.flag : c.neg);
     else if (c.k === 'rank') out.push(now ? `--rank=${now}` : '--no-rank');
-    else if (now === '' ) continue;
+    else if (now === '') continue;
     else if (c.words) for (const w of now.split(/\s+/).filter(Boolean)) out.push(`${c.flag}=${w}`);
     else out.push(c.flag.startsWith('--') ? `${c.flag}=${now}` : c.flag, ...(c.flag.startsWith('--') ? [] : [now]));
   }
-  if (v('summarize') !== init.summarize) out.push(v('summarize') ? '--summarize' : '--no-summarize');
-  const sp = v('summarize-prompt');
-  if (v('summarize') && sp && sp !== init['summarize-prompt']) out.push(`--summarize-prompt=${sp}`);
+  const sum = v('summarize') && !step;
+  if (sum !== init.summarize) out.push(sum ? '--summarize' : '--no-summarize');
+  if (sum && v('summarize-prompt')) out.push(`--summarize-prompt=${v('summarize-prompt')}`);
   return out;
 };
-
 // The launch's values, from the command line (what parseArgs cannot place is left at the default).
 const initOf = launch => {
+  const fill = { '--rank': '--rank=jev', '--summarize': '--summarize=x', '--dedup': '--dedup=always', '--no-rank': '--rank=\0', '--no-summarize': '--summarize=\0' };
   const { values: o } = parseArgs({
-    args: launch, strict: false, allowPositionals: true, allowNegative: true,
+    args: launch.map(a => fill[a] ?? a), strict: false, allowPositionals: true, allowNegative: true,
     options: { rank: { type: 'string' }, level: { type: 'string' }, t: { type: 'string' }, T: { type: 'string' }, C: { type: 'string' },
       dedup: { type: 'string' }, unit: { type: 'string' }, 'auto-scope': { type: 'boolean' }, n: { type: 'boolean' }, p: { type: 'boolean' },
       g: { type: 'boolean' }, include: { type: 'string', multiple: true }, exclude: { type: 'string', multiple: true },
       'changed-within': { type: 'string' }, hops: { type: 'string' }, reverse: { type: 'boolean' }, summarize: { type: 'string' },
       'summarize-prompt': { type: 'string' } },
   });
-  const rank = o.rank === undefined ? '' : ['jev', 'match'].includes(o.rank) ? o.rank : 'jev'; // a bare --rank swallows the next word
+  const rank = o.rank === undefined || o.rank === '\0' ? '' : ['jev', 'match'].includes(o.rank) ? o.rank : 'jev'; // a bare --rank swallows the next word
   return { x: [], rank, level: o.level ?? 'normal', t: o.t ?? '', T: o.T ?? '', C: o.C ?? '', dedup: o.dedup ?? 'never', unit: o.unit ?? 'line',
     'auto-scope': o['auto-scope'] ?? true, n: !!o.n, p: !!o.p, g: !!o.g, include: (o.include ?? []).join(' '), exclude: (o.exclude ?? []).join(' '),
-    'changed-within': o['changed-within'] ?? '', hops: o.hops ?? '0..', reverse: !!o.reverse, summarize: o.summarize !== undefined,
-    'summarize-prompt': o['summarize-prompt'] ?? '' };
+    'changed-within': o['changed-within'] ?? '', hops: o.hops ?? '0..', reverse: !!o.reverse, summarize: o.summarize !== undefined && o.summarize !== '\0',
+    'summarize-prompt': '' };
 };
 
 // What the page replaces or the meaning of which comes from the page: refused at launch.
+// --NAME VALUE or --NAME=VALUE out of the arguments: [the rest, the value]
+const lift = (args, name) => {
+  const i = args.findIndex(a => a === `--${name}` || a.startsWith(`--${name}=`));
+  if (i < 0) return [args, undefined];
+  const two = args[i] === `--${name}`;
+  return [args.filter((_, j) => j !== i && !(two && j === i + 1)), two ? args[i + 1] : args[i].slice(name.length + 3)];
+};
 const REFUSED = /^(-[eavQlcqoziHV]|-[eavQ].+|--(question|step-to|format|color|verbose|dry-run|interactive|help|version|install-templates|quiet|null-data)(=.*)?)$/;
 
 const PARAMS = new Set(['x', 'summarize', 'summarize-prompt', ...CONTROLS.map(c => c.k)]);
@@ -87,39 +96,43 @@ export function serve(argv) {
   const at = argv.findIndex(a => /^--serve(=|$)/.test(a)), port = argv[at].slice(8);
   if (port && !(/^\d+$/.test(port) && Number(port) < 65536)) throw new Error(`--serve=${port}: not a port number`);
   const rest = argv.filter((_, i) => i !== at), dd = rest.indexOf('--');
-  const launch = dd < 0 ? rest : rest.slice(0, dd), after = dd < 0 ? [] : rest.slice(dd);
+  const before = dd < 0 ? rest : rest.slice(0, dd), after = dd < 0 ? [] : rest.slice(dd);
+  // the key stays in this process (never in the page or the command shown); the summary instruction is a control, not a launch option
+  const [noKey, key] = lift(before, 'sys1-api-key'), [launch, prompt] = lift(noKey, 'summarize-prompt');
   const bad = launch.find(a => REFUSED.test(a));
   if (bad) throw new Error(`--serve: ${bad.split('=')[0]} is not for --serve (the page sets the meaning and shows the results as html)`);
-  const init = initOf(launch);
+  const init = { ...initOf(launch), 'summarize-prompt': prompt ?? '' };
+  const secret = key === undefined ? [] : [`--sys1-api-key=${key}`];
+  const token = randomBytes(16).toString('hex');
   const summarizeAsked = init.summarize;
   const script = process.argv[1];
   const tpl = launch.some(a => a.startsWith('--template')) ? [] : ['--template=search'];
   const run = (args, signal) => new Promise(resolve => {
-    const child = execFile(process.execPath, [script, ...launch, ...args, ...after], { signal, maxBuffer: 1 << 28 },
+    const child = execFile(process.execPath, [script, ...launch, ...secret, ...args, ...after], { signal, maxBuffer: 1 << 28 },
       (e, out, err) => resolve({ code: e ? (typeof e.code === 'number' ? e.code : 2) : 0, out, err }));
     child.stdin.end(); // no targets means stdin: an empty one, not a hang
   });
 
   const search = async (p, kind, signal) => {
-    const pk = { ...p, summarize: kind === 'summary' };
+    const pk = { ...p, summarize: kind === 'summary' }, step = (p.x).some(f => f[0] === 'S');
     const args = toArgv(pk, init);
     if (kind === 'dry') args.push('--dry-run', '--no-summarize');
     else if (kind === 'summary') args.push('--format=plain');
-    else if (pk.rank ?? init.rank) args.push('--format=html', ...tpl);
+    else if (!step && (pk.rank ?? init.rank)) args.push('--format=html', ...tpl);
     const { code, out, err } = await run(['--color=never', ...args], signal);
     if (code > 1) return { error: err.trim() || `exit ${code}` };
     if (code === 1 && !out) return { none: true, note: err.trim() };
-    return kind === 'results' && (p.rank ?? init.rank) ? { html: out.replace('</head>', '<style>.bar{display:none}</style></head>') } : { text: out };
+    return kind === 'results' && !step && (p.rank ?? init.rank) ? { html: out.replace('</head>', '<style>.bar{display:none}</style></head>') } : { text: out };
   };
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x'), host = req.headers.host;
-    const send = (code, type, body) => { res.writeHead(code, { 'content-type': `${type}; charset=utf-8`, 'cache-control': 'no-store' }); res.end(body); };
+    const send = (code, type, body) => { res.writeHead(code, { 'content-type': `${type}; charset=utf-8`, 'cache-control': 'no-store', 'x-frame-options': 'DENY' }); res.end(body); };
     // a page on another site (or a rebound name) must not be able to start a search
     if (host !== `127.0.0.1:${server.address().port}` && host !== `localhost:${server.address().port}`) return send(403, 'text/plain', 'forbidden');
-    if (url.pathname === '/') return send(200, 'text/html', page({ init, launch, after }));
+    if (url.pathname === '/') return send(200, 'text/html', page({ init, launch, after, token }));
     const kind = url.pathname.slice(1);
-    if (!['results', 'summary', 'dry'].includes(kind) || ['cross-site', 'same-site'].includes(req.headers['sec-fetch-site'])) return send(404, 'text/plain', 'not found');
+    if (!['results', 'summary', 'dry'].includes(kind) || ['cross-site', 'same-site'].includes(req.headers['sec-fetch-site']) || url.searchParams.get('k') !== token) return send(404, 'text/plain', 'not found');
     const p = fromQuery(url.searchParams, init);
     if (!p) return send(400, 'text/plain', 'bad value');
     const ac = new AbortController();
@@ -133,7 +146,8 @@ export function serve(argv) {
   });
 }
 
-const page = ({ init, launch, after }) => `<!doctype html>
+const json = x => JSON.stringify(x).replace(/</g, '\\u003c');
+const page = ({ init, launch, after, token }) => `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark"><title>sys1grep</title>
 <style>
@@ -182,7 +196,7 @@ iframe { width: 100%; border: 0; min-height: 80px; } pre.out { white-space: pre-
 </div></details></form></div></header>
 <main id="m"><div id="left"></div><div id="right" hidden></div></main>
 <script>
-const CONTROLS = ${JSON.stringify(CONTROLS)}, INIT = ${JSON.stringify(init)}, LAUNCH = ${JSON.stringify(launch)}, AFTER = ${JSON.stringify(after)};
+const CONTROLS = ${json(CONTROLS)}, INIT = ${json(init)}, LAUNCH = ${json(launch)}, AFTER = ${json(after)}, TOKEN = ${json(token)};
 const toArgv = ${toArgv};
 const quote = (s, force) => (!force && /^[\\w@%+=:,./-]+$/.test(s) ? s : "'" + s.replace(/'/g, "'\\\\''") + "'");
 const shown = argv => argv.map((t, i) => (/^-[eavQ]$/.test(argv[i - 1] ?? '') ? quote(t, t[0] === '-') : /^--[a-z-]+=/.test(t) ? t.replace(/=([\\s\\S]*)/, (_, v) => '=' + quote(v)) : quote(t)));
@@ -204,12 +218,13 @@ const read = () => {
 const show = () => {
   const p = read(), step = p.x.some(x => x[0] === 'S');
   for (const el of document.querySelectorAll('.step')) el.style.display = step ? '' : 'none';
-  f.elements['summarize-prompt'].style.display = p.summarize ? '' : 'none';
+  f.elements.rank.disabled = f.elements.summarize.disabled = step;
+  f.elements['summarize-prompt'].style.display = p.summarize && !step ? '' : 'none';
   cmd.textContent = ['sys1grep', ...LAUNCH.map(t => quote(t)), ...shown(toArgv(p, INIT)), ...AFTER.map(t => quote(t))].join(' ');
   document.getElementById('ds').className = CONTROLS.some(c => !['rank'].includes(c.k) && p[c.k] !== INIT[c.k] && !(c.step && !step) && !(c.nostep && step)) ? 'dot' : '';
   return p;
 };
-const query = p => { const q = new URLSearchParams(); for (const x of p.x) q.append('x', x); for (const [k, v] of Object.entries(p)) if (k !== 'x') q.set(k, v === true ? '1' : v === false ? '0' : v); return q; };
+const query = p => { const q = new URLSearchParams({ k: TOKEN }); for (const x of p.x) q.append('x', x); for (const [k, v] of Object.entries(p)) if (k !== 'x') q.set(k, v === true ? '1' : v === false ? '0' : v); return q; };
 let gen = 0;
 const get = async (kind, p, into) => {
   const mine = gen, r = await fetch('/' + kind + '?' + query(p)), j = await r.json().catch(() => ({ error: 'bad answer' }));
@@ -225,7 +240,7 @@ const run = kind => {
   if (!p.x.some(x => x[0] !== 'S')) { left.textContent = 'Enter a meaning.'; return; }
   gen++;
   left.textContent = 'searching...';
-  const sum = kind === 'results' && p.summarize;
+  const sum = kind === 'results' && p.summarize && !p.x.some(x => x[0] === 'S');
   document.getElementById('m').className = sum ? 'two' : '';
   right.hidden = !sum; right.textContent = sum ? 'summarizing...' : '';
   get(kind, p, left);
