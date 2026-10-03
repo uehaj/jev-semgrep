@@ -411,6 +411,7 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
   -V, --version  print the version and exit
 
 Exit status: 0 matched / 1 no match / 2 error
+  On 1, when lines were sent, stderr names the highest probability and its line (not with -q, --summarize, --step-to, or when only a negation failed)
 
 Environment (read from the environment, else from ~/.config/sys1grep/.env; ./.env is never read):
   SYS1GREP_API_KEY    API key. Falls back to TYPESAFE_API_KEY. Get one at https://console.typesafe.ai/
@@ -663,6 +664,7 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
   -V, --version  バージョンを表示して終了
 
 終了コード: 一致あり 0 / なし 1 / エラー 2 (引数・読めないファイル・API 障害)
+  行を送って 1 のときは、最も高かった確率とその行を stderr に出す (-q・--summarize・--step-to と、否定だけで落ちたときは出さない)
 
 環境変数 (環境、無ければ ~/.config/sys1grep/.env から読む。./.env は読まない):
   SYS1GREP_API_KEY    API キー。無ければ TYPESAFE_API_KEY。取得は https://console.typesafe.ai/
@@ -785,7 +787,7 @@ for (const tk of tokens) {
   const not = bang !== (tk.name === 'v');
   const shape = tk.name !== 'question' && RE_SHAPE.exec(bare); // -Q is always a question, never a regex
   const lit = shape ? { kind: 'r', not, ...compileRegex(shape[1], shape[2]) }
-    : { kind: 'm', not, text: tk.name === 'question' ? `the line answers: ${bare}` : bare };
+    : { kind: 'm', not, text: tk.name === 'question' ? `the line answers: ${bare}` : bare, said: bare };
   if (tk.name === 'e' || tk.name === 'question' || expr.length === 0 || fresh) expr.push(Object.assign([lit], { role }));
   else expr.at(-1).push(lit);
 }
@@ -2516,3 +2518,31 @@ if (dry) {
 }
 // process.exit() can drop buffered stdout when piped, so set exitCode instead.
 process.exitCode = dry ? (hadError ? 2 : 0) : matched && opt.quiet ? 0 : hadError || summaryFailed ? 2 : matched ? 0 : 1; // -q: a match wins over an error
+// #139: exit 1 is a threshold decision, not a fact; name the closest line so the caller does not rerun to see it.
+if (process.exitCode === 1 && sent.length && !opt.quiet && !summarizer && !multiStep) {
+  // A term is as close as its lowest meaning: an AND holds only when every meaning in it clears the threshold.
+  let best = { p: -1 };
+  // the tNeg after following the advice: --level loose also loosens tNeg, a lower -t (or -T as given) does not
+  const adviceNeg = opt.t !== undefined || opt.T !== undefined || tPos <= levels.loose[0] ? tNeg : levels.loose[1];
+  for (const l of sent) for (const term of expr) {
+    const { ok, matches } = regexPart(term, l);
+    if (!ok) continue;
+    // a negation that fails even after the advice holds the term down: that unit is no candidate (the termHolds test)
+    if (term.some(lit => lit.kind === 'm' && lit.not && (asksByUnit.get(l).get(expandCaptures(lit.text, matches)) ?? 0) >= adviceNeg)) continue;
+    let low = null;
+    for (const lit of term) if (lit.kind === 'm' && !lit.not) {
+      const p = asksByUnit.get(l).get(expandCaptures(lit.text, matches)) ?? 0;
+      if (!low || p < low.p) low = { p, l, meaning: lit.said };
+    }
+    // only a term its own meanings failed: a near miss is by definition under tPos
+    if (low && low.p < tPos && low.p > best.p) best = low;
+  }
+  if (best.l) {
+    const at = `${best.l.file === '-' ? 'standard input' : best.l.file}:${spansOf.get(best.l.file)?.[best.l.no - 1]?.[0]?.[0] ?? best.l.no}`;
+    // -t overrides --level, so with -t only a lower -t changes the outcome; advice that would not match is none
+    const loose = tPos <= levels.loose[0] || best.p < levels.loose[0] ? '' : opt.t === undefined ? `--level loose takes ${levels.loose[0]}, ` : `-t ${levels.loose[0]} loosens it, `;
+    // -p prints only what matches: -t 0 lets every unit match, -T 1 keeps a negation from dropping one
+    const every = `${opt.p ? '' : '-p '}-t 0${expr.some(term => term.some(lit => lit.kind === 'm' && lit.not)) ? ' -T 1' : ''}`;
+    console.error(`sys1grep: no ${unitName.slice(0, -1)} reached ${tPos} for "${safe(best.meaning)}"; the highest was ${(Math.floor(best.p * 100 + 1e-9) / 100).toFixed(2)} (${safe(at)}). ${loose}${every} shows every probability`);
+  }
+}
