@@ -1976,7 +1976,7 @@ if (willFold && sent.length) {
   }])), `[dedup] "${cut(text, 40)}"`)).then(a => MASK.filter(([kind]) => a[kind].noul >= 0.7).map(([kind]) => kind))));
   const kept = MASK.filter(([kind]) => keep.flat().includes(kind));
   const fold = MASK.filter(([kind]) => !keep.flat().includes(kind));
-  if (logPlan) logPlan(`dedup: kept apart (read by the meaning): ${kept.map(([kind]) => kind).join(', ') || 'none'}`);
+  if (logPlan) logPlan(`dedup: kept apart (read by the meaning): ${kept.map(([kind]) => kind).join(', ') || 'none'}${dry ? ' (dry run: the question is assumed no)' : ''}`);
   const rep = new Map();
   for (const l of sent) {
     const key = [templateKey(l.text, kept, fold), ...asksByUnit.get(l).keys()].join('\0\0');

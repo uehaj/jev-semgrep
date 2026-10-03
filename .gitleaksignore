@@ -1,3 +1,4 @@
+# tests/dedup-holdout/syslog.log: the working-directory field of its sudo lines is read as a password by the maintainer's local pre-commit gitleaks.toml (generic-password-assignment). gitleaks' default config, and so CI, does not.
 tests/dedup-holdout/syslog.log:generic-password-assignment:10
 tests/dedup-holdout/syslog.log:generic-password-assignment:105
 tests/dedup-holdout/syslog.log:generic-password-assignment:107
