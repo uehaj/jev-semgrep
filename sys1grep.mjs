@@ -2453,12 +2453,14 @@ if (process.exitCode === 1 && sent.length && !opt.quiet && !summarizer && !multi
   for (const l of sent) for (const term of expr) {
     const { ok, matches } = regexPart(term, l);
     if (!ok) continue;
+    // a failed negation holds the term down whatever -t is: that unit is no candidate (the termHolds test)
+    if (term.some(lit => lit.kind === 'm' && lit.not && (asksByUnit.get(l).get(expandCaptures(lit.text, matches)) ?? 0) >= tNeg)) continue;
     let low = null;
     for (const lit of term) if (lit.kind === 'm' && !lit.not) {
       const p = asksByUnit.get(l).get(expandCaptures(lit.text, matches)) ?? 0;
       if (!low || p < low.p) low = { p, l, meaning: lit.said };
     }
-    // only a term its own meanings failed: a line a negation dropped cleared tPos and would hide a near miss
+    // only a term its own meanings failed: a near miss is by definition under tPos
     if (low && low.p < tPos && low.p > best.p) best = low;
   }
   if (best.l) {
