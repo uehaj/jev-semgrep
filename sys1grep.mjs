@@ -249,7 +249,8 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
   -C NUM       print NUM lines of context before and after (-A NUM -B NUM)
   -c           print only a count of matching lines per file (like grep -c)
   -q, --quiet  print nothing, stop at the first match; exit 0 on a match, even after an error (like grep -q)
-  --chunk=LINES lines per request (default 30)
+  --chunk=LINES lines per request (default 30; a request also carries at most 64 questions, so fewer lines
+               with 3 or more meanings)
                Lines in one request are each other's context, so a small chunk changes verdicts
                on ambiguous lines, not just speed
   -j N         concurrent requests (default 8)
@@ -499,7 +500,8 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
   -C NUM       前後 NUM 行を表示 (-A NUM -B NUM)
   -c           一致した行数だけをファイルごとに表示 (grep -c 相当)
   -q, --quiet  何も表示せず、最初の一致で止まる。一致があればエラーがあっても終了コード 0 (grep -q 相当)
-  --chunk=LINES 1 リクエストにまとめる行数 (既定 30)
+  --chunk=LINES 1 リクエストにまとめる行数 (既定 30。質問も 1 リクエストに 64 個までなので、意味が 3 つ以上
+               なら行数はそれより少なくなる)
                同じリクエストの行は互いの文脈になるので、小さくすると速さだけでなく曖昧な行の
                判定も変わる
   -j N         同時リクエスト数 (既定 8)
@@ -815,6 +817,9 @@ if (!level) die(`--level must be one of ${Object.keys(levels).join(', ')}`);
 const tPos = opt.t === undefined ? level[0] : Number(opt.t);
 const tNeg = opt.T === undefined ? level[1] : Number(opt.T);
 const chunkLines = Number(opt.chunk);
+// Clef's input schema caps a request at 64 questions (#174); every backend gets that cap, which only adds a few requests
+// when a line carries 3 or more meanings, or auto-scope has many candidates.
+const MAX_QUESTIONS = 64;
 // Validate numeric options. parseArgs turns -C=10 into the value "=10", so reject that here.
 for (const [k, label] of [['t', '-t'], ['T', '-T'], ['chunk', '--chunk'], ['j', '-j'], ['A', '-A'], ['B', '-B'], ['C', '-C'], ['max-columns', '-M'], ['max-cost', '--max-cost']])
   if (opt[k] !== undefined && !(k === 't' || k === 'T' || k === 'max-cost' ? /^\d+(\.\d+)?$/ : /^\d+$/).test(opt[k])) die(`${label}: invalid number '${opt[k]}' (write ${label} 10 or ${label}10, not ${label}=10)`);
@@ -1267,6 +1272,11 @@ function gitCandidates(found) {
   return out;
 }
 const scopeQuestions = text => Object.fromEntries(CANDIDATES.map(c => [c.key, { type: 'noul', instructions: `Does the meaning "${text}" restrict its matches to ${c.what}?` }]));
+const postScope = async (text, label) => { // the candidates in requests of at most MAX_QUESTIONS (#174): a repo with many authors has more
+  const qs = Object.entries(scopeQuestions(text)), answers = {};
+  for (let i = 0; i < qs.length; i += MAX_QUESTIONS) Object.assign(answers, await post({ meaning: text }, Object.fromEntries(qs.slice(i, i + MAX_QUESTIONS)), label));
+  return answers;
+};
 const SCOPE_AT = 0.6; // a candidate counts at this or more (see the top of auto-scope)
 // Jev's answers -> one scope per category that got a yes: { label, words, names, cs, test } (names: for --verbose;
 // cs: its candidates, for the judging requests' note and -g's git log arguments)
@@ -1549,7 +1559,7 @@ if (narrowable) CANDIDATES.push(...gitCandidates(opt.gitlog ? ['./-'] : found.fi
 if (narrowable && opt.gitlog) CANDIDATES.splice(0, Infinity, ...CANDIDATES.filter(c => LOGGED.includes(c.cat)));
 if (narrowable) spin.set('asking which files each meaning restricts to (auto-scope)');
 if (narrowable) await Promise.all(expr.flatMap(term => scoped(term).map(lit =>
-  pooled(() => post({ meaning: lit.text }, scopeQuestions(lit.text), `[scope] "${cut(lit.text, 40)}"`)).then(a => {
+  pooled(() => postScope(lit.text, `[scope] "${cut(lit.text, 40)}"`)).then(a => {
     if (opt.verbose && !dry) traceScope(lit.text, a, found.filter(f => !named(f)));
     scopesOf(a).forEach(sc => addScope(term, { ...sc, meaning: lit.text }));
   }))));
@@ -1895,7 +1905,7 @@ if (logPlan) for (const file of read.keys())
 // --rank=jev asks after the search, so which results there are is not known yet: at most one per unit that could match.
 // ponytail: --max-cost does not count these; the estimate would be this bound, far over what a search usually finds
 if (logPlan && opt.rank === 'jev') {
-  const reqs = Math.ceil(allLines.length / chunkLines);
+  const reqs = Math.ceil(allLines.length / Math.min(chunkLines, MAX_QUESTIONS));
   logPlan(`rank: at most ${allLines.length} results, ~${reqs} request${reqs === 1 ? '' : 's'} after the search, a question each`);
 }
 // -q stops at the first match, like grep -q. Known before any request, --dedup's included: unsent units (blank, or
@@ -1948,10 +1958,8 @@ if (blobOfLabel.size) {
   }
   sent = out;
 }
-// Chunk by line count, by characters and by questions. The API caps state + longest question at 32k tokens, and
-// Clef's input schema caps a request at 64 questions (#174); every backend gets that cap, which only adds a few
-// requests when a line carries 3 or more meanings. A unit alone over the cap still goes out (nothing splits a unit).
-const MAX_QUESTIONS = 64;
+// Chunk by line count, by characters and by questions (MAX_QUESTIONS). The API caps state + longest question at 32k
+// tokens. A unit alone over the question cap still goes out (nothing splits a unit).
 const chunked = (units, asks = asksByUnit) => {
   const out = [];
   for (let i = 0; i < units.length; ) {

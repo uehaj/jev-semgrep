@@ -127,6 +127,13 @@ reset; $J --chunk 1 -e cat "$F" >/dev/null; eq "$(stat count)" "7" "--chunk 1: 7
 yes 'cat dog bird' | head -40 >"$tmp/q3.txt"
 reset; $J -c -e cat -e dog -e bird "$tmp/q3.txt" >/dev/null; eq "$(stat count)" "2" "3 meanings x 40 lines: 2 requests"; eq "$(stat qmax)" "63" "3 meanings x 40 lines: 63 questions at most in a request"
 reset; $J -c -e cat "$tmp/q3.txt" >/dev/null; eq "$(stat qmax)" "30" "1 meaning: --chunk's 30 lines still decide"
+yes cat | head -200 >"$tmp/c200.txt"; reset; $J --no-auto-scope --chunk 100 -c -e cat "$tmp/c200.txt" >/dev/null; eq "$(stat qmax)" "64" "--chunk 100 on 200 lines: 64 questions at most in a request"
+reset; $J --no-auto-scope --chunk 100 --rank=jev -e cat "$tmp/c200.txt" >/dev/null; eq "$(stat qmax)" "64" "--rank=jev with --chunk 100: 64 questions at most in a request"
+m65=; for i in $(seq 1 65); do m65="$m65 -e m$i"; done; printf 'm1\nm2\n' >"$tmp/two.txt"
+reset; $J --no-auto-scope -c $m65 "$tmp/two.txt" >/dev/null; eq "$(stat count) $(stat qmax)" "2 65" "a unit asked 65 meanings goes out whole, one to a request"
+# auto-scope's candidates (a repo with 20 authors has 72) are cut the same way
+a="$tmp/authors"; mkdir "$a"; (cd "$a" && git init -q && for i in $(seq 1 20); do echo "line $i" >>a.py; git add a.py; GIT_AUTHOR_NAME=u$i GIT_AUTHOR_EMAIL=u$i@x.org GIT_COMMITTER_NAME=u$i GIT_COMMITTER_EMAIL=u$i@x.org git -c commit.gpgsign=false commit -qm c$i --no-verify; done)
+reset; $J -r -c -e cat "$a" >/dev/null 2>&1 || true; eq "$(stat qmax)" "64" "auto-scope with 20 authors: 64 questions at most in a request"
 reset; $J --chunk 1 -e cat -e dog -Q owl "$F" >/dev/null; eq "$(stat count)" "7" "meanings share a request"
 code 2 "--chunk 0" -- $J --chunk 0 -e cat "$F"
 

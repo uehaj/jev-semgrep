@@ -1005,7 +1005,7 @@ A leading `!` on a meaning negates just that meaning (quote it, `!` is history e
 
 ## How it works
 
-1. Non-blank lines are cut into chunks of 30 lines (with a character cap).
+1. Non-blank lines are cut into chunks of 30 lines (with a character cap, and at most 64 questions a request).
 2. Each chunk goes into `state` as an object `{"L000": "line 1", "L001": "line 2", ...}`,
    and one `noul` (yes/no probability) question per line × meaning goes into the same request.
 3. Up to 8 requests run concurrently. Output is printed in file order.
