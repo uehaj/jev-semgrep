@@ -1348,7 +1348,7 @@ case $out in *'summarizingwithclaude'*'033[KSUMMARY'*) ;; *) fail "spinner while
 # --help: exit 0, Japanese by locale, lists the options
 code 0 "--help" -- $E LANG=C node ../sys1grep.mjs --help
 eq "$($E LANG=C node ../sys1grep.mjs -h | head -1 | cut -c1-15)" "usage: sys1grep" "-h"
-for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename' '--summarize' '--summarize-prompt' '--format' '-M' '--max-filesize' '--max-cost' '-y, --yes' '--rank' '--no-rank' '--no-summarize' '--step-to' '--edges=FILE' '--reverse' '--hops=' '--template=NAME' '--install-templates'; do
+for o in '-Q, --question' '-q, --quiet' '--level=LEVEL' '--chunk=LINES' '-j N' '--color' '--sys1-api-key' '--dry-run' '--verbose' '-H, --with-filename' '--no-filename' '--summarize' '--summarize-prompt' '--format' '-M' '--max-filesize' '--max-cost' '-y, --yes' '--rank' '--no-rank' '--no-summarize' '--step-to' '--edges=FILE' '--reverse' '--hops=' '--template=NAME' '--install-templates' '--serve'; do
   $E LANG=C node ../sys1grep.mjs --help | grep -q -- "$o" || fail "--help lacks $o"
 done
 $E LANG=C node ../sys1grep.mjs --help | grep -q 'grep by meaning' || fail "--help in English"
@@ -1387,4 +1387,41 @@ $E LANG=C node ../sys1grep.mjs --help | grep -qF "sys1grep -e '/^ *def helper/' 
 $E LANG=ja_JP.UTF-8 node ../sys1grep.mjs --help | grep -qF "sys1grep -e '/^ *def main/' --hops=1..2 --step-to '/raise /' *.py" || fail "--help in Japanese: --step-to examples"
 $E LANG=C node ../sys1grep.mjs --help | grep -qF "sys1grep [OPTION]... -e START1 [-e START2]... --step-to END1 [-e END2]... [FILE...]" || fail "--help: --step-to usage names both sides"
 $E LANG=ja_JP.UTF-8 node ../sys1grep.mjs --help | grep -qF "sys1grep [OPTION]... -e START1 [-e START2]... --step-to END1 [-e END2]... [FILE...]" || fail "--help in Japanese: --step-to usage names both sides"
+# --serve: a page on 127.0.0.1, each search a run of sys1grep against the fake
+$E SYS1GREP_URL=$base/v1 node ../sys1grep.mjs --serve "$F" >"$tmp/serve.url" 2>/dev/null &
+serve=$!
+i=0; while [ ! -s "$tmp/serve.url" ]; do i=$((i + 1)); [ $i -lt 200 ] || fail "--serve did not start"; sleep 0.05; done
+U=$(cat "$tmp/serve.url")
+case $U in http://127.0.0.1:*/) ;; *) fail "--serve prints its URL: $U" ;; esac
+K=$(curl -s "$U" | sed -n 's/.*TOKEN = "\([0-9a-f]*\)".*/\1/p')
+[ -n "$K" ] || fail "--serve: the page carries a token"
+eq "$(curl -s "$U" | grep -c 'id="cmd"')" "1" "--serve: the page"
+eq "$(curl -s "${U}results?k=$K&x=e:cat&rank=" | node -pe "JSON.parse(require('fs').readFileSync(0)).text")" "cat
+cat dog" "--serve: rank off, matches in file order"
+eq "$(curl -s "${U}results?k=$K&x=e:cat&rank=jev" | node -pe "const h = JSON.parse(require('fs').readFileSync(0)).html; [h.includes('Result 1'), h.includes('.bar{display:none}')].join()")" "true,true" "--serve: rank on, the search template's cards"
+eq "$(curl -s "${U}results?k=$K&x=e:cat&x=a:dog&rank=" | node -pe "JSON.parse(require('fs').readFileSync(0)).text")" "cat dog" "--serve: -a from the fields"
+eq "$(curl -s "${U}results?k=$K&x=e:cat&x=v:dog&rank=&C=0&n=1" | node -pe "JSON.parse(require('fs').readFileSync(0)).text")" "1:cat" "--serve: -v, -n from the controls"
+eq "$(curl -s "${U}results?k=$K&x=e:zzz&rank=" | node -pe "JSON.parse(require('fs').readFileSync(0)).none")" "true" "--serve: no match"
+eq "$(curl -s "${U}results?k=$K&x=e:cat&t=abc")" "bad value" "--serve: a bad number is refused"
+eq "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example' "$U")" "403" "--serve: another host name is refused"
+eq "$(curl -s -o /dev/null -w '%{http_code}' -H 'Sec-Fetch-Site: cross-site' "${U}results?k=$K&x=e:cat")" "404" "--serve: a cross-site search is refused"
+eq "$(curl -s "${U}dry?k=$K&x=e:cat" | grep -c 'dry-run\|requests')" "1" "--serve: estimate is --dry-run"
+eq "$(curl -s -o /dev/null -w '%{http_code}' "${U}results?x=e:cat")" "404" "--serve: a search without the token is refused"
+eq "$(curl -s -o /dev/null -w '%{http_code}' -H "Host: localhost:${U##*:}" "$U")" "403" "--serve: localhost with the wrong port is refused"
+eq "$(curl -s -H 'Sec-Fetch-Site: same-site' -o /dev/null -w '%{http_code}' "${U}results?k=$K&x=e:cat")" "404" "--serve: a same-site search is refused"
+eq "$(curl -s "${U}results?k=$K&x=e:cat&x=S:&x=e:owl&rank=jev&dedup=always" | node -pe "const j = JSON.parse(require('fs').readFileSync(0)); j.error || 'ok'")" "ok" "--serve: --step-to drops rank and dedup"
+kill $serve 2>/dev/null; wait $serve 2>/dev/null || true
+# launch values the page must carry: -g unchecked, a summary instruction, the key kept out of the page
+$E SYS1GREP_URL=$base/v1 node ../sys1grep.mjs --serve -n --dedup=always --summarize=cat --summarize-prompt=hello --sys1-api-key=SECRETKEY123 "$F" >"$tmp/serve2.url" 2>/dev/null &
+serve=$!
+i=0; while [ ! -s "$tmp/serve2.url" ]; do i=$((i + 1)); [ $i -lt 200 ] || fail "--serve (launch options) did not start"; sleep 0.05; done
+U=$(cat "$tmp/serve2.url"); K=$(curl -s "$U" | sed -n 's/.*TOKEN = "\([0-9a-f]*\)".*/\1/p')
+eq "$(curl -s "$U" | grep -c SECRETKEY123 || true)" "0" "--serve: the key is not in the page"
+eq "$(curl -s "$U" | grep -c -- '--summarize-prompt' || true)" "1" "--serve: the launch summary instruction is a control's value"
+eq "$(curl -s "${U}results?k=$K&x=e:cat&rank=&summarize=0" | node -pe "JSON.parse(require('fs').readFileSync(0)).error || 'ok'")" "ok" "--serve: results with a launch --summarize-prompt"
+eq "$(curl -s "${U}results?k=$K&x=e:cat&x=S:&x=e:owl&rank=" | node -pe "const j = JSON.parse(require('fs').readFileSync(0)); (j.error || 'ok').replace(/.*cannot be combined.*/, 'combined')")" "ok" "--serve: --step-to with a launch --dedup"
+kill $serve 2>/dev/null; wait $serve 2>/dev/null || true
+code 2 "--serve refuses -e" -- $J --serve -e cat "$F"
+code 2 "--serve refuses --format" -- $J --serve --format=html "$F"
+eq "$($J --serve=99999 "$F" 2>&1 | head -1 | cut -c1-30)" "sys1grep: --serve=99999: not a" "--serve: a bad port is an error"
 echo "OK: $n checks passed (and the grep-guarded ones)"
