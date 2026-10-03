@@ -164,7 +164,7 @@ const optSrc = name => {
 };
 // --help: Japanese when the locale starts with ja, English otherwise
 const HELP_EN = `usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
-       sys1grep [OPTION]... EXPRESSION --step-to EXPRESSION [FILE...]
+       sys1grep [OPTION]... -e START1 [-e START2]... --step-to END1 [-e END2]... [FILE...]
 grep by meaning, powered by Jev (TypeSafe System One). Reads stdin when FILE is omitted.
 As git sys1grep, FILE arguments are pathspecs and every tracked file is searched, like git grep.
 
@@ -275,10 +275,14 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                    line before the next, as git grep -W: the diff=<driver> attribute and diff.<driver>.xfuncname
                    pick the funcname lines, else sys1grep's rule for .js/.ts/.py, else a line starting with a
                    letter, _ or $. -M defaults to 8000. Not with -z, -g or -o
-  --step-to EXPRESSION  multi-step matching: the expression before --step-to finds the start units; walk the
-               edges from them breadth first, and print the paths to the reached units that match the expression
-               after it (the ends). A step is a search, not a hop: every -e / -a / -v / -Q after --step-to is the
-               end expression. --step-to MEANING or --step-to '/RE/' is --step-to -e MEANING. No score steers the
+  --step-to END1 [-e END2]...  multi-step matching, -e START1 [-e START2]... --step-to END1 [-e END2]...: find the
+               units (functions, by default) that match START, then the units they reach through calls (or any
+               --edges) that match END, and print each path between them: two searches (steps) joined by any
+               number of calls (hops). Each side is an expression of its own, and several -e on a side are OR'd.
+               The expression before --step-to finds the start units; walk the edges from them breadth first, and
+               print the paths to the reached units that match the expression after it (the ends). A step is a
+               search, not a hop: every -e / -a / -v / -Q after --step-to is the end expression.
+               --step-to MEANING or --step-to '/RE/' is --step-to -e MEANING. No score steers the
                walk; the units reached within --hops are judged against the end expression in one batch. A
                regex-only start and end send nothing.
                Without --edges the unit is a function (--unit=function) and an edge is a call: name( in a
@@ -288,7 +292,15 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                and why the walk stopped. Not with -z, -g, -o, -c, -l, -A/-B/-C, --rank, --summarize or --dedup.
                --max-cost asks again before the end's requests, counting what the start sent; --dry-run walks
                from every unit the start expression could hold for, a bound
+               Examples:
+                 # where --summarize hands lines to the tool, and what a function it reaches does when the tool fails
                  sys1grep -e "--summarize hands the lines to the tool" --step-to "what happens when it fails" sys1grep.mjs
+                 # regex only, nothing is sent: the functions main reaches that hold a raise
+                 sys1grep -e '/^ *def main/' --step-to '/raise /' *.py
+                 # backwards: does main reach helper? (--reverse walks callee to caller)
+                 sys1grep -e '/^ *def helper/' --reverse --step-to '/^ *def main/' *.py
+                 # only ends exactly 1 or 2 calls from the start
+                 sys1grep -e '/^ *def main/' --hops=1..2 --step-to '/raise /' *.py
   --edges=FILE the edges to walk instead of calls, one per line: FROM_FILE:LINE<TAB>FROM_NAME<TAB>TO_FILE:LINE
                <TAB>TO_NAME. A line stands for the unit holding it, of any --unit but zero. Any relation works
                (imports, links, log ids); write an undirected one both ways
@@ -405,7 +417,7 @@ Environment (read from the environment, else from ~/.config/sys1grep/.env; ./.en
   The key goes to SYS1GREP_URL, whatever it is. With SYS1GREP_URL set and no key, no auth header is sent.
   e.g.  mkdir -p ~/.config/sys1grep && echo 'SYS1GREP_API_KEY=your-key' > ~/.config/sys1grep/.env`;
 const HELP_JA = `usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... [FILE...]
-       sys1grep [OPTION]... EXPRESSION --step-to EXPRESSION [FILE...]
+       sys1grep [OPTION]... -e START1 [-e START2]... --step-to END1 [-e END2]... [FILE...]
 jev (TypeSafe System One) で意味的にマッチする行を探す grep。FILE 省略時は stdin。
 git sys1grep として呼ぶと git grep と同じく FILE は pathspec になり、追跡中のファイルを全部探す。
 
@@ -513,10 +525,13 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                  (git grep -W と同じ)。関数名の行は diff=<driver> 属性と diff.<driver>.xfuncname で決め、
                  無ければ .js/.ts/.py は sys1grep の規則、それ以外は英字・_・$ で始まる行。-M の既定は 8000。
                  -z・-g・-o とは併用できない
-  --step-to EXPRESSION  多段階マッチング: --step-to の前の式で開始ユニットを探し、そこから辺を幅優先でたどり、
-               たどり着いたユニットのうち後ろの式に当たるもの (終点) までのパスを出す。step はホップではなく
-               検索の段: --step-to の後の -e / -a / -v / -Q はすべて終点の式。--step-to 意味 や --step-to '/RE/' は
-               --step-to -e 意味 と同じ。たどる道はスコアで決めない。--hops の範囲でたどり着いたユニットを 1 回の
+  --step-to END1 [-e END2]...  多段階マッチング、-e START1 [-e START2]... --step-to END1 [-e END2]...: START に当たる
+               ユニット (既定では関数) を探し、そこから呼び出し (または --edges) をたどって着くユニットのうち
+               END に当たるものを探し、その間のパスを出す。2 回の検索 (step) を、何段でもよい呼び出し (hop) で
+               つなぐ。両側はそれぞれ別の式で、片側に -e を複数並べると OR。--step-to の前の式で開始ユニットを
+               探し、そこから辺を幅優先でたどり、たどり着いたユニットのうち後ろの式に当たるもの (終点) までの
+               パスを出す。step はホップではなく検索の段: --step-to の後の -e / -a / -v / -Q はすべて終点の式。
+               --step-to 意味 や --step-to '/RE/' は --step-to -e 意味 と同じ。たどる道はスコアで決めない。--hops の範囲でたどり着いたユニットを 1 回の
                バッチで終点の式と照らす。開始と終点の式が正規表現だけなら何も送らない。
                --edges が無ければ単位は関数 (--unit=function) で、辺は呼び出し: 関数本体 (コメント・docstring・
                文字列は除く) の 名前( が、その名前の関数すべてにつながる。
@@ -525,7 +540,15 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                -z・-g・-o・-c・-l・-A/-B/-C・--rank・--summarize・--dedup とは併用できない。
                --max-cost は終点のリクエストの前にもう一度、開始で送った分を含めて確かめる。--dry-run は
                開始の式が当たりうるユニットすべてから歩く (上限の見積もり)
+               例:
+                 # --summarize が行をツールに渡す所と、そこから呼ぶ関数のうちツールの失敗を扱うもの
                  sys1grep -e "--summarize が行をツールに渡している" --step-to "ツールの起動や応答が失敗したときの処理" sys1grep.mjs
+                 # 正規表現だけなので何も送らない: main から呼ばれる関数のうち raise を含むもの
+                 sys1grep -e '/^ *def main/' --step-to '/raise /' *.py
+                 # 逆向き: main から helper に届くか (--reverse は呼ばれる側から呼ぶ側へたどる)
+                 sys1grep -e '/^ *def helper/' --reverse --step-to '/^ *def main/' *.py
+                 # 開始からちょうど 1〜2 回の呼び出しで届く終点だけ
+                 sys1grep -e '/^ *def main/' --hops=1..2 --step-to '/raise /' *.py
   --edges=FILE 呼び出しの代わりにたどる辺。1 行 1 本: FROM_FILE:LINE<TAB>FROM_NAME<TAB>TO_FILE:LINE<TAB>TO_NAME。
                行はそれを含むユニットを指す (--unit は zero 以外ならどれでもよい)。import、リンク、ログ ID など
                どんな関係でもよい。向きの無い関係は両向きに書く
