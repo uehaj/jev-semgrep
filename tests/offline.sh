@@ -665,8 +665,8 @@ eq "$(gl -e 'cat @s:t_today @s:t_yesterday')" "newpy newjs midn " "-g: today is 
 # contains the 7 days' start; later it does not, and the 7 days win anyway.
 glc() { (cd "$L" && $JI -g "$@" 2>&1 >/dev/null) | grep '^sys1grep: git log ' || fail "-g $*: no git log line"; }
 glc -e 'cat @s:t_lastmonth @s:t_day30' | grep -q -- '--until=' || fail "-g: last month over the last 30 days"
-glc -e 'cat @s:t_lastmonth @s:t_day7' | grep -qE -- '--since=[0-9T:.-]+Z --$' || fail "-g: the last 7 days over last month: $(glc -e 'cat @s:t_lastmonth @s:t_day7')"
-(cd "$L" && $JI -g -e 'cat @s:t_yesterday' 2>&1 >/dev/null) | grep -qE "^sys1grep: git log .*--since=[0-9T:.-]+Z --until=[0-9T:.-]+Z " || fail "-g: --until on stderr"
+glc -e 'cat @s:t_lastmonth @s:t_day7' | grep -qE -- '--since(-as-filter)?=[0-9T:.-]+Z --$' || fail "-g: the last 7 days over last month: $(glc -e 'cat @s:t_lastmonth @s:t_day7')"
+(cd "$L" && $JI -g -e 'cat @s:t_yesterday' 2>&1 >/dev/null) | grep -qE "^sys1grep: git log .*--since(-as-filter)?=[0-9T:.-]+Z --until=[0-9T:.-]+Z " || fail "-g: --until on stderr"
 (cd "$L" && $JI -g -e 'cat @s:t_day1' 2>&1 >/dev/null) | grep -q -- '--until' && fail "-g: a rolling span has no --until"
 eq "$($JI -r -l -e 'cat @s:t_yesterday' "$S" 2>&1 >/dev/null | grep -c 'since .* (from "what was changed yesterday: 0.90")')" "1" "files: a span's end means nothing (a later change moves the mtime)"
 eq "$(gl -e 'cat @s:l_python')" "newpy yday oldpy " "-g: a language becomes pathspecs"
@@ -676,7 +676,7 @@ eq "$(gl -e 'cat @s:t_today @s:l_python')" "newpy " "-g: scopes of one meaning t
 eq "$(gl -e 'cat @s:l_python' b.js)" "newjs " "-g: FILE is a pathspec, never narrowed"
 eq "$(gl --no-auto-scope -e 'cat @s:t_today')" "newpy newjs midn yday oldpy " "-g: --no-auto-scope"
 eq "$(cd "$L" && $JI -g --dry-run -e 'cat @s:l_python' -e dog | grep -c '\[scope\]' || true)" "0" "-g: no scope question with two terms"
-(cd "$L" && $JI -g -e 'cat @s:t_today @s:l_python' 2>&1 >/dev/null) | grep -qE "^sys1grep: git log .*--since=[0-9T:.-]+Z -- ':\(glob\)\*\*/\*\.py'" || fail "-g: the git log command on stderr"
+(cd "$L" && $JI -g -e 'cat @s:t_today @s:l_python' 2>&1 >/dev/null) | grep -qE "^sys1grep: git log .*--since(-as-filter)?=[0-9T:.-]+Z -- ':\(glob\)\*\*/\*\.py'" || fail "-g: the git log command on stderr"
 gn() { (cd "$L" && $JI -g --verbose "$@" 2>&1 >/dev/null) | grep '^sys1grep:   note: ' | sort -u; }
 eq "$(gn -e 'cat @s:t_today @s:l_python')" "sys1grep:   note: every record here is from Python files, what was changed today." "-g: the note names the scopes git log took"
 eq "$(gn -e 'cat @s:l_python' b.js)" "" "-g: no language in the note when FILE pathspecs replaced it"
@@ -689,6 +689,17 @@ eq "$(gs g_branch)" "dirty.txt feat.txt staged.txt untr.txt " "git scope: this b
 eq "$(gs g_unpushed)" "dirty.txt feat.txt new.txt old.txt " "git scope: unpushed, no remote"
 eq "$(cd "$G" && $GS -l -e 'cat @s:g_staged' 2>/dev/null | tr '\n' ' ')" "staged.txt " "git scope: git sys1grep"
 eq "$($JI -r -l -e 'cat @s:g_staged' "$S" 2>&1 | grep -c 'sys1grep: scope:' || true)" "0" "git scope: not asked outside a repository"
+# #136: git log --since stops the walk at the first older commit; a HEAD dated yesterday (clock skew, a rebase that
+# kept dates) hid every period commit behind it. --since-as-filter (git 2.37) filters instead; older git keeps --since.
+K="$tmp/skew"; mkdir -p "$K"; Y=$(node -e 'const d=new Date();d.setDate(d.getDate()-1);d.setHours(12,0,0,0);console.log(d.toISOString())')
+(cd "$K" && git init -q -b main && git config user.email b@x && git config user.name Bob && git config core.hooksPath /dev/null \
+  && echo 'cat @s:t_today' >today.txt && git add today.txt && git commit -q -m today -m 'cat @s:t_today' \
+  && echo 'cat @s:t_today' >skew.txt && git add skew.txt && GIT_AUTHOR_DATE=$Y GIT_COMMITTER_DATE=$Y git commit -q -m skew -m 'cat @s:t_today')
+eq "$(cd "$K" && $JI -g -e 'cat @s:t_today' 2>/dev/null | grep -aoE '^[0-9a-f]{7,} [0-9-]{10} [a-z]+' | awk '{print $3}' | tr '\n' ' ')" "today " "-g: a period commit behind an older-dated HEAD is still seen"
+eq "$($JI -r -l -e 'cat @s:t_today' "$K" 2>/dev/null | sed "s|$K/||" | tr '\n' ' ')" "today.txt " "git scope: time by commit sees past an older-dated HEAD"
+(cd "$K" && $JI -g -e 'cat @s:t_today' 2>&1 >/dev/null) | grep -q -- '--since-as-filter=' || fail "-g: --since-as-filter on git >= 2.37"
+printf '#!/bin/sh\ncase " $* " in *" --version "*) echo "git version 2.30.0"; exit 0;; esac\nexec %s "$@"\n' "$(command -v git)" >"$tmp/gitwrap/git"
+(cd "$K" && PATH="$tmp/gitwrap:$PATH" $JI -g -e 'cat @s:t_today' 2>&1 >/dev/null) | grep -qE -- ' --since=[0-9T:.-]+Z ' || fail "-g: --since on git < 2.37"
 # places: by path; several are alternatives
 W="$tmp/roles"; mkdir -p "$W/tests" "$W/src" "$W/docs"; RT='cat @s:r_test'; RR='cat @s:r_readme @s:r_changelog'; RC='cat @s:r_code'
 for f in tests/x.js src/y.js README.md docs/guide.txt app.log; do printf '%s\n' "$RT" "$RR" "$RC" >"$W/$f"; done

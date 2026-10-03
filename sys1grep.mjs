@@ -235,8 +235,9 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                git sys1grep's pathspecs are narrowed like the rest (as with --include)
   --auto-scope turn it back on after --no-auto-scope in SYS1GREP_OPTS
   -g, --gitlog search the commits of git log, one record each (hash, date, subject, body), instead of
-               files. With one term, auto-scope becomes git log's arguments: a time --since (and --until
-               when the span has an end: yesterday, last week, last month), a language
+               files. With one term, auto-scope becomes git log's arguments: a time --since-as-filter
+               (--since on git before 2.37, which stops at the first older commit; and --until when
+               the span has an end: yesterday, last week, last month), a language
                pathspecs, an author or mine --author, this branch or not pushed a range; the command goes
                to stderr. FILE arguments are pathspecs. Not with -r or git sys1grep
                  sys1grep -g -e 'a performance fix to the .mjs files today'
@@ -474,8 +475,9 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                絞らない。git sys1grep の pathspec は他と同じく絞る (--include と同じ)
   --auto-scope SYS1GREP_OPTS の --no-auto-scope を打ち消して、絞り込みを有効に戻す
   -g, --gitlog ファイルではなく git log のコミットを、1 コミット 1 レコード (ハッシュ、日付、件名、本文) で探す。
-               項が 1 つなら絞り込みを git log の引数にする: 時期は --since (昨日・先週・先月のように終わりが
-               ある時期は --until も)、言語は pathspec、作者と自分は
+               項が 1 つなら絞り込みを git log の引数にする: 時期は --since-as-filter (2.37 より前の git では
+               --since。最初の古いコミットで止まる。昨日・先週・先月のように終わりがある時期は --until も)、
+               言語は pathspec、作者と自分は
                --author、このブランチと未プッシュは範囲。そのコマンドを stderr に出す。FILE は pathspec。
                -r と git sys1grep とは併用できない
                  sys1grep -g -Q '今日、.mjsにおこなった性能向上の修正'
@@ -1197,12 +1199,23 @@ function byAuthor(top, email) {
   const files = gitPaths(top, 'log', '--use-mailmap', '-i', `--author=<${who.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}>`, '--format=', '--name-only', '-z');
   return !files?.size ? null : me ? union(files, uncommitted(top)) : files;
 }
+// #136: git log --since does not filter by date, it stops the walk at the first older commit, so a HEAD dated earlier
+// than its parent (clock skew, a rebase that kept dates) hides every period commit behind it. --since-as-filter
+// (git 2.37) walks everything and filters; older git keeps --since. --until already filters without stopping.
+let sinceOpt = null;
+function sinceArg(t) {
+  if (!sinceOpt) {
+    const [major, minor] = (gitOut('.', '--version').match(/(\d+)\.(\d+)/) ?? [, 0, 0]).slice(1).map(Number);
+    sinceOpt = major > 2 || (major === 2 && minor >= 37) ? '--since-as-filter' : '--since';
+  }
+  return `${sinceOpt}=${new Date(t).toISOString()}`;
+}
 // A time in a repository: a committed file needs a commit at or after it (a checkout sets every mtime to now, and a
 // commit comes after the edit it records; the committer date, which a rebase moves later, never earlier). An
 // uncommitted file, or one outside a repository, needs its mtime at or after it.
 function changedSince(from, f, st) {
   const abs = resolve(f), top = repoOf(dirname(abs));
-  const committed = top && gitPaths(top, 'log', `--since=${new Date(from).toISOString()}`, '--format=', '--name-only', '-z'), open = top && uncommitted(top);
+  const committed = top && gitPaths(top, 'log', sinceArg(from), '--format=', '--name-only', '-z'), open = top && uncommitted(top);
   return !committed || !open ? st.mtimeMs >= from : committed.has(abs) || (open.has(abs) && st.mtimeMs >= from);
 }
 const inGit = files => f => { const abs = resolve(f), top = repoOf(dirname(abs)), set = top && files(top); return !set || set.has(abs); };
@@ -1553,7 +1566,7 @@ function askToContinue(msg) {
 function gitlogArgs() {
   const cs = (expr.length === 1 ? expr[0] : []).filter(l => l.kind === 's').flatMap(l => l.cs), args = [], paths = [];
   const times = cs.filter(c => c.cat === 'time'), since = Math.max(...times.map(c => c.from)), until = Math.min(...times.filter(c => c.to).map(c => c.to));
-  if (since > -Infinity) args.push(`--since=${new Date(since).toISOString()}`);
+  if (since > -Infinity) args.push(sinceArg(since));
   if (until < Infinity) args.push(`--until=${new Date(until - 1000).toISOString()}`); // git's --until is inclusive, to the second
   const who = c => (c.key === 'g_mine' ? gitOut('.', 'config', 'user.email') : c.email);
   for (const c of cs.filter(c => c.cat === 'author')) if (who(c)) args.push('-i', `--author=<${who(c).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}>`);
