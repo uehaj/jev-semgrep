@@ -1,0 +1,280 @@
+2026-09-13 16:43:39.000 INFO  [scheduler-2] InventorySync - synced 214 items for warehouse WH-4
+2026-09-19 04:27:19.000 INFO  [scheduler-3] InventorySync - synced 230 items for warehouse WH-9
+2026-09-05 06:41:08.000 INFO  [scheduler-2] InventorySync - synced 442 items for warehouse WH-3
+2026-09-10 22:45:57.000 INFO  [scheduler-2] InventorySync - synced 221 items for warehouse WH-3
+2026-09-21 18:58:10.000 ERROR [pool-5-thread-4] OrderService - unexpected error processing order 853e31aa
+java.sql.SQLException: Connection reset
+	at com.example.db.ConnectionPool.borrow(ConnectionPool.java:754)
+	at com.example.db.ConnectionPool.borrow(ConnectionPool.java:40)
+2026-09-25 10:56:26.000 INFO  [scheduler-3] InventorySync - synced 227 items for warehouse WH-5
+2026-09-05 06:06:08.000 INFO  [http-nio-5] RequestLogger - request_id=9e4a4ea3 path=/api/v1/checkout completed in 6265ms status=502
+2026-09-08 19:14:14.000 INFO  [scheduler-3] InventorySync - synced 41 items for warehouse WH-8
+2026-09-05 16:54:38.000 INFO  [scheduler-3] InventorySync - synced 95 items for warehouse WH-7
+2026-09-16 15:08:10.000 INFO  [http-nio-7] RequestLogger - request_id=e7ab6c01 path=/api/v1/checkout completed in 284ms status=200
+2026-09-09 13:14:47.000 INFO  [scheduler-2] InventorySync - synced 388 items for warehouse WH-4
+2026-09-03 05:59:28.000 INFO  [scheduler-4] InventorySync - synced 353 items for warehouse WH-6
+2026-09-28 14:56:15.000 INFO  [scheduler-1] InventorySync - synced 312 items for warehouse WH-7
+2026-09-24 10:25:39.000 INFO  [scheduler-1] InventorySync - synced 267 items for warehouse WH-2
+2026-09-15 14:52:56.000 WARN  [auth-worker-7] AuthService - Authentication failed for user 'dave' from 192.20.198.133: invalid credentials
+2026-09-25 20:03:12.000 INFO  [http-nio-5] RequestLogger - request_id=d24657be path=/api/v1/checkout completed in 3280ms status=200
+2026-09-15 05:27:18.000 INFO  [scheduler-1] InventorySync - synced 354 items for warehouse WH-9
+2026-09-05 14:53:41.000 INFO  [scheduler-1] InventorySync - synced 93 items for warehouse WH-9
+2026-09-05 12:26:20.000 INFO  [scheduler-2] InventorySync - synced 233 items for warehouse WH-4
+2026-09-15 02:16:20.000 INFO  [scheduler-2] InventorySync - synced 368 items for warehouse WH-2
+2026-09-03 03:45:28.000 INFO  [scheduler-1] InventorySync - synced 269 items for warehouse WH-7
+2026-09-24 16:39:10.000 INFO  [scheduler-4] InventorySync - synced 23 items for warehouse WH-3
+2026-09-11 18:55:42.000 INFO  [scheduler-2] InventorySync - synced 445 items for warehouse WH-3
+2026-09-06 22:03:26.000 ERROR [pool-4-thread-10] OrderService - unexpected error processing order db77b8fc
+java.sql.SQLException: Connection reset
+	at com.example.db.ConnectionPool.borrow(ConnectionPool.java:144)
+	at com.example.db.ConnectionPool.borrow(ConnectionPool.java:217)
+2026-09-01 19:48:16.000 WARN  [auth-worker-8] AuthService - Authentication failed for user 'heidi' from 192.2.252.61: invalid credentials
+2026-09-07 18:42:30.000 INFO  [scheduler-4] InventorySync - synced 41 items for warehouse WH-1
+2026-09-08 17:17:39.000 INFO  [scheduler-2] InventorySync - synced 26 items for warehouse WH-3
+2026-09-05 01:41:22.000 WARN  [auth-worker-1] AuthService - Authentication failed for user 'yumi' from 192.152.169.236: invalid credentials
+2026-09-03 01:06:26.000 INFO  [scheduler-2] InventorySync - synced 345 items for warehouse WH-5
+2026-09-20 21:44:44.000 INFO  [scheduler-2] InventorySync - synced 495 items for warehouse WH-8
+2026-09-24 18:23:59.000 WARN  [auth-worker-5] AuthService - Authentication failed for user 'taro' from 172.188.194.210: invalid credentials
+2026-09-03 13:53:35.000 WARN  [auth-worker-3] AuthService - Authentication failed for user 'heidi' from 10.140.168.135: invalid credentials
+2026-09-14 16:13:44.000 INFO  [http-nio-2] RequestLogger - request_id=6df33f23 path=/api/v1/checkout completed in 496ms status=502
+2026-09-03 15:46:44.000 INFO  [scheduler-3] InventorySync - synced 219 items for warehouse WH-6
+2026-09-09 16:36:39.000 ERROR [pool-5-thread-19] OrderService - unexpected error processing order 21229c4c
+java.lang.NullPointerException
+	at com.example.order.OrderService.process(OrderService.java:657)
+	at com.example.order.OrderService.process(OrderService.java:519)
+	at com.example.order.OrderService.process(OrderService.java:514)
+	at com.example.order.OrderService.process(OrderService.java:837)
+2026-09-06 19:14:45.000 INFO  [http-nio-1] RequestLogger - request_id=d8a55da4 path=/api/v1/checkout completed in 1605ms status=500
+2026-09-21 03:47:54.000 INFO  [http-nio-7] RequestLogger - request_id=ddb219a3 path=/api/v1/checkout completed in 5060ms status=200
+2026-09-12 17:51:40.000 INFO  [http-nio-4] RequestLogger - request_id=db8fab8c path=/api/v1/checkout completed in 5267ms status=200
+2026-09-26 02:19:19.000 INFO  [scheduler-3] InventorySync - synced 393 items for warehouse WH-1
+2026-09-04 21:21:21.000 INFO  [scheduler-1] InventorySync - synced 427 items for warehouse WH-3
+2026-09-07 10:53:21.000 INFO  [scheduler-4] InventorySync - synced 470 items for warehouse WH-8
+2026-09-26 01:41:08.000 INFO  [scheduler-4] InventorySync - synced 457 items for warehouse WH-9
+2026-09-11 14:50:52.000 INFO  [scheduler-1] InventorySync - synced 428 items for warehouse WH-9
+2026-09-10 18:46:43.000 ERROR [pool-1-thread-7] OrderService - unexpected error processing order df6f3731
+java.sql.SQLException: Connection reset
+	at com.example.db.ConnectionPool.borrow(ConnectionPool.java:828)
+	at com.example.db.ConnectionPool.borrow(ConnectionPool.java:824)
+	at com.example.db.ConnectionPool.borrow(ConnectionPool.java:372)
+2026-09-03 04:17:53.000 WARN  [auth-worker-3] AuthService - Authentication failed for user 'grace' from 192.199.95.153: invalid credentials
+2026-09-04 09:45:54.000 ERROR [pool-3-thread-14] OrderService - unexpected error processing order 6b016d0c
+java.lang.NullPointerException
+	at com.example.order.OrderService.process(OrderService.java:390)
+	at com.example.order.OrderService.process(OrderService.java:472)
+2026-09-27 09:13:33.000 ERROR [pool-3-thread-2] OrderService - unexpected error processing order 44f99425
+java.lang.NullPointerException
+	at com.example.order.OrderService.process(OrderService.java:464)
+	at com.example.order.OrderService.process(OrderService.java:528)
+2026-09-01 15:57:32.000 INFO  [auth-worker-8] AuthService - User 'frank' logged in successfully, session=5f9d0f4854
+2026-09-17 09:49:20.000 INFO  [auth-worker-2] AuthService - User 'yumi' logged in successfully, session=37c9e47703
+2026-09-17 21:08:13.000 INFO  [scheduler-4] InventorySync - synced 199 items for warehouse WH-9
+2026-09-04 00:19:59.000 WARN  [auth-worker-2] AuthService - Authentication failed for user 'yumi' from 172.239.23.27: invalid credentials
+2026-09-17 21:47:19.000 WARN  [auth-worker-5] AuthService - Authentication failed for user 'taro' from 192.107.164.52: invalid credentials
+2026-09-07 09:17:34.000 ERROR [pool-6-thread-4] OrderService - unexpected error processing order e346e81c
+java.util.concurrent.TimeoutException
+	at com.example.client.HttpClient.call(HttpClient.java:290)
+	at com.example.client.HttpClient.call(HttpClient.java:127)
+2026-09-01 19:35:32.000 INFO  [auth-worker-6] AuthService - User 'ivan' logged in successfully, session=2cd5cfd09e
+2026-09-09 04:45:51.000 INFO  [http-nio-3] RequestLogger - request_id=6cbf6db3 path=/api/v1/checkout completed in 2025ms status=502
+2026-09-11 17:28:03.000 INFO  [auth-worker-1] AuthService - User 'heidi' logged in successfully, session=0592192140
+2026-09-02 02:27:25.000 INFO  [auth-worker-8] AuthService - User 'judy' logged in successfully, session=023693b4d5
+2026-09-10 10:52:12.000 INFO  [scheduler-1] InventorySync - synced 499 items for warehouse WH-8
+2026-09-19 04:05:52.000 INFO  [scheduler-4] InventorySync - synced 50 items for warehouse WH-8
+2026-09-10 21:41:45.000 INFO  [scheduler-4] InventorySync - synced 119 items for warehouse WH-4
+2026-09-05 19:16:58.000 ERROR [pool-6-thread-11] OrderService - unexpected error processing order ed92f8d5
+java.lang.NullPointerException
+	at com.example.order.OrderService.process(OrderService.java:474)
+	at com.example.order.OrderService.process(OrderService.java:509)
+	at com.example.order.OrderService.process(OrderService.java:40)
+2026-09-03 15:07:22.000 INFO  [scheduler-2] InventorySync - synced 145 items for warehouse WH-6
+2026-09-20 18:08:32.000 INFO  [auth-worker-2] AuthService - User 'yumi' logged in successfully, session=1405a61029
+2026-09-21 02:50:19.000 INFO  [scheduler-4] InventorySync - synced 303 items for warehouse WH-7
+2026-09-08 19:15:35.000 INFO  [auth-worker-7] AuthService - User 'heidi' logged in successfully, session=ae8d4dc8a0
+2026-09-07 22:37:27.000 INFO  [scheduler-4] InventorySync - synced 291 items for warehouse WH-6
+2026-09-18 22:15:11.000 INFO  [scheduler-1] InventorySync - synced 379 items for warehouse WH-8
+2026-09-04 18:38:29.000 ERROR [pool-4-thread-6] OrderService - unexpected error processing order b11b15ed
+java.lang.NullPointerException
+	at com.example.order.OrderService.process(OrderService.java:81)
+	at com.example.order.OrderService.process(OrderService.java:622)
+	at com.example.order.OrderService.process(OrderService.java:121)
+2026-09-22 19:49:52.000 INFO  [scheduler-4] InventorySync - synced 331 items for warehouse WH-1
+2026-09-03 06:52:08.000 INFO  [scheduler-1] InventorySync - synced 388 items for warehouse WH-3
+2026-09-22 04:28:34.000 INFO  [http-nio-8] RequestLogger - request_id=e838c25e path=/api/v1/checkout completed in 5062ms status=200
+2026-09-10 18:50:58.000 INFO  [scheduler-4] InventorySync - synced 368 items for warehouse WH-6
+2026-09-03 18:00:39.000 INFO  [scheduler-4] InventorySync - synced 434 items for warehouse WH-3
+2026-09-28 09:03:23.000 INFO  [scheduler-1] InventorySync - synced 1 items for warehouse WH-9
+2026-09-27 11:07:55.000 INFO  [http-nio-4] RequestLogger - request_id=2ab90151 path=/api/v1/checkout completed in 275ms status=502
+2026-09-13 20:20:45.000 INFO  [scheduler-4] InventorySync - synced 223 items for warehouse WH-9
+2026-09-07 21:11:30.000 INFO  [auth-worker-7] AuthService - User 'ivan' logged in successfully, session=a498db1cf5
+2026-09-12 13:09:18.000 INFO  [scheduler-2] InventorySync - synced 69 items for warehouse WH-1
+2026-09-03 20:01:09.000 INFO  [scheduler-4] InventorySync - synced 337 items for warehouse WH-7
+2026-09-05 02:08:41.000 INFO  [scheduler-4] InventorySync - synced 458 items for warehouse WH-7
+2026-09-20 05:29:32.000 INFO  [scheduler-4] InventorySync - synced 197 items for warehouse WH-6
+2026-09-08 05:27:38.000 WARN  [auth-worker-4] AuthService - Authentication failed for user 'heidi' from 192.137.210.238: invalid credentials
+2026-09-18 18:23:02.000 INFO  [scheduler-4] InventorySync - synced 361 items for warehouse WH-6
+2026-09-04 18:30:44.000 WARN  [auth-worker-5] AuthService - Authentication failed for user 'sakura' from 172.40.45.63: invalid credentials
+2026-09-16 20:47:42.000 INFO  [scheduler-1] InventorySync - synced 351 items for warehouse WH-9
+2026-09-26 18:19:39.000 WARN  [auth-worker-1] AuthService - Authentication failed for user 'frank' from 172.232.240.147: invalid credentials
+2026-09-24 10:26:22.000 INFO  [scheduler-3] InventorySync - synced 149 items for warehouse WH-3
+2026-09-02 22:59:38.000 INFO  [scheduler-3] InventorySync - synced 32 items for warehouse WH-8
+2026-09-19 05:36:03.000 INFO  [scheduler-3] InventorySync - synced 415 items for warehouse WH-1
+2026-09-10 15:05:08.000 INFO  [scheduler-3] InventorySync - synced 130 items for warehouse WH-3
+2026-09-20 08:17:54.000 INFO  [http-nio-2] RequestLogger - request_id=849916ff path=/api/v1/checkout completed in 6093ms status=502
+2026-09-24 04:42:28.000 ERROR [pool-3-thread-8] OrderService - unexpected error processing order 018b2210
+java.lang.NullPointerException
+	at com.example.order.OrderService.process(OrderService.java:892)
+	at com.example.order.OrderService.process(OrderService.java:43)
+	at com.example.order.OrderService.process(OrderService.java:361)
+	at com.example.order.OrderService.process(OrderService.java:96)
+2026-09-05 19:59:52.000 INFO  [auth-worker-7] AuthService - User 'heidi' logged in successfully, session=4bec1a888a
+2026-09-08 21:28:46.000 INFO  [scheduler-2] InventorySync - synced 296 items for warehouse WH-6
+2026-09-02 20:16:48.000 INFO  [scheduler-1] InventorySync - synced 86 items for warehouse WH-8
+2026-09-13 15:19:30.000 INFO  [scheduler-2] InventorySync - synced 195 items for warehouse WH-7
+2026-09-16 08:09:33.000 INFO  [scheduler-1] InventorySync - synced 148 items for warehouse WH-8
+2026-09-13 21:20:33.000 INFO  [scheduler-1] InventorySync - synced 50 items for warehouse WH-9
+2026-09-21 11:54:27.000 INFO  [scheduler-3] InventorySync - synced 172 items for warehouse WH-5
+2026-09-09 03:16:41.000 INFO  [scheduler-4] InventorySync - synced 396 items for warehouse WH-4
+2026-09-24 21:37:49.000 INFO  [http-nio-3] RequestLogger - request_id=d56eed91 path=/api/v1/checkout completed in 2784ms status=200
+2026-09-22 00:53:04.000 WARN  [auth-worker-2] AuthService - Authentication failed for user 'bob' from 192.228.179.57: invalid credentials
+2026-09-24 09:16:12.000 WARN  [auth-worker-2] AuthService - Authentication failed for user 'judy' from 10.111.62.182: invalid credentials
+2026-09-04 02:54:38.000 INFO  [auth-worker-3] AuthService - User 'kenji' logged in successfully, session=78fdfc21d4
+2026-09-23 05:16:18.000 INFO  [scheduler-1] InventorySync - synced 328 items for warehouse WH-8
+2026-09-09 13:44:57.000 INFO  [scheduler-3] InventorySync - synced 132 items for warehouse WH-3
+2026-09-25 02:17:49.000 WARN  [auth-worker-6] AuthService - Authentication failed for user 'grace' from 10.132.135.46: invalid credentials
+2026-09-15 02:31:59.000 INFO  [http-nio-3] RequestLogger - request_id=3f597f3f path=/api/v1/checkout completed in 3236ms status=200
+2026-09-05 17:49:27.000 INFO  [http-nio-2] RequestLogger - request_id=4d0f7842 path=/api/v1/checkout completed in 5290ms status=200
+2026-09-04 01:04:04.000 INFO  [scheduler-3] InventorySync - synced 398 items for warehouse WH-8
+2026-09-01 15:09:41.000 INFO  [scheduler-1] InventorySync - synced 341 items for warehouse WH-7
+2026-09-09 04:44:21.000 INFO  [scheduler-1] InventorySync - synced 264 items for warehouse WH-8
+2026-09-16 13:25:54.000 INFO  [scheduler-1] InventorySync - synced 277 items for warehouse WH-4
+2026-09-01 12:44:52.000 INFO  [scheduler-1] InventorySync - synced 291 items for warehouse WH-9
+2026-09-12 10:43:19.000 INFO  [scheduler-1] InventorySync - synced 188 items for warehouse WH-9
+2026-09-28 10:05:53.000 INFO  [scheduler-3] InventorySync - synced 332 items for warehouse WH-4
+2026-09-06 17:02:24.000 INFO  [scheduler-3] InventorySync - synced 357 items for warehouse WH-7
+2026-09-04 20:44:22.000 INFO  [scheduler-4] InventorySync - synced 377 items for warehouse WH-4
+2026-09-05 01:12:01.000 INFO  [scheduler-2] InventorySync - synced 251 items for warehouse WH-7
+2026-09-03 17:41:19.000 INFO  [scheduler-4] InventorySync - synced 495 items for warehouse WH-1
+2026-09-02 10:03:21.000 INFO  [scheduler-1] InventorySync - synced 208 items for warehouse WH-2
+2026-09-07 20:42:33.000 INFO  [scheduler-2] InventorySync - synced 380 items for warehouse WH-4
+2026-09-03 01:47:09.000 INFO  [scheduler-1] InventorySync - synced 242 items for warehouse WH-1
+2026-09-08 22:41:08.000 WARN  [auth-worker-1] AuthService - Authentication failed for user 'kenji' from 172.49.233.157: invalid credentials
+2026-09-06 18:04:52.000 INFO  [scheduler-1] InventorySync - synced 255 items for warehouse WH-4
+2026-09-03 06:27:21.000 INFO  [scheduler-4] InventorySync - synced 167 items for warehouse WH-2
+2026-09-22 18:34:08.000 ERROR [pool-1-thread-19] OrderService - unexpected error processing order 5aba625a
+java.lang.NullPointerException
+	at com.example.order.OrderService.process(OrderService.java:133)
+	at com.example.order.OrderService.process(OrderService.java:290)
+2026-09-05 13:10:44.000 ERROR [pool-4-thread-8] OrderService - unexpected error processing order bc893329
+java.lang.NullPointerException
+	at com.example.order.OrderService.process(OrderService.java:146)
+	at com.example.order.OrderService.process(OrderService.java:112)
+2026-09-26 20:39:24.000 INFO  [scheduler-1] InventorySync - synced 451 items for warehouse WH-8
+2026-09-03 00:00:11.000 INFO  [scheduler-3] InventorySync - synced 214 items for warehouse WH-8
+2026-09-23 04:13:09.000 INFO  [scheduler-4] InventorySync - synced 211 items for warehouse WH-4
+2026-09-06 19:44:02.000 INFO  [scheduler-4] InventorySync - synced 314 items for warehouse WH-2
+2026-09-21 09:22:26.000 WARN  [auth-worker-4] AuthService - Authentication failed for user 'dave' from 10.48.185.221: invalid credentials
+2026-09-25 17:32:14.000 INFO  [scheduler-2] InventorySync - synced 142 items for warehouse WH-1
+2026-09-07 03:50:09.000 INFO  [scheduler-4] InventorySync - synced 255 items for warehouse WH-3
+2026-09-06 21:59:02.000 WARN  [auth-worker-5] AuthService - Authentication failed for user 'frank' from 10.222.128.86: invalid credentials
+2026-09-20 14:02:06.000 INFO  [scheduler-2] InventorySync - synced 81 items for warehouse WH-1
+2026-09-16 16:07:04.000 INFO  [scheduler-4] InventorySync - synced 304 items for warehouse WH-6
+2026-09-14 06:47:43.000 INFO  [scheduler-2] InventorySync - synced 399 items for warehouse WH-2
+2026-09-11 07:06:15.000 INFO  [scheduler-2] InventorySync - synced 193 items for warehouse WH-4
+2026-09-03 15:37:31.000 WARN  [auth-worker-3] AuthService - Authentication failed for user 'grace' from 10.232.91.100: invalid credentials
+2026-09-12 04:29:46.000 INFO  [http-nio-5] RequestLogger - request_id=32b127eb path=/api/v1/checkout completed in 2957ms status=200
+2026-09-02 22:36:03.000 INFO  [http-nio-8] RequestLogger - request_id=417a812b path=/api/v1/checkout completed in 930ms status=200
+2026-09-25 10:14:56.000 INFO  [http-nio-3] RequestLogger - request_id=18336cf2 path=/api/v1/checkout completed in 1304ms status=502
+2026-09-28 07:05:26.000 INFO  [scheduler-4] InventorySync - synced 442 items for warehouse WH-4
+2026-09-19 15:53:29.000 INFO  [http-nio-7] RequestLogger - request_id=720e0ddc path=/api/v1/checkout completed in 6000ms status=200
+2026-09-08 10:27:37.000 INFO  [http-nio-3] RequestLogger - request_id=98333664 path=/api/v1/checkout completed in 4867ms status=200
+2026-09-14 01:02:30.000 INFO  [scheduler-1] InventorySync - synced 218 items for warehouse WH-9
+2026-09-13 15:51:51.000 INFO  [scheduler-1] InventorySync - synced 232 items for warehouse WH-8
+2026-09-08 02:35:48.000 WARN  [auth-worker-7] AuthService - Authentication failed for user 'sakura' from 10.67.183.76: invalid credentials
+2026-09-08 20:05:01.000 INFO  [scheduler-3] InventorySync - synced 83 items for warehouse WH-8
+2026-09-28 18:47:37.000 WARN  [auth-worker-8] AuthService - Authentication failed for user 'heidi' from 10.207.94.203: invalid credentials
+2026-09-28 11:40:29.000 INFO  [scheduler-1] InventorySync - synced 441 items for warehouse WH-2
+2026-09-13 22:21:33.000 WARN  [auth-worker-5] AuthService - Authentication failed for user 'grace' from 192.106.41.159: invalid credentials
+2026-09-11 23:59:03.000 INFO  [scheduler-3] InventorySync - synced 455 items for warehouse WH-1
+2026-09-04 12:23:29.000 INFO  [scheduler-3] InventorySync - synced 188 items for warehouse WH-3
+2026-09-21 17:45:04.000 INFO  [scheduler-2] InventorySync - synced 71 items for warehouse WH-6
+2026-09-08 17:07:41.000 INFO  [scheduler-2] InventorySync - synced 386 items for warehouse WH-4
+2026-09-11 11:57:17.000 INFO  [scheduler-4] InventorySync - synced 142 items for warehouse WH-1
+2026-09-03 11:22:28.000 INFO  [scheduler-1] InventorySync - synced 241 items for warehouse WH-9
+2026-09-22 17:57:18.000 INFO  [scheduler-3] InventorySync - synced 410 items for warehouse WH-2
+2026-09-07 14:05:05.000 INFO  [scheduler-2] InventorySync - synced 148 items for warehouse WH-2
+2026-09-04 05:17:07.000 INFO  [scheduler-4] InventorySync - synced 78 items for warehouse WH-4
+2026-09-17 20:01:18.000 INFO  [scheduler-2] InventorySync - synced 243 items for warehouse WH-6
+2026-09-14 14:47:41.000 WARN  [auth-worker-2] AuthService - Authentication failed for user 'dave' from 10.118.171.106: invalid credentials
+2026-09-19 10:41:41.000 INFO  [scheduler-4] InventorySync - synced 304 items for warehouse WH-9
+2026-09-27 17:28:29.000 ERROR [pool-3-thread-6] OrderService - unexpected error processing order e7543d91
+java.lang.NullPointerException
+	at com.example.order.OrderService.process(OrderService.java:505)
+	at com.example.order.OrderService.process(OrderService.java:390)
+2026-09-10 01:09:22.000 INFO  [http-nio-3] RequestLogger - request_id=810d56a6 path=/api/v1/checkout completed in 1382ms status=200
+2026-09-06 05:53:45.000 INFO  [scheduler-2] InventorySync - synced 83 items for warehouse WH-4
+2026-09-04 01:20:36.000 INFO  [auth-worker-6] AuthService - User 'erin' logged in successfully, session=18fb3733f4
+2026-09-18 22:02:42.000 ERROR [pool-2-thread-12] OrderService - unexpected error processing order d5e8c481
+java.util.concurrent.TimeoutException
+	at com.example.client.HttpClient.call(HttpClient.java:556)
+	at com.example.client.HttpClient.call(HttpClient.java:318)
+2026-09-04 00:25:59.000 INFO  [scheduler-2] InventorySync - synced 486 items for warehouse WH-8
+2026-09-11 04:00:47.000 INFO  [scheduler-3] InventorySync - synced 332 items for warehouse WH-5
+2026-09-16 09:48:36.000 INFO  [scheduler-4] InventorySync - synced 174 items for warehouse WH-2
+2026-09-24 15:57:02.000 INFO  [auth-worker-2] AuthService - User 'ivan' logged in successfully, session=4479c682ab
+2026-09-13 19:53:14.000 INFO  [scheduler-1] InventorySync - synced 168 items for warehouse WH-1
+2026-09-20 20:12:37.000 INFO  [scheduler-3] InventorySync - synced 101 items for warehouse WH-1
+2026-09-03 17:54:28.000 INFO  [scheduler-1] InventorySync - synced 500 items for warehouse WH-9
+2026-09-13 06:31:20.000 INFO  [scheduler-1] InventorySync - synced 466 items for warehouse WH-6
+2026-09-13 04:45:54.000 INFO  [scheduler-4] InventorySync - synced 191 items for warehouse WH-1
+2026-09-10 11:22:19.000 INFO  [scheduler-1] InventorySync - synced 111 items for warehouse WH-8
+2026-09-24 13:51:28.000 INFO  [http-nio-7] RequestLogger - request_id=83b72099 path=/api/v1/checkout completed in 5983ms status=500
+2026-09-05 18:38:05.000 INFO  [auth-worker-8] AuthService - User 'erin' logged in successfully, session=e349044737
+2026-09-17 10:04:59.000 INFO  [scheduler-4] InventorySync - synced 46 items for warehouse WH-1
+2026-09-14 20:58:17.000 INFO  [scheduler-4] InventorySync - synced 364 items for warehouse WH-3
+2026-09-07 05:53:24.000 INFO  [http-nio-1] RequestLogger - request_id=1e01bd60 path=/api/v1/checkout completed in 4038ms status=200
+2026-09-27 18:19:31.000 INFO  [scheduler-4] InventorySync - synced 115 items for warehouse WH-1
+2026-09-26 00:09:16.000 ERROR [pool-6-thread-16] OrderService - unexpected error processing order 39804a29
+java.sql.SQLException: Connection reset
+	at com.example.db.ConnectionPool.borrow(ConnectionPool.java:304)
+	at com.example.db.ConnectionPool.borrow(ConnectionPool.java:437)
+	at com.example.db.ConnectionPool.borrow(ConnectionPool.java:193)
+	at com.example.db.ConnectionPool.borrow(ConnectionPool.java:513)
+2026-09-23 20:15:01.000 INFO  [auth-worker-8] AuthService - User 'erin' logged in successfully, session=e1a6ef2643
+2026-09-03 19:47:23.000 INFO  [scheduler-4] InventorySync - synced 445 items for warehouse WH-5
+2026-09-21 21:30:44.000 INFO  [scheduler-3] InventorySync - synced 263 items for warehouse WH-1
+2026-09-28 08:10:37.000 WARN  [auth-worker-8] AuthService - Authentication failed for user 'frank' from 192.69.182.42: invalid credentials
+2026-09-02 08:23:26.000 INFO  [scheduler-3] InventorySync - synced 25 items for warehouse WH-5
+2026-09-10 16:40:59.000 WARN  [auth-worker-3] AuthService - Authentication failed for user 'dave' from 10.85.165.224: invalid credentials
+2026-09-11 21:51:19.000 INFO  [http-nio-6] RequestLogger - request_id=57be38e8 path=/api/v1/checkout completed in 5737ms status=502
+2026-09-12 04:00:08.000 INFO  [scheduler-3] InventorySync - synced 399 items for warehouse WH-8
+2026-09-14 10:58:58.000 INFO  [auth-worker-3] AuthService - User 'dave' logged in successfully, session=1786903d18
+2026-09-27 06:50:57.000 INFO  [scheduler-1] InventorySync - synced 214 items for warehouse WH-8
+2026-09-03 03:52:08.000 INFO  [scheduler-4] InventorySync - synced 179 items for warehouse WH-5
+2026-09-23 11:08:52.000 INFO  [scheduler-3] InventorySync - synced 89 items for warehouse WH-5
+2026-09-01 23:52:07.000 INFO  [http-nio-3] RequestLogger - request_id=67fc11f6 path=/api/v1/checkout completed in 5707ms status=200
+2026-09-05 06:08:05.000 INFO  [scheduler-1] InventorySync - synced 40 items for warehouse WH-1
+2026-09-25 15:48:27.000 WARN  [auth-worker-1] AuthService - Authentication failed for user 'bob' from 192.30.240.31: invalid credentials
+2026-09-09 01:04:19.000 INFO  [scheduler-1] InventorySync - synced 401 items for warehouse WH-2
+2026-09-20 06:37:57.000 INFO  [http-nio-6] RequestLogger - request_id=e63c6c7e path=/api/v1/checkout completed in 5513ms status=200
+2026-09-28 23:17:37.000 ERROR [pool-5-thread-20] OrderService - unexpected error processing order bcc10092
+java.lang.NullPointerException
+	at com.example.order.OrderService.process(OrderService.java:79)
+	at com.example.order.OrderService.process(OrderService.java:111)
+	at com.example.order.OrderService.process(OrderService.java:849)
+	at com.example.order.OrderService.process(OrderService.java:602)
+2026-09-25 00:33:13.000 INFO  [scheduler-3] InventorySync - synced 88 items for warehouse WH-9
+2026-09-01 23:06:59.000 INFO  [http-nio-8] RequestLogger - request_id=61390289 path=/api/v1/checkout completed in 4150ms status=502
+2026-09-06 14:43:06.000 INFO  [http-nio-7] RequestLogger - request_id=764871cc path=/api/v1/checkout completed in 2926ms status=502
+2026-09-08 13:07:48.000 INFO  [scheduler-1] InventorySync - synced 239 items for warehouse WH-2
+2026-09-17 04:31:48.000 ERROR [pool-5-thread-2] OrderService - unexpected error processing order dc49a070
+java.util.concurrent.TimeoutException
+	at com.example.client.HttpClient.call(HttpClient.java:128)
+	at com.example.client.HttpClient.call(HttpClient.java:404)
+	at com.example.client.HttpClient.call(HttpClient.java:300)
+2026-09-15 19:47:19.000 INFO  [scheduler-4] InventorySync - synced 116 items for warehouse WH-9
+2026-09-14 09:54:27.000 INFO  [http-nio-8] RequestLogger - request_id=d50376c6 path=/api/v1/checkout completed in 590ms status=200
+2026-09-06 00:43:31.000 INFO  [scheduler-4] InventorySync - synced 225 items for warehouse WH-9
+2026-09-22 21:05:07.000 INFO  [auth-worker-2] AuthService - User 'grace' logged in successfully, session=66b2c2e96c
+2026-09-06 02:23:12.000 ERROR [pool-4-thread-4] OrderService - unexpected error processing order f5595b77
+java.sql.SQLException: Connection reset

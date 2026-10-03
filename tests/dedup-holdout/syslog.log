@@ -1,0 +1,220 @@
+Sep 06 23:00:44 batch01 dhclient[32617]: DHCPACK of 192.16.93.155 from 172.113.53.240
+Sep 05 10:47:04 web02 kernel[13841]: iptables: DROPPED IN=eth0 OUT= MAC=00:1a:2b:3c:4d:5e SRC=172.85.45.211 DST=192.171.228.3 DPT=443 PROTO=TCP
+Sep 08 22:04:22 db01 dhclient[27233]: DHCPACK of 192.0.24.99 from 172.214.85.227
+Sep 16 12:22:34 batch01 diskmond[51790]: disk usage at 70% on /var/log (threshold 90%)
+Sep 28 18:41:48 web02 sudo[1415]: bob : TTY=pts/0 ; PWD=/home/erin ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 11 08:06:04 db01 sudo[5015]: grace : TTY=pts/1 ; PWD=/home/sakura ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 18 02:21:38 batch01 systemd[10913]: Started Session 541 of user kenji.
+Sep 20 13:10:03 web01 kernel[25849]: iptables: DROPPED IN=eth0 OUT= MAC=00:1a:2b:3c:4d:5e SRC=10.209.135.170 DST=172.152.121.25 DPT=22 PROTO=TCP
+Sep 19 17:53:31 web02 diskmond[28123]: disk usage at 40% on /var/log (threshold 90%)
+Sep 03 09:52:42 batch01 sudo[41924]: alice : TTY=pts/1 ; PWD=/home/carol ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 10 02:30:54 web01 cron[32153]: (root) CMD (/usr/local/bin/backup.sh --id 449ce244)
+Sep 22 08:05:41 batch01 sudo[29314]: grace : TTY=pts/2 ; PWD=/home/carol ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 02 08:28:29 db01 cron[4139]: (root) CMD (/usr/local/bin/backup.sh --id 452a614e)
+Sep 05 22:42:06 web01 systemd[27231]: Started Session 927 of user ivan.
+Sep 25 18:14:35 web01 dhclient[25973]: DHCPACK of 192.214.243.147 from 10.243.153.21
+Sep 28 22:02:32 web02 sudo[62297]: taro : TTY=pts/3 ; PWD=/home/carol ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 06 06:51:12 web02 diskmond[64867]: disk usage at 45% on /var/log (threshold 90%)
+Sep 22 13:12:52 web02 dhclient[18201]: DHCPACK of 172.163.34.23 from 172.203.166.220
+Sep 17 14:58:55 web01 dhclient[7022]: DHCPACK of 192.214.57.107 from 10.75.51.237
+Sep 19 03:50:18 db01 dhclient[18149]: DHCPACK of 172.196.248.147 from 192.242.19.45
+Sep 13 04:39:38 batch01 diskmond[57703]: disk usage at 96% on /var/log (threshold 90%)
+Sep 11 22:15:03 batch01 dhclient[32318]: DHCPACK of 172.10.172.210 from 172.159.143.216
+Sep 28 22:43:06 web02 sudo[54221]: sakura : TTY=pts/3 ; PWD=/home/taro ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 11 08:46:26 web01 sudo[31849]: dave : TTY=pts/3 ; PWD=/home/sakura ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 25 16:55:23 web01 NetworkManager[20489]: <info> device (eth0): link became up
+Sep 23 16:25:08 web01 sudo[3876]: yumi : TTY=pts/1 ; PWD=/home/yumi ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 08 01:29:03 db01 systemd[54069]: Started Session 380 of user frank.
+Sep 15 16:25:40 web01 systemd[32133]: Started Session 347 of user frank.
+Sep 20 14:11:55 batch01 postfix/smtpd[58721]: connect from unknown[172.176.83.215]
+Sep 09 23:53:44 web01 cron[10776]: (root) CMD (/usr/local/bin/backup.sh --id 21048267)
+Sep 28 18:49:13 web02 systemd[17734]: Started Session 793 of user dave.
+Sep 21 13:32:01 web01 NetworkManager[11450]: <info> device (eth0): link became up
+Sep 20 00:14:16 db01 systemd[18147]: Started Session 826 of user kenji.
+Sep 14 12:54:22 batch01 cron[44480]: (root) CMD (/usr/local/bin/backup.sh --id 4e3faa88)
+Sep 17 19:25:37 web01 diskmond[63439]: disk usage at 82% on /var/log (threshold 90%)
+Sep 27 11:35:41 db01 cron[4283]: (root) CMD (/usr/local/bin/backup.sh --id 207e6afc)
+Sep 11 08:40:20 db01 cron[58582]: (root) CMD (/usr/local/bin/backup.sh --id e2d73acc)
+Sep 21 09:12:09 web02 dhclient[17101]: DHCPACK of 192.206.163.175 from 10.13.254.76
+Sep 14 12:24:47 web01 postfix/smtpd[46851]: connect from unknown[192.97.175.186]
+Sep 08 21:34:40 batch01 dhclient[30953]: DHCPACK of 192.183.153.217 from 10.92.150.25
+Sep 05 23:16:46 web02 dhclient[58220]: DHCPACK of 172.45.113.91 from 10.157.215.202
+Sep 11 11:16:37 db01 NetworkManager[3617]: <info> device (eth0): link became up
+Sep 28 20:37:37 web01 NetworkManager[7952]: <info> device (eth0): link became up
+Sep 28 21:24:33 db01 kernel[47002]: iptables: DROPPED IN=eth0 OUT= MAC=00:1a:2b:3c:4d:5e SRC=10.70.102.88 DST=172.234.73.81 DPT=5432 PROTO=TCP
+Sep 06 02:31:21 web02 cron[29725]: (root) CMD (/usr/local/bin/backup.sh --id b4649079)
+Sep 09 06:48:49 web02 postfix/smtpd[40370]: connect from unknown[10.250.45.34]
+Sep 14 20:27:25 batch01 dhclient[21216]: DHCPACK of 172.2.19.137 from 10.191.7.229
+Sep 25 16:12:01 web01 systemd[45550]: Started Session 354 of user dave.
+Sep 12 09:08:06 batch01 NetworkManager[4378]: <info> device (eth0): link became up
+Sep 27 01:19:18 batch01 dhclient[32224]: DHCPACK of 192.172.222.228 from 192.68.175.231
+Sep 12 06:10:58 batch01 diskmond[47755]: disk usage at 54% on /var/log (threshold 90%)
+Sep 05 06:46:01 web02 sudo[57545]: sakura : TTY=pts/0 ; PWD=/home/grace ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 21 08:49:34 web01 postfix/smtpd[45303]: connect from unknown[10.55.10.13]
+Sep 04 13:28:24 web01 postfix/smtpd[45040]: connect from unknown[172.78.105.178]
+Sep 21 00:19:26 web01 systemd[39790]: Started Session 376 of user judy.
+Sep 23 04:26:53 web01 NetworkManager[18627]: <info> device (eth0): link became up
+Sep 04 03:31:12 web02 dhclient[36022]: DHCPACK of 192.103.183.181 from 172.151.82.11
+Sep 16 06:44:59 batch01 kernel[51187]: iptables: DROPPED IN=eth0 OUT= MAC=00:1a:2b:3c:4d:5e SRC=10.6.45.233 DST=10.252.76.244 DPT=22 PROTO=TCP
+Sep 17 02:46:46 web01 dhclient[6641]: DHCPACK of 192.118.233.254 from 172.135.237.13
+Sep 27 05:55:02 db01 kernel[9169]: iptables: DROPPED IN=eth0 OUT= MAC=00:1a:2b:3c:4d:5e SRC=192.160.218.190 DST=10.48.23.3 DPT=5432 PROTO=TCP
+Sep 22 20:10:21 db01 dhclient[26330]: DHCPACK of 192.137.47.96 from 172.93.58.103
+Sep 15 08:53:24 batch01 dhclient[27364]: DHCPACK of 192.85.57.34 from 192.30.81.27
+Sep 19 15:51:36 batch01 sudo[1988]: grace : TTY=pts/2 ; PWD=/home/judy ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 28 21:56:53 web02 NetworkManager[58269]: <info> device (eth0): link became up
+Sep 14 14:02:04 db01 systemd[57007]: Started Session 112 of user sakura.
+Sep 22 16:49:47 web02 dhclient[43596]: DHCPACK of 192.173.48.111 from 192.127.246.89
+Sep 22 20:24:09 web01 diskmond[10384]: disk usage at 99% on /var/log (threshold 90%)
+Sep 17 15:54:31 web02 diskmond[21113]: disk usage at 71% on /var/log (threshold 90%)
+Sep 08 10:17:03 web02 postfix/smtpd[30187]: connect from unknown[172.206.120.21]
+Sep 15 18:28:05 batch01 NetworkManager[32695]: <info> device (eth0): link became up
+Sep 24 20:01:06 batch01 kernel[29998]: iptables: DROPPED IN=eth0 OUT= MAC=00:1a:2b:3c:4d:5e SRC=192.0.46.203 DST=192.155.105.168 DPT=8080 PROTO=TCP
+Sep 11 11:52:03 web02 dhclient[43282]: DHCPACK of 172.242.186.184 from 172.58.49.195
+Sep 08 00:21:22 db01 postfix/smtpd[10858]: connect from unknown[172.54.23.230]
+Sep 16 04:52:45 batch01 diskmond[12939]: disk usage at 79% on /var/log (threshold 90%)
+Sep 07 03:59:54 batch01 sudo[22246]: yumi : TTY=pts/1 ; PWD=/home/sakura ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 04 13:02:59 web01 dhclient[61396]: DHCPACK of 172.234.68.247 from 172.2.24.142
+Sep 14 18:30:59 web02 systemd[53527]: Started Session 277 of user sakura.
+Sep 05 03:24:42 db01 NetworkManager[64292]: <info> device (eth0): link became up
+Sep 20 22:48:15 db01 kernel[58193]: iptables: DROPPED IN=eth0 OUT= MAC=00:1a:2b:3c:4d:5e SRC=172.150.231.207 DST=10.70.211.155 DPT=8080 PROTO=TCP
+Sep 24 16:19:53 db01 systemd[14343]: Started Session 666 of user kenji.
+Sep 07 06:39:45 db01 systemd[64412]: Started Session 788 of user carol.
+Sep 23 20:11:32 db01 systemd[36949]: Started Session 879 of user frank.
+Sep 16 18:36:42 batch01 systemd[18838]: Started Session 961 of user ivan.
+Sep 28 13:51:00 web01 diskmond[3577]: disk usage at 49% on /var/log (threshold 90%)
+Sep 22 01:12:17 web02 dhclient[35566]: DHCPACK of 192.128.74.215 from 10.151.104.193
+Sep 02 11:52:28 web01 postfix/smtpd[33583]: connect from unknown[192.114.199.61]
+Sep 26 22:18:44 web01 dhclient[16571]: DHCPACK of 172.213.160.248 from 192.27.6.191
+Sep 07 19:55:49 batch01 dhclient[11727]: DHCPACK of 192.188.100.199 from 192.99.150.115
+Sep 22 02:11:11 web01 kernel[46610]: iptables: DROPPED IN=eth0 OUT= MAC=00:1a:2b:3c:4d:5e SRC=172.142.135.34 DST=10.130.2.85 DPT=443 PROTO=TCP
+Sep 05 01:09:59 db01 postfix/smtpd[37630]: connect from unknown[192.154.251.203]
+Sep 18 11:04:50 db01 postfix/smtpd[35691]: connect from unknown[10.34.81.107]
+Sep 18 12:05:22 web02 dhclient[54081]: DHCPACK of 192.169.169.93 from 172.111.243.144
+Sep 25 20:00:07 db01 NetworkManager[40319]: <info> device (eth0): link became down
+Sep 20 07:02:43 db01 kernel[53977]: iptables: DROPPED IN=eth0 OUT= MAC=00:1a:2b:3c:4d:5e SRC=10.197.131.139 DST=192.144.12.234 DPT=3389 PROTO=TCP
+Sep 25 11:32:51 batch01 NetworkManager[42798]: <info> device (eth0): link became up
+Sep 07 10:32:05 web01 sudo[580]: taro : TTY=pts/4 ; PWD=/home/ivan ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 21 02:13:42 web02 dhclient[45060]: DHCPACK of 172.53.105.138 from 192.222.36.192
+Sep 05 00:29:45 db01 diskmond[3656]: disk usage at 44% on /var/log (threshold 90%)
+Sep 06 08:35:04 web02 dhclient[25626]: DHCPACK of 172.198.230.162 from 172.221.161.5
+Sep 22 03:34:00 web01 dhclient[45049]: DHCPACK of 192.23.37.92 from 192.54.148.202
+Sep 10 19:05:18 batch01 kernel[52317]: iptables: DROPPED IN=eth0 OUT= MAC=00:1a:2b:3c:4d:5e SRC=192.15.242.41 DST=192.112.69.192 DPT=443 PROTO=TCP
+Sep 26 17:18:40 web02 cron[63366]: (root) CMD (/usr/local/bin/backup.sh --id f6bf9a5d)
+Sep 26 23:41:23 web01 postfix/smtpd[429]: connect from unknown[192.72.63.11]
+Sep 19 19:25:34 web01 cron[59314]: (root) CMD (/usr/local/bin/backup.sh --id 18e52d45)
+Sep 24 11:13:26 web02 sudo[16663]: dave : TTY=pts/4 ; PWD=/home/yumi ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 07 03:11:42 web01 dhclient[13037]: DHCPACK of 192.236.37.75 from 192.34.128.26
+Sep 24 18:31:21 db01 sudo[18786]: kenji : TTY=pts/1 ; PWD=/home/bob ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 20 02:57:12 db01 NetworkManager[43315]: <info> device (eth0): link became up
+Sep 10 22:37:09 db01 dhclient[55157]: DHCPACK of 172.86.2.81 from 10.113.223.71
+Sep 12 04:43:46 db01 dhclient[42406]: DHCPACK of 172.228.183.199 from 172.249.55.45
+Sep 20 02:53:17 web02 dhclient[38234]: DHCPACK of 10.134.39.187 from 10.9.15.209
+Sep 19 12:49:37 web02 dhclient[58521]: DHCPACK of 192.133.241.168 from 10.187.200.58
+Sep 25 18:46:54 db01 sudo[26103]: ivan : TTY=pts/4 ; PWD=/home/bob ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 12 16:00:42 web02 dhclient[48072]: DHCPACK of 192.84.71.115 from 10.91.74.189
+Sep 16 11:02:14 batch01 cron[15436]: (root) CMD (/usr/local/bin/backup.sh --id a6b6ad4d)
+Sep 02 21:13:33 db01 kernel[41621]: iptables: DROPPED IN=eth0 OUT= MAC=00:1a:2b:3c:4d:5e SRC=172.23.20.252 DST=192.165.52.181 DPT=3389 PROTO=TCP
+Sep 27 08:53:47 db01 postfix/smtpd[24906]: connect from unknown[192.89.192.168]
+Sep 12 18:41:57 web01 NetworkManager[59557]: <info> device (eth0): link became up
+Sep 08 16:25:22 db01 NetworkManager[39697]: <info> device (eth0): link became up
+Sep 01 16:56:08 batch01 sudo[18503]: bob : TTY=pts/4 ; PWD=/home/kenji ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 07 04:11:10 db01 postfix/smtpd[21741]: connect from unknown[10.117.212.208]
+Sep 24 03:30:43 batch01 NetworkManager[42518]: <info> device (eth0): link became up
+Sep 27 13:01:15 web01 sudo[41357]: judy : TTY=pts/1 ; PWD=/home/carol ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 17 01:57:36 web02 diskmond[60553]: disk usage at 56% on /var/log (threshold 90%)
+Sep 06 16:25:38 web01 dhclient[14476]: DHCPACK of 192.145.43.56 from 172.241.246.44
+Sep 27 13:38:09 web02 systemd[11091]: Started Session 623 of user erin.
+Sep 24 21:21:59 batch01 postfix/smtpd[8764]: connect from unknown[10.117.193.99]
+Sep 04 00:12:33 batch01 dhclient[31704]: DHCPACK of 192.49.90.122 from 192.19.60.24
+Sep 22 04:57:38 web01 dhclient[52679]: DHCPACK of 192.220.215.95 from 10.219.117.241
+Sep 16 12:22:37 web01 NetworkManager[50291]: <info> device (eth0): link became up
+Sep 08 02:18:38 batch01 cron[48835]: (root) CMD (/usr/local/bin/backup.sh --id e96021ea)
+Sep 26 00:36:33 web01 NetworkManager[13562]: <info> device (eth0): link became up
+Sep 23 10:26:23 web01 sudo[17224]: kenji : TTY=pts/4 ; PWD=/home/erin ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 28 17:27:36 db01 postfix/smtpd[36282]: connect from unknown[192.203.104.106]
+Sep 26 17:30:11 db01 postfix/smtpd[22667]: connect from unknown[172.129.157.148]
+Sep 25 22:25:47 web02 dhclient[33414]: DHCPACK of 192.60.117.115 from 192.82.51.55
+Sep 13 10:51:35 web01 sudo[6069]: kenji : TTY=pts/0 ; PWD=/home/taro ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 27 04:30:59 batch01 diskmond[14633]: disk usage at 56% on /var/log (threshold 90%)
+Sep 12 02:38:02 batch01 dhclient[13319]: DHCPACK of 172.146.29.243 from 10.253.224.3
+Sep 28 21:59:51 db01 sudo[33904]: taro : TTY=pts/4 ; PWD=/home/ivan ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 23 07:39:10 web01 kernel[26671]: iptables: DROPPED IN=eth0 OUT= MAC=00:1a:2b:3c:4d:5e SRC=192.0.80.23 DST=172.204.180.172 DPT=443 PROTO=TCP
+Sep 19 06:33:00 web01 dhclient[61029]: DHCPACK of 192.145.178.89 from 172.115.99.117
+Sep 13 18:00:16 web02 kernel[63411]: iptables: DROPPED IN=eth0 OUT= MAC=00:1a:2b:3c:4d:5e SRC=10.37.150.88 DST=10.131.128.178 DPT=443 PROTO=TCP
+Sep 13 18:30:49 web02 dhclient[41627]: DHCPACK of 172.235.14.124 from 10.132.34.98
+Sep 26 07:43:44 web02 dhclient[26244]: DHCPACK of 172.180.4.180 from 172.127.147.24
+Sep 22 23:52:21 web01 postfix/smtpd[14423]: connect from unknown[10.243.160.91]
+Sep 19 08:11:47 web02 NetworkManager[48297]: <info> device (eth0): link became up
+Sep 08 08:13:14 web02 dhclient[62737]: DHCPACK of 192.182.79.200 from 10.61.40.174
+Sep 22 15:39:00 web01 dhclient[64613]: DHCPACK of 172.161.252.230 from 192.140.251.47
+Sep 25 16:17:25 web02 dhclient[56487]: DHCPACK of 10.27.216.123 from 192.16.177.101
+Sep 22 05:29:07 batch01 cron[44278]: (root) CMD (/usr/local/bin/backup.sh --id 46660886)
+Sep 07 12:37:06 db01 kernel[32787]: iptables: DROPPED IN=eth0 OUT= MAC=00:1a:2b:3c:4d:5e SRC=172.95.134.61 DST=172.241.175.94 DPT=80 PROTO=TCP
+Sep 14 06:26:44 db01 kernel[47339]: iptables: DROPPED IN=eth0 OUT= MAC=00:1a:2b:3c:4d:5e SRC=172.143.230.47 DST=192.67.117.209 DPT=22 PROTO=TCP
+Sep 09 07:35:27 batch01 sudo[52900]: taro : TTY=pts/1 ; PWD=/home/heidi ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 01 05:26:31 web02 dhclient[45355]: DHCPACK of 192.161.249.77 from 172.24.203.26
+Sep 06 01:13:52 db01 NetworkManager[29581]: <info> device (eth0): link became up
+Sep 24 10:16:23 db01 postfix/smtpd[8045]: connect from unknown[172.176.10.106]
+Sep 12 21:38:12 web02 dhclient[5238]: DHCPACK of 172.181.166.173 from 192.249.228.228
+Sep 13 19:18:29 web02 dhclient[10716]: DHCPACK of 192.172.215.162 from 192.207.36.21
+Sep 11 07:20:20 db01 systemd[26016]: Started Session 719 of user kenji.
+Sep 09 14:49:55 db01 dhclient[15476]: DHCPACK of 192.230.211.43 from 10.11.64.187
+Sep 22 08:47:44 web01 sudo[4280]: grace : TTY=pts/0 ; PWD=/home/bob ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 16 17:03:01 batch01 postfix/smtpd[10276]: connect from unknown[10.53.134.159]
+Sep 03 20:59:56 batch01 cron[18723]: (root) CMD (/usr/local/bin/backup.sh --id c37986a9)
+Sep 15 20:08:08 web02 diskmond[23485]: disk usage at 82% on /var/log (threshold 90%)
+Sep 28 10:55:30 batch01 dhclient[49180]: DHCPACK of 192.139.227.35 from 192.90.233.162
+Sep 21 18:27:33 db01 dhclient[10305]: DHCPACK of 172.116.45.114 from 172.187.211.67
+Sep 10 00:00:33 web02 kernel[52395]: iptables: DROPPED IN=eth0 OUT= MAC=00:1a:2b:3c:4d:5e SRC=172.4.251.243 DST=172.153.4.197 DPT=443 PROTO=TCP
+Sep 10 19:14:50 web01 postfix/smtpd[16477]: connect from unknown[10.210.223.102]
+Sep 06 22:47:41 batch01 dhclient[42597]: DHCPACK of 10.134.40.109 from 192.122.139.73
+Sep 24 17:51:17 batch01 sudo[19078]: bob : TTY=pts/1 ; PWD=/home/carol ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 04 20:29:39 batch01 cron[12406]: (root) CMD (/usr/local/bin/backup.sh --id 38470693)
+Sep 11 00:09:03 web01 sudo[8294]: bob : TTY=pts/2 ; PWD=/home/erin ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 23 14:46:00 web02 diskmond[32447]: disk usage at 40% on /var/log (threshold 90%)
+Sep 07 10:26:19 batch01 dhclient[25817]: DHCPACK of 172.16.169.21 from 10.28.136.199
+Sep 03 17:30:11 web02 dhclient[63995]: DHCPACK of 172.195.6.32 from 192.127.197.198
+Sep 15 07:47:02 web02 NetworkManager[34253]: <info> device (eth0): link became up
+Sep 22 06:30:24 db01 dhclient[58264]: DHCPACK of 10.21.62.65 from 172.152.101.93
+Sep 02 21:13:07 web02 systemd[11068]: Started Session 432 of user alice.
+Sep 26 08:37:07 batch01 dhclient[5964]: DHCPACK of 10.21.243.177 from 192.79.190.198
+Sep 08 05:31:05 db01 dhclient[32071]: DHCPACK of 192.30.30.92 from 192.78.54.33
+Sep 08 10:35:50 db01 dhclient[58994]: DHCPACK of 172.98.10.177 from 172.183.68.65
+Sep 02 15:45:28 db01 postfix/smtpd[22884]: connect from unknown[172.97.95.140]
+Sep 11 23:29:17 web02 diskmond[29550]: disk usage at 49% on /var/log (threshold 90%)
+Sep 10 08:34:23 batch01 diskmond[33258]: disk usage at 80% on /var/log (threshold 90%)
+Sep 13 23:11:56 web01 postfix/smtpd[4251]: connect from unknown[172.122.164.185]
+Sep 22 17:52:24 web02 postfix/smtpd[26956]: connect from unknown[172.78.144.83]
+Sep 21 10:07:06 web01 diskmond[11807]: disk usage at 48% on /var/log (threshold 90%)
+Sep 28 01:12:06 batch01 sudo[54907]: alice : TTY=pts/4 ; PWD=/home/kenji ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Sep 13 21:31:33 db01 diskmond[39811]: disk usage at 54% on /var/log (threshold 90%)
+Sep 23 02:00:59 web02 systemd[30774]: Started Session 952 of user bob.
+Sep 26 20:03:23 batch01 dhclient[62005]: DHCPACK of 192.29.136.136 from 10.36.155.20
+Sep 07 16:06:06 web02 postfix/smtpd[41081]: connect from unknown[10.98.127.146]
+Sep 06 17:47:35 batch01 dhclient[52034]: DHCPACK of 192.183.234.180 from 192.218.53.43
+Sep 06 17:25:32 db01 systemd[29133]: Started Session 646 of user judy.
+Sep 12 10:35:20 db01 kernel[60795]: iptables: DROPPED IN=eth0 OUT= MAC=00:1a:2b:3c:4d:5e SRC=192.220.165.156 DST=10.109.192.197 DPT=3389 PROTO=TCP
+Sep 24 08:23:28 batch01 dhclient[19782]: DHCPACK of 10.17.145.153 from 10.69.154.2
+Sep 08 06:54:20 web01 dhclient[9170]: DHCPACK of 192.141.79.25 from 10.235.182.40
+Sep 09 11:56:37 web02 cron[6123]: (root) CMD (/usr/local/bin/backup.sh --id 77684b58)
+Sep 19 12:36:58 web02 dhclient[47993]: DHCPACK of 192.166.247.45 from 172.48.153.10
+Sep 26 18:24:05 web01 dhclient[51048]: DHCPACK of 172.178.222.107 from 10.116.5.163
+Sep 21 12:03:19 web01 cron[21519]: (root) CMD (/usr/local/bin/backup.sh --id 8df909d0)
+Sep 17 22:14:09 web01 systemd[49438]: Started Session 502 of user heidi.
+Sep 20 18:32:05 web02 NetworkManager[9800]: <info> device (eth0): link became up
+Sep 05 10:05:30 web01 postfix/smtpd[28574]: connect from unknown[172.43.204.129]
+Sep 25 22:08:48 web02 NetworkManager[26007]: <info> device (eth0): link became up
+Sep 21 18:12:35 web02 cron[28284]: (root) CMD (/usr/local/bin/backup.sh --id f575353f)
+Sep 11 21:59:36 web01 diskmond[27857]: disk usage at 66% on /var/log (threshold 90%)
+Sep 12 11:12:20 db01 postfix/smtpd[23019]: connect from unknown[10.156.86.253]
+Sep 20 14:39:09 batch01 diskmond[15401]: disk usage at 92% on /var/log (threshold 90%)
+Sep 07 21:23:09 web01 diskmond[16028]: disk usage at 43% on /var/log (threshold 90%)
+Sep 20 04:55:53 db01 diskmond[52809]: disk usage at 84% on /var/log (threshold 90%)
+Sep 04 09:28:30 web01 kernel[9363]: iptables: DROPPED IN=eth0 OUT= MAC=00:1a:2b:3c:4d:5e SRC=192.108.104.140 DST=192.132.247.160 DPT=8080 PROTO=TCP
+Sep 23 22:42:01 batch01 postfix/smtpd[4039]: connect from unknown[192.22.130.44]
+Sep 10 06:50:44 db01 diskmond[62043]: disk usage at 81% on /var/log (threshold 90%)
+Sep 01 02:24:42 db01 systemd[56741]: Started Session 775 of user frank.
+Sep 04 00:18:55 batch01 cron[64103]: (root) CMD (/usr/local/bin/backup.sh --id b02016e6)
+Sep 23 03:57:20 batch01 dhclient[16313]: DHCPACK of 192.45.95.51 from 192.234.11.11
+Sep 17 09:21:31 batch01 dhclient[64232]: DHCPACK of 10.177.180.91 from 192.154.120.251
+Sep 17 08:51:03 db01 dhclient[47934]: DHCPACK of 10.143.115.39 from 172.201.70.23
