@@ -197,6 +197,10 @@ to the narrowest:
   is sent. The input about to be sent is priced too (`--max-cost`,
   default 1 USD); over it, one question asks to continue on the terminal, `-y` answers it yes, and without a
   terminal it is exit 2 (this applies with `-q` too — scripts pass `-y`).
+  With `-r` or `git sys1grep`, a term no regex narrows that is about to send more than 10,000 lines gets one
+  stderr line with the same totals, naming the term (`sys1grep: sending 214,913 of 231,502 lines from 1,247 files
+  (~9.1M input tokens, ~$0.38); the term "…" has no regex to narrow it. Add -a '/RE/' to it, …`). The search goes
+  on; `-q` silences the line, `-y` does not.
 
 ```sh
 $ sys1grep --dry-run -r --include='*.log' --changed-within=today -e '/ERROR|FATAL/' -a 'a customer is affected' logs/

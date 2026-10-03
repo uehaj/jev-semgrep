@@ -1320,6 +1320,28 @@ $E LANG=C node ../sys1grep.mjs --help | grep -q 'grep by meaning' || fail "--hel
 v=$(node -p "require('../package.json').version")
 eq "$($E node ../sys1grep.mjs --version)" "sys1grep $v" "--version"
 eq "$($E node ../sys1grep.mjs -V)" "sys1grep $v" "-V"
+# #138: -r and git sys1grep warn before sending many lines through a term no regex narrows; 10,001 lines here
+B="$tmp/big"; mkdir -p "$B"
+seq 1 5000 | sed 's/^/row /' >"$B/a.txt"; seq 1 5001 | sed 's/^/row /' >"$B/b.txt"
+(cd "$B" && git init -q && git add a.txt b.txt)
+W="^sys1grep: sending 10,001 of 10,001 lines from 2 files (~[0-9.]*[KM]* input tokens); the term \"owl\" has no regex to narrow it. Add -a '/RE/' to it, or --include / --changed-within, or --dry-run to see the requests\$"
+eq "$($JI -r --chunk 1000 -e owl "$B" 2>&1 >/dev/null | grep -c "$W" || true)" "1" "large send: a regex-free term warns"
+eq "$($JI -r --chunk 1000 -e '/zzz/' -e owl "$B" 2>&1 >/dev/null | grep -c "$W" || true)" "1" "large send: a regex in another OR term does not narrow this one"
+eq "$(cd "$B" && $GS --chunk 1000 -e owl 2>&1 >/dev/null | grep -c '^sys1grep: sending 10,001 of 10,001 lines' || true)" "1" "large send: git sys1grep warns too"
+eq "$($JI -r --chunk 1000 -e '/row/' -a owl "$B" 2>&1 >/dev/null | grep -c '^sys1grep: sending' || true)" "0" "large send: a regex in the same term narrows it, even one every line matches"
+eq "$($JI -r --chunk 1000 -e '!/zzz/' -a owl "$B" 2>&1 >/dev/null | grep -c "$W" || true)" "1" "large send: a negated regex does not narrow its term"
+eq "$($JI -r -y --chunk 1000 -e owl "$B" 2>&1 >/dev/null | grep -c "$W" || true)" "1" "large send: -y does not silence it"
+awk -v B="$B" 'BEGIN { for (i = 1; i <= 5000; i++) printf "%s/a.txt:1\tS\t%s/a.txt:%d\tR\n", B, B, i; for (i = 1; i <= 5001; i++) printf "%s/a.txt:1\tS\t%s/b.txt:%d\tR\n", B, B, i }' >"$tmp/big-edges.tsv"
+eq "$($JI -r --chunk 1000 --edges="$tmp/big-edges.tsv" -e '/^row 1$/' --step-to owl "$B" 2>&1 >/dev/null | grep -c '^sys1grep: sending 10,001 of 10,001 lines' || true)" "1" "large send: --step-to checks the end's requests"
+eq "$($JI -r --chunk 1000 -q -e owl "$B" 2>&1 | grep -c '^sys1grep: sending' || true)" "0" "large send: -q is silent"
+eq "$($JI -r --dry-run -e owl "$B" 2>&1 | grep -c '^sys1grep: sending' || true)" "0" "large send: --dry-run shows its own totals"
+eq "$($JI -r -e owl "$P" 2>&1 >/dev/null | grep -c '^sys1grep: sending' || true)" "0" "large send: a small tree is silent"
+eq "$($JI --chunk 1000 -e owl "$B/a.txt" "$B/b.txt" 2>&1 >/dev/null | grep -c '^sys1grep: sending' || true)" "0" "large send: files named without -r are silent"
+B10="$tmp/big10k"; mkdir -p "$B10"; seq 1 5000 | sed 's/^/row /' >"$B10/a.txt"; cp "$B10/a.txt" "$B10/b.txt"
+eq "$($JI -r --chunk 1000 -e owl "$B10" 2>&1 >/dev/null | grep -c '^sys1grep: sending' || true)" "0" "large send: exactly 10,000 lines is silent"
+reset; out=$(asking "$JI -i -r --chunk 1000 -l -e owl '$B'" y)
+[ "$(stat count)" -gt 0 ] || fail "large send: -i, y: searched: $out"
+echo "$out" | grep -q '^sys1grep: sending' && fail "large send: -i already showed the totals, no warning: $out"
 code 0 "--version with no key" -- $E node ../sys1grep.mjs --version
 $E LANG=ja_JP.UTF-8 node ../sys1grep.mjs --help | grep -q '何も表示せず' || fail "--help in Japanese"
 $E LANG=C LC_MESSAGES=ja_JP.UTF-8 node ../sys1grep.mjs --help | grep -q '何も表示せず' || fail "LC_MESSAGES"

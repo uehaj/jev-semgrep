@@ -813,6 +813,10 @@ const parseSize = (s, label) => {
 const fmtSize = b => (b >= 1024 ** 3 ? `${(b / 1024 ** 3).toFixed(1)} GB` : b >= 1024 ** 2 ? `${(b / 1024 ** 2).toFixed(1)} MB` : `${Math.ceil(b / 1024)} KB`);
 const MAX_FILESIZE = parseSize(opt['max-filesize'] ?? '10M', '--max-filesize');
 const MAX_COST = Number(opt['max-cost']);
+// #138: -r / git sys1grep warn above this many units sent through a term with no regex. #132's git-log run sent
+// ~1,200 lines and the runaway matplotlib one ~215,000 (django's 7.4M tokens, ~35,000): 10,000 sits between them,
+// ~2M tokens (~$0.08), well under --max-cost's default $1 (~120,000 lines).
+const LARGE_SEND_UNITS = 10_000;
 if (!['line', 'zero', 'sentence-by-jev', 'sentence-by-rule', 'function'].includes(opt.unit)) die('--unit must be line, zero, sentence-by-jev, sentence-by-rule, or function');
 if (!['auto', 'always', 'never'].includes(opt.color)) die('--color must be auto, always or never');
 if (!['auto', 'always', 'never'].includes(opt.dedup)) die('--dedup must be auto, always or never');
@@ -2040,7 +2044,13 @@ async function evaluate(chunk, asks = asksByUnit, terms = starting, tag = 'judge
 // above, not asked about, so this is the only question a run can show.
 // --step-to (#163) asks it again before the end expression's requests, which then count with everything sent before.
 function guardCost(chunks, asks, terms) {
-  if (dry || opt.interactive || opt.yes) return;
+  if (dry || opt.interactive) return;
+  // #138: a meaning in a term without a regex is asked of every unit -r or git sys1grep found, which an OR'd regex
+  // term does not narrow. A warning only; -y does not silence it, -q does. Decided before the estimate, so -y
+  // without the warning still skips serializing every request.
+  const units = chunks.reduce((t, c) => t + c.length, 0);
+  const wide = (opt.r || asGit) && !opt.quiet && units > LARGE_SEND_UNITS && terms.find(term => term.some(lit => lit.kind === 'm') && !term.some(lit => lit.kind === 'r' && !lit.not));
+  if (opt.yes && !wide) return;
   const bits = chunks.reduce((t, c) => {
     const body = JSON.stringify({ model, ...requestOf(c, asks, terms) });
     return { bytes: t.bytes + Buffer.byteLength(body), cjk: t.cjk + cjkBytesOf(body) };
@@ -2050,6 +2060,14 @@ function guardCost(chunks, asks, terms) {
   // (OpenRouter, a local server): a wrong number the guard can act on beats none it cannot (#58's open question).
   // #125 review (item 4): say so in the question itself, so a custom endpoint's own price is never mistaken for it.
   const estPrice = (estTokens * 0.042) / 1e6;
+  const meaning = wide && wide.find(lit => lit.kind === 'm').text;
+  if (meaning) {
+    const short = meaning.length > 40 ? `${meaning.slice(0, 40).replace(/\s+\S*$/, '')}…` : meaning;
+    const cost = `~${new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(estTokens)} input tokens${customUrl ? '' : `, ~$${estPrice.toFixed(2)}`}`;
+    const msg = `sys1grep: sending ${units.toLocaleString('en-US')} of ${totalUnits.toLocaleString('en-US')} ${unitName} from ${read.size.toLocaleString('en-US')} file${read.size === 1 ? '' : 's'} (${cost}); the term "${safe(short)}" has no regex to narrow it. Add -a '/RE/' to it, or --include / --changed-within, or --dry-run to see the requests`;
+    if (!warned.includes(msg)) { console.error(msg); warned.push(msg); }
+  }
+  if (opt.yes) return;
   const at = customUrl ? " at TypeSafe's list price (SYS1GREP_URL is another endpoint)" : '';
   if (estPrice > MAX_COST) askToContinue(`sys1grep: about ${estTokens.toLocaleString('en-US')} input tokens, ~$${estPrice.toFixed(2)}${at}  (--max-cost ${MAX_COST})`);
 }

@@ -6,6 +6,13 @@ versions follow [Semantic Versioning](https://semver.org/) (until 1.0, option ch
 ## [Unreleased]
 
 ### Added
+- `-r` and `git sys1grep` warn before sending a large tree through a term no regex narrows (#138). When such a
+  term is about to send more than 10,000 units, one stderr line before the judging requests gives the totals
+  `--dry-run` would (units, files, estimated input tokens and, for TypeSafe itself, the price), names the term and
+  suggests `-a '/RE/'`, `--include` / `--changed-within` or `--dry-run`. The run goes on: it is a warning, not a
+  refusal. `-q` silences it, `-y` does not; `--dry-run` and `-i` show the same totals already and do not print it.
+  A negated regex does not narrow its term, and a regex in another OR term (`-e '/RE/' -e MEANING`) does not
+  narrow this one.
 - A meaning may start with a dash on any search, not only around `--step-to`: `-e "--summarize hands the lines on"`, and the same for `-a`, `-v` and `-Q`. An option holds no space; a value that starts with `-` and is not an option is taken as the meaning.
 - Multi-step matching: `EXPRESSION --step-to EXPRESSION` finds the functions the expression before `--step-to`
   matches, walks the calls from them breadth first, and prints the paths to the reached functions the expression
