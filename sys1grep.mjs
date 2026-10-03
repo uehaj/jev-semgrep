@@ -387,7 +387,7 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
   -V, --version  print the version and exit
 
 Exit status: 0 matched / 1 no match / 2 error
-  On 1, when lines were sent, stderr names the highest probability and its line (not with -q or --summarize)
+  On 1, when lines were sent, stderr names the highest probability and its line (not with -q, --summarize, --step-to, or when only a negation failed)
 
 Environment (read from the environment, else from ~/.config/sys1grep/.env; ./.env is never read):
   SYS1GREP_API_KEY    API key. Falls back to TYPESAFE_API_KEY. Get one at https://console.typesafe.ai/
@@ -622,7 +622,7 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
   -V, --version  バージョンを表示して終了
 
 終了コード: 一致あり 0 / なし 1 / エラー 2 (引数・読めないファイル・API 障害)
-  行を送って 1 のときは、最も高かった確率とその行を stderr に出す (-q と --summarize では出さない)
+  行を送って 1 のときは、最も高かった確率とその行を stderr に出す (-q・--summarize・--step-to と、否定だけで落ちたときは出さない)
 
 環境変数 (環境、無ければ ~/.config/sys1grep/.env から読む。./.env は読まない):
   SYS1GREP_API_KEY    API キー。無ければ TYPESAFE_API_KEY。取得は https://console.typesafe.ai/
@@ -745,7 +745,7 @@ for (const tk of tokens) {
   const not = bang !== (tk.name === 'v');
   const shape = tk.name !== 'question' && RE_SHAPE.exec(bare); // -Q is always a question, never a regex
   const lit = shape ? { kind: 'r', not, ...compileRegex(shape[1], shape[2]) }
-    : { kind: 'm', not, text: tk.name === 'question' ? `the line answers: ${bare}` : bare };
+    : { kind: 'm', not, text: tk.name === 'question' ? `the line answers: ${bare}` : bare, said: bare };
   if (tk.name === 'e' || tk.name === 'question' || expr.length === 0 || fresh) expr.push(Object.assign([lit], { role }));
   else expr.at(-1).push(lit);
 }
@@ -2447,7 +2447,6 @@ if (dry) {
 // process.exit() can drop buffered stdout when piped, so set exitCode instead.
 process.exitCode = dry ? (hadError ? 2 : 0) : matched && opt.quiet ? 0 : hadError || summaryFailed ? 2 : matched ? 0 : 1; // -q: a match wins over an error
 // #139: exit 1 is a threshold decision, not a fact; name the closest line so the caller does not rerun to see it.
-// Only when the best is under the threshold: a negated meaning that failed would make "no line reached" false.
 if (process.exitCode === 1 && sent.length && !opt.quiet && !summarizer && !multiStep) {
   // A term is as close as its lowest meaning: an AND holds only when every meaning in it clears the threshold.
   let best = { p: -1 };
@@ -2457,11 +2456,12 @@ if (process.exitCode === 1 && sent.length && !opt.quiet && !summarizer && !multi
     let low = null;
     for (const lit of term) if (lit.kind === 'm' && !lit.not) {
       const p = asksByUnit.get(l).get(expandCaptures(lit.text, matches)) ?? 0;
-      if (!low || p < low.p) low = { p, l, meaning: lit.text };
+      if (!low || p < low.p) low = { p, l, meaning: lit.said };
     }
-    if (low && low.p > best.p) best = low;
+    // only a term its own meanings failed: a line a negation dropped cleared tPos and would hide a near miss
+    if (low && low.p < tPos && low.p > best.p) best = low;
   }
-  if (best.l && best.p < tPos) {
+  if (best.l) {
     const at = `${best.l.file === '-' ? 'standard input' : best.l.file}:${spansOf.get(best.l.file)?.[best.l.no - 1]?.[0]?.[0] ?? best.l.no}`;
     // -t overrides --level, so with -t only a lower -t changes the outcome
     const loose = tPos <= levels.loose[0] ? '' : opt.t === undefined ? `--level loose takes ${levels.loose[0]}, ` : `-t ${levels.loose[0]} loosens it, `;
