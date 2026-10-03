@@ -186,6 +186,10 @@ Jev に送る行が増えるほど、費用も時間もかかります。いち�
   送る予定のトークンの値段（`--max-cost`、既定 1 USD）は別に見積もり、超えていれば端末で続けるか聞きます。
   `-y` は聞かずに yes と答え、端末が無く超えていれば終了コード 2 です（`-q` でも同じで、スクリプトからは
   `-y` を渡します）。
+  `-r` と `git sys1grep` では、regex で絞られない term が 10,000 行を超えて送ろうとすると、同じ集計と
+  その term を stderr に 1 行出します（`sys1grep: sending 214,913 of 231,502 lines from 1,247 files
+  (~9.1M input tokens, ~$0.38); the term "…" has no regex to narrow it. Add -a '/RE/' to it, …`）。
+  検索はそのまま続きます。`-q` ではこの行は出ず、`-y` では消えません。
 
 ```sh
 $ sys1grep --dry-run -r --include='*.log' --changed-within=today -e '/ERROR|FATAL/' -a '顧客に影響が出ている' logs/
