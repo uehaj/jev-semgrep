@@ -20,6 +20,12 @@ process.stderr.on('error', () => {});
 const die = (msg, hint = true) => { console.error(`sys1grep: ${msg}${hint ? "\nTry 'sys1grep --help' for more information." : ''}`); process.exit(2); };
 process.on('uncaughtException', e => die(e.message));
 
+// --serve [PORT] (#166): a search page on 127.0.0.1; serve.mjs runs this script again for each search.
+if (process.argv.slice(2, process.argv.indexOf('--') < 0 ? undefined : process.argv.indexOf('--')).some(a => /^--serve(=|$)/.test(a))) {
+  (await import('./serve.mjs')).serve(process.argv.slice(2));
+  await new Promise(() => {}); // the server keeps the process alive; Ctrl-C ends it
+}
+
 // Settings come from the environment; ~/.config/sys1grep/.env fills in what it lacks. Never ./.env: the current
 // directory may be an untrusted checkout, and its .env could point SYS1GREP_URL at a server that collects the key.
 // For one minor release (removed in 1.0.0, see #93): fall back to the old SEMGREP_* names and
@@ -382,6 +388,13 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
                answer prints as it comes, unchecked; html: TOOL writes plain text, which goes escaped into
                --template's {{answer}} and prints when TOOL is done. Before --summarize-prompt's TEXT, which can override it. Needs
                --rank (not with -l) or --summarize, except in SYS1GREP_OPTS. (It replaces --summarize-format.)
+  --serve[=PORT]  serve a search page on 127.0.0.1 (a random free port, printed, or PORT) instead of searching: a box for
+               the meanings (-e -a -v -Q --step-to), rank / summarize and the other options as controls, results as cards
+               (--rank --format=html), and the command line for the current controls, to copy. Each search runs this
+               program with the options given here plus what the controls changed; the targets and -j, --chunk, -M,
+               --max-cost, -y, --edges, --template and the API settings stay as given. The meanings come from the page,
+               so -e -a -v -Q --step-to and what the page replaces (-l -c -q -o -z -i --format --color --dry-run) are
+               refused. Needs -y (or a higher --max-cost) to search over the cost guard. One Jev request per search
   --template=NAME  the document --rank or --summarize --format=html writes (default: SYS1GREP_TEMPLATE, else default):
                ~/.config/sys1grep/templates/NAME.html, else the bundled one (default, print, search, terminal); a
                value with / or ending in .html is a file. Placeholders: {{title}} {{query}} {{count}}, and
@@ -626,6 +639,13 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                html は TOOL に平文を書かせ、エスケープして --template の {{answer}} に入れ、TOOL が終わってから表示する。
                --summarize-prompt の TEXT より前に置くので TEXT で上書きできる。
                --rank (-l とは併用不可) か --summarize が要る (SYS1GREP_OPTS では要らない)。--summarize-format の後継
+  --serve[=PORT]  検索せずに、127.0.0.1 で検索ページを出す (空いているポートを選んで表示、または PORT)。意味を
+               入れる欄 (-e -a -v -Q --step-to)、rank / summarize などのオプションをコントロールにし、結果は
+               カード (--rank --format=html)、いまのコントロールのコマンドラインをコピー用に表示する。検索のたびに
+               ここで指定したオプションにコントロールの変更を足してこのプログラムを実行する。対象と -j・--chunk・-M・
+               --max-cost・-y・--edges・--template・API 設定は指定のまま。意味はページから来るので -e -a -v -Q --step-to と、
+               ページが置き換えるもの (-l -c -q -o -z -i --format --color --dry-run) は受け付けない。費用の確認を通すには
+               -y (か高めの --max-cost) が要る。検索ごとに Jev へ 1 リクエスト
   --template=NAME  --rank か --summarize の --format=html が書く文書 (既定は SYS1GREP_TEMPLATE、無ければ default)。
                ~/.config/sys1grep/templates/NAME.html、無ければ同梱のもの (default, print, search, terminal)。/ を含むか
                .html で終わる値はファイル。置き換える文字列は {{title}} {{query}} {{count}} と、<!--result--> と

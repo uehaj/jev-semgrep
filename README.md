@@ -781,6 +781,32 @@ OpenAI-compatible server. All three need `SYS1GREP_SUMMARIZER_MODEL`: none has a
 `SYS1GREP_SUMMARIZER_API_KEY` goes as `Authorization: Bearer` to a URL TOOL only (never `SYS1GREP_API_KEY`,
 which is Jev's). `OLLAMA_HOST` moves ollama's host, as it does for the `ollama` CLI itself.
 
+### A search page (`--serve`)
+
+`--rank --format=html` answers one question per run. `--serve` opens the same page with a search box, so you can rephrase
+and narrow without rerunning the command:
+
+```
+$ sys1grep --serve -r src/
+http://127.0.0.1:51234/
+$ sys1grep --serve=8080 -y --level=strict -r src/     # a fixed port; the options given here are the page's first values
+```
+
+The page has the meaning fields (`+` adds one; each takes `-e`, `-a`, `-v`, `-Q` or `--step-to:`), `rank`, `summarize`, a
+**Details** fold with the other options (`--level`, `-t`/`-T`, `-C`, `--auto-scope`, `-n`, `-p`, `--dedup`, `--unit`,
+`--include`, `--exclude`, `--changed-within`, `-g`, and `--hops` / `--reverse` while a `--step-to:` field exists), and above
+the results the **command line** for the controls as they are now, with a Copy button; pasted in a terminal it runs the
+same search. An option at its launch value is left out of what the controls add. `rank` off shows the matches in file order
+as text, on shows the ranked cards; `summarize` adds a right column (it runs the search once more, so it costs one more
+request). Estimate cost is `--dry-run`.
+
+Each search runs sys1grep itself (the options given at launch, then the controls'), so everything the command line does
+the page does, and only that. The server listens on `127.0.0.1` only, answers only to that host name, and the page never
+sees the API key. The targets, `-j`, `--chunk`, `-M`, `--max-filesize`, `--max-cost`, `-y`, `--edges`, `--template`, the
+API settings and `--summarize`'s TOOL are fixed at launch: the page can narrow what was given but not widen it. A search
+over the cost guard fails on the page, as it does without a terminal; launch with `-y` to let it through.
+The meanings come from the page, so `-e -a -v -Q --step-to` and `-l -c -q -o -z -i --format --color --dry-run` are refused at launch.
+
 ### Best first (`--rank`)
 
 Matches print in file order, as grep prints them. With many, `--rank` prints the results best first, each under a
@@ -972,6 +998,7 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
                for now; see "One line per template" above)
   --rank[=jev|match]  print the results (a match with its context) best first, under numbered headers; jev
                (bare --rank) asks Jev of each result, match sorts by its best match probability (see "Best first"); --no-rank: file order
+  --serve[=PORT]  serve a search page on 127.0.0.1 instead of searching (see "A search page (`--serve`)")
   --template=NAME  the document --rank or --summarize --format=html writes: ~/.config/sys1grep/templates/NAME.html, else the
                bundled one (default, print, terminal), or a file; default SYS1GREP_TEMPLATE, else default.
                --template=list prints the names (see "HTML templates")
