@@ -88,6 +88,14 @@ eq "$($J -n --level strict -t 0.5 -e fish "$F" | nums)" "6 " "-t overrides --lev
 eq "$($J -n -T 0.7 -v fish "$F" | cut -d: -f1 | grep -cx 6 || true)" "1" "-T overrides --level"
 eq "$($J -n -t 0.7 -T 0.3 -e bird -e '!bird' "$F" | cut -d: -f1 | grep -cx 5 || true)" "0" "0.4 is neither bird nor not bird"
 code 2 "--level bogus" -- $J --level bogus -e cat "$F"
+# #139: exit 1 after sending says how close the best line came, so the caller need not rerun to find out
+eq "$($J -e bird "$F" 2>&1 >/dev/null || true)" "sys1grep: no line reached 0.5 for \"bird\"; the highest was 0.40 ($F:5). --level loose takes 0.3, -p shows every probability" "no-match hint"
+eq "$($J -e bird -a '!cat' "$F" 2>&1 >/dev/null || true)" "sys1grep: no line reached 0.5 for \"bird\"; the highest was 0.40 ($F:5). --level loose takes 0.3, -p shows every probability" "no-match hint: a negated meaning is not the highest"
+eq "$($J --level loose -e zebra "$F" 2>&1 >/dev/null || true)" "sys1grep: no line reached 0.3 for \"zebra\"; the highest was 0.05 ($F:1). -p shows every probability" "no-match hint: already loose"
+code 1 "no-match hint, exit" -- $J -e bird "$F"
+eq "$($J -q -e bird "$F" 2>&1 || true)" "" "no-match hint: silent under -q"
+eq "$($J -e '/zebra/' "$F" 2>&1 || true)" "" "no-match hint: silent when nothing was sent"
+eq "$($J -e cat -a '/zebra/' "$F" 2>&1 || true)" "" "no-match hint: silent when the regex left nothing to send"
 code 2 "-t above 1" -- $J -t 1.5 -e cat "$F"
 
 # -p prints each meaning's probability, in meaning order
@@ -767,6 +775,7 @@ $S --summarize -z -e cat "$tmp/z" >/dev/null
 eq "$(tr '\n' '|' <"$tmp/sum.in")" "cat||cat two||" "--summarize -z: records end in a blank line, not NUL"
 rm -f "$tmp/sum.in"; code 1 "--summarize, no match" -- $S --summarize -e zebra "$F"
 [ ! -e "$tmp/sum.in" ] || fail "--summarize runs the summarizer with no match"
+eq "$($S --summarize -e bird "$F" 2>&1 || true)" "" "--summarize, no match: no hint"
 code 2 "--summarize, summarizer fails" -- env SUM_EXIT=3 $S --summarize -e cat "$F"
 code 2 "--summarize, an unreadable file" -- $S --summarize -e cat "$F" "$tmp/none"
 # --format with --summarize (#122; was --summarize-format): each format asks for itself, plain when none is given; the sentence follows the fixed part

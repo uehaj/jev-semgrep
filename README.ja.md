@@ -957,6 +957,8 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
 
 FILE を省略すると stdin を読みます。複数ファイルなら `file:` を前置きします。
 終了コードは grep と同じで、一致あり 0、なし 1、エラー 2（引数エラー、読めないファイル、API 障害）です。
+行を送ったうえで終了コード 1 になるときは、最も高かった確率とその行、閾値を緩めるオプションを stderr に 1 行出します
+（`sys1grep: no line reached 0.5 for "…"; the highest was 0.42 (app.log:118). ...`）。`-q` と `--summarize` では出しません。
 
 ### 式の書き方
 

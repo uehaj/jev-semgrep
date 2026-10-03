@@ -984,6 +984,9 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
 
 Without FILE, stdin is read. With several files, output is prefixed with `file:`.
 Exit codes follow grep: 0 matched, 1 no match, 2 error (bad arguments, unreadable file, API failure).
+Exit 1 after lines were sent prints one line on stderr: the highest probability, its line, and the options that
+loosen the threshold (`sys1grep: no line reached 0.5 for "…"; the highest was 0.42 (app.log:118). ...`).
+Not with `-q` or `--summarize`.
 
 ### Expression grammar
 
