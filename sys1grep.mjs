@@ -1948,13 +1948,19 @@ if (blobOfLabel.size) {
   }
   sent = out;
 }
-// Chunk by line count and by characters. The API caps state + longest question at 32k tokens.
-const chunked = units => {
+// Chunk by line count, by characters and by questions. The API caps state + longest question at 32k tokens, and
+// Clef's input schema caps a request at 64 questions (#174); every backend gets that cap, which only adds a few
+// requests when a line carries 3 or more meanings. A unit alone over the cap still goes out (nothing splits a unit).
+const MAX_QUESTIONS = 64;
+const chunked = (units, asks = asksByUnit) => {
   const out = [];
   for (let i = 0; i < units.length; ) {
     const chunk = [];
-    let chars = 0;
+    let chars = 0, questions = 0;
     while (i < units.length && chunk.length < chunkLines && chars < 20000) {
+      const q = asks.get(units[i])?.size || 1; // rank's results carry one question each and are not in asks
+      if (chunk.length && questions + q > MAX_QUESTIONS) break;
+      questions += q;
       chars += units[i].text.length;
       chunk.push(units[i++]);
     }
@@ -2339,7 +2345,7 @@ if (multiStep) {
   else if (!opt.quiet) console.error(`sys1grep: walk: ${walked}`);
   const inRange = [...reached].filter(([, r]) => r.hop >= hops.min).map(([u]) => u);
   const endAsks = new Map(inRange.map(u => [u, asksOf(u, ending)]));
-  const endSend = inRange.filter(u => endAsks.get(u).size), endChunks = chunked(endSend);
+  const endSend = inRange.filter(u => endAsks.get(u).size), endChunks = chunked(endSend, endAsks);
   guardCost(endChunks, endAsks, ending);
   let done = 0;
   spin.set(`--step-to: 0 of ${endChunks.length} requests`);

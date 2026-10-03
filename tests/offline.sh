@@ -123,6 +123,10 @@ eq "$($J -o -n -A 1 -e '/cat/' "$F" | tr '\n' '|')" "1:cat|4:cat|" "-o: no conte
 reset; $J -e cat "$F" >/dev/null; eq "$(stat count)" "1" "default chunk: one request"
 reset; $J --chunk 2 -e cat "$F" >/dev/null; eq "$(stat count)" "4" "--chunk 2: 4 requests"
 reset; $J --chunk 1 -e cat "$F" >/dev/null; eq "$(stat count)" "7" "--chunk 1: 7 requests"
+# #174: a request carries at most 64 questions (Clef's schema cap), whatever the backend: 40 lines x 3 meanings are 21 + 19 lines, not 30 + 10
+yes 'cat dog bird' | head -40 >"$tmp/q3.txt"
+reset; $J -c -e cat -e dog -e bird "$tmp/q3.txt" >/dev/null; eq "$(stat count)" "2" "3 meanings x 40 lines: 2 requests"; eq "$(stat qmax)" "63" "3 meanings x 40 lines: 63 questions at most in a request"
+reset; $J -c -e cat "$tmp/q3.txt" >/dev/null; eq "$(stat qmax)" "30" "1 meaning: --chunk's 30 lines still decide"
 reset; $J --chunk 1 -e cat -e dog -Q owl "$F" >/dev/null; eq "$(stat count)" "7" "meanings share a request"
 code 2 "--chunk 0" -- $J --chunk 0 -e cat "$F"
 
