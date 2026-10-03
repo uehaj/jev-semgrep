@@ -2447,19 +2447,24 @@ if (dry) {
 // process.exit() can drop buffered stdout when piped, so set exitCode instead.
 process.exitCode = dry ? (hadError ? 2 : 0) : matched && opt.quiet ? 0 : hadError || summaryFailed ? 2 : matched ? 0 : 1; // -q: a match wins over an error
 // #139: exit 1 is a threshold decision, not a fact; name the closest line so the caller does not rerun to see it.
-// Only when the best is under the threshold: an AND that failed elsewhere would make "no line reached" false.
+// Only when the best is under the threshold: a negated meaning that failed would make "no line reached" false.
 if (process.exitCode === 1 && sent.length && !opt.quiet && !summarizer && !multiStep) {
+  // A term is as close as its lowest meaning: an AND holds only when every meaning in it clears the threshold.
   let best = { p: -1 };
   for (const l of sent) for (const term of expr) {
     const { ok, matches } = regexPart(term, l);
-    if (ok) for (const lit of term) if (lit.kind === 'm' && !lit.not) {
+    if (!ok) continue;
+    let low = null;
+    for (const lit of term) if (lit.kind === 'm' && !lit.not) {
       const p = asksByUnit.get(l).get(expandCaptures(lit.text, matches)) ?? 0;
-      if (p > best.p) best = { p, l, meaning: lit.text };
+      if (!low || p < low.p) low = { p, l, meaning: lit.text };
     }
+    if (low && low.p > best.p) best = low;
   }
   if (best.l && best.p < tPos) {
     const at = `${best.l.file === '-' ? 'standard input' : best.l.file}:${spansOf.get(best.l.file)?.[best.l.no - 1]?.[0]?.[0] ?? best.l.no}`;
-    const loose = tPos > levels.loose[0] ? `--level loose takes ${levels.loose[0]}, ` : '';
-    console.error(`sys1grep: no ${unitName.slice(0, -1)} reached ${tPos} for "${safe(best.meaning)}"; the highest was ${best.p.toFixed(2)} (${safe(at)}). ${loose}-p shows every probability`);
+    // -t overrides --level, so with -t only a lower -t changes the outcome
+    const loose = tPos <= levels.loose[0] ? '' : opt.t === undefined ? `--level loose takes ${levels.loose[0]}, ` : `-t ${levels.loose[0]} loosens it, `;
+    console.error(`sys1grep: no ${unitName.slice(0, -1)} reached ${tPos} for "${safe(best.meaning)}"; the highest was ${(Math.floor(best.p * 100 + 1e-9) / 100).toFixed(2)} (${safe(at)}). ${loose}-p shows every probability`);
   }
 }
