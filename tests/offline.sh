@@ -1056,8 +1056,8 @@ sh -c "$J --max-filesize 10K -e cat < '$tmp/huge.txt'" 2>&1 >/dev/null | grep -q
 reset; eq "$(sh -c "$J -n -e cat < '$F'" | nums)" "1 4 " "stdin under --max-filesize is still searched"
 # --max-cost 0: any estimated price is over it, so even ordinary input asks; --max-filesize's own skip above never
 # asks, so a run now shows at most this one question (item 8, now moot: see the PR body)
-reset; code 2 "--max-cost 0, no terminal" -- sh -c "$J --max-cost 0 -e cat '$F' </dev/null"
-out=$($J --max-cost 0 -e cat "$F" </dev/null 2>&1 >/dev/null) || true
+reset; code 2 "--max-cost 0, no terminal" -- notty sh -c "$J --max-cost 0 -e cat '$F' </dev/null"
+out=$(notty $J --max-cost 0 -e cat "$F" </dev/null 2>&1 >/dev/null) || true
 echo "$out" | grep -q -- 'input tokens.*--max-cost 0' || fail "the message names --max-cost: $out"
 # item 4 (owner 2026-09-27): --max-cost keeps pricing at TypeSafe's list price even for a custom endpoint (every
 # offline test's own SYS1GREP_URL counts as one), and now says so in the question
