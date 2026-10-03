@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{{title}}</title>
+<style>
+:root {
+  --bg: #fff;
+  --fg: #202124;
+  --muted: #5f6368;
+  --rule: #dadce0;
+  --title: #1a0dab;
+  --url: #188038;
+  --snippet-bg: #f8f9fa;
+  --mark: #fff3b0;
+  --box-shadow: 0 1px 6px rgba(32, 33, 36, .28);
+  --chrome: arial, "Helvetica Neue", "Hiragino Sans", "Noto Sans CJK JP", "Noto Sans", sans-serif;
+  --code: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #202124;
+    --fg: #e8eaed;
+    --muted: #9aa0a6;
+    --rule: #3c4043;
+    --title: #8ab4f8;
+    --url: #81c995;
+    --snippet-bg: #2a2b2e;
+    --mark: #5c5200;
+    --box-shadow: 0 1px 6px rgba(0, 0, 0, .6);
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.58 var(--chrome); }
+.bar { border-bottom: 1px solid var(--rule); padding: 16px; }
+.bar-in { max-width: 652px; margin: 0 auto; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.logo { font-size: 24px; font-weight: 700; letter-spacing: -.5px; color: var(--title); }
+.box {
+  flex: 1;
+  min-width: 200px;
+  padding: 10px 18px;
+  border: 1px solid var(--rule);
+  border-radius: 24px;
+  font-size: 16px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.box:hover { box-shadow: var(--box-shadow); border-color: transparent; }
+.page { max-width: 652px; margin: 0 auto; padding: 0 16px 64px; }
+.stats { margin: 16px 0 8px; color: var(--muted); font-size: 14px; }
+.result { padding: 14px 0 10px; }
+.url { color: var(--url); font-size: 14px; line-height: 1.3; }
+.file { overflow-wrap: anywhere; }
+.file:empty::before { content: "(standard input)"; }
+.title {
+  margin: 4px 0 6px;
+  color: var(--title);
+  font-size: 20px;
+  line-height: 1.3;
+  font-weight: 400;
+}
+.title .score { margin-left: 8px; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.title .score:empty { display: none; }
+.relevance { display: inline-block; vertical-align: middle; width: 56px; height: 4px; margin-left: 8px; background: var(--rule); border-radius: 2px; overflow: hidden; }
+.relevance::before { content: ""; display: block; height: 100%; width: calc(var(--s) * 1%); background: var(--url); }
+pre {
+  margin: 0;
+  padding: 8px 12px;
+  background: var(--snippet-bg);
+  border-left: 3px solid var(--rule);
+  border-radius: 0 4px 4px 0;
+  font: 13px/1.55 var(--code);
+  tab-size: 4;
+  overflow-x: auto;
+  white-space: pre;
+}
+pre:focus-visible { outline: 2px solid var(--title); outline-offset: 2px; }
+.result:first-of-type pre { border-left-color: var(--url); }
+@media print {
+  :root { --bg: #fff; --fg: #000; --muted: #444; --rule: #bbb; --title: #000; --url: #000; --snippet-bg: #fff; }
+  .bar { padding-top: 0; }
+  .box:hover { box-shadow: none; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; overflow: visible; }
+  .title, .url { break-after: avoid; }
+  .relevance { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
+.answer { margin: 16px 0 8px; padding: 12px 16px; border-left: 3px solid var(--url); background: var(--snippet-bg); border-radius: 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.answer:empty { display: none; }
+</style>
+</head>
+<body>
+<div class="bar"><div class="bar-in">
+<span class="logo">sys1grep</span>
+<div class="box" lang="">{{query}}</div>
+</div></div>
+<div class="page">
+<p class="stats">About {{count}} results, best first</p>
+<section class="answer" lang="">{{answer}}</section>
+<main>
+<!--result-->
+<article class="result">
+<div class="url">Result {{rank}}</div>
+<h2 class="title" lang=""><span class="file">{{file}}</span><span class="score">{{score}}</span><span class="relevance" style="--s:{{score_pct}}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{score_pct}}" aria-label="relevance of result {{rank}}"></span></h2>
+<pre tabindex="0" lang="" aria-label="lines of result {{rank}}">{{lines}}</pre>
+</article>
+<!--/result-->
+</main>
+</div>
+</body>
+</html>

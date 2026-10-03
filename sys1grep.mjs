@@ -5,10 +5,11 @@
 //   -e / -Q terms are OR'd; -a / -v attach AND / AND NOT to the preceding term: (A and B and not C) or D.
 //   A leading ! negates just that meaning: -e A -e '!B' is A or not B.
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { existsSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync, writeSync } from 'node:fs';
+import { constants, copyFileSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, statSync, writeSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { format, parseArgs } from 'node:util';
 
 // Node 20 colors console.error red on a terminal (22 does not): stderr gets exactly what sys1grep writes.
@@ -105,6 +106,8 @@ const OPTIONS = {
   summarize: { type: 'string' }, // pipe what would print to this LLM CLI and print its answer instead
   'summarize-prompt': { type: 'string' }, // the user's own instruction, added after the fixed one
   format: { type: 'string', default: 'plain' }, // plain / markdown / html: --rank's output, or asked of the summarizer
+  template: { type: 'string' }, // --rank's or --summarize's --format=html document: a NAME under the templates dirs, or a file; list: the names
+  'install-templates': { type: 'boolean', default: false }, // copy the bundled templates to ~/.config/sys1grep/templates
   'summarize-format': { type: 'string' }, // removed (--format): parsed only to say so
   // the API settings, each overriding its environment variable
   'sys1-model': { type: 'string' }, // SYS1GREP_MODEL
@@ -139,8 +142,9 @@ let optsInteractive = false; // -i from SYS1GREP_OPTS: a script without a termin
 try {
   const { tokens: t } = parseArgs({ args: defaults, options: OPTIONS, allowPositionals: true, allowNegative: true, tokens: true });
   optsInteractive = t.some(k => k.name === 'interactive' && !k.rawName.startsWith('--no-'));
-  const bad = t.find(k => k.kind !== 'option' || ['e', 'a', 'v', 'question', 'step-to', 'cached', 'untracked'].includes(k.name));
-  if (bad) die(`SYS1GREP_OPTS: ${bad.kind !== 'option' ? `'${bad.value ?? '--'}' is not an option` : ['cached', 'untracked'].includes(bad.name) ? `--${bad.name} is not allowed (what is searched goes on the command line)` : `${bad.name.length > 1 ? '--' : '-'}${bad.name} is not allowed (${bad.name === 'step-to' ? 'expressions' : 'meanings'} go on the command line)`}`);
+  const command = k => k.name === 'install-templates' || (k.name === 'template' && k.value === 'list');
+  const bad = t.find(k => k.kind !== 'option' || ['e', 'a', 'v', 'question', 'step-to', 'cached', 'untracked'].includes(k.name) || command(k));
+  if (bad) die(`SYS1GREP_OPTS: ${bad.kind !== 'option' ? `'${bad.value ?? '--'}' is not an option` : command(bad) ? `${bad.rawName}${bad.value === undefined ? '' : `=${bad.value}`} is not allowed (it does something instead of searching)` : ['cached', 'untracked'].includes(bad.name) ? `--${bad.name} is not allowed (what is searched goes on the command line)` : `${bad.name.length > 1 ? '--' : '-'}${bad.name} is not allowed (${bad.name === 'step-to' ? 'expressions' : 'meanings'} go on the command line)`}`);
 } catch (e) { die(`SYS1GREP_OPTS: ${e.message}`); }
 const { values: opt, positionals: files, tokens } = parseArgs({
   args: [...defaults, ...openStep(process.argv.slice(2)).map(fill)],
@@ -362,10 +366,20 @@ As git sys1grep, FILE arguments are pathspecs and every tracked file is searched
   --summarize-prompt=TEXT  the user's own instruction, added after the fixed one in --summarize's system
                prompt (how long, what to focus on, ...). Needs --summarize; empty TEXT is the same as none
   --format=FORMAT  plain (default) / markdown / html. With --rank, sys1grep writes the results itself: markdown a
-               ## heading and a fenced block per result, html one document with a <section> (<h2>, <pre>) per
-               result, escaped, uncolored. With --summarize it is asked of TOOL instead (plain: no Markdown), and its
-               answer prints as it comes, unchecked; before --summarize-prompt's TEXT, which can override it. Needs
+               ## heading and a fenced block per result, html one document from --template, escaped,
+               uncolored. With --summarize it is asked of TOOL instead (plain: no Markdown), and its
+               answer prints as it comes, unchecked; html: TOOL writes plain text, which goes escaped into
+               --template's {{answer}} and prints when TOOL is done. Before --summarize-prompt's TEXT, which can override it. Needs
                --rank (not with -l) or --summarize, except in SYS1GREP_OPTS. (It replaces --summarize-format.)
+  --template=NAME  the document --rank or --summarize --format=html writes (default: SYS1GREP_TEMPLATE, else default):
+               ~/.config/sys1grep/templates/NAME.html, else the bundled one (default, print, search, terminal); a
+               value with / or ending in .html is a file. Placeholders: {{title}} {{query}} {{count}}, and
+               between <!--result--> and <!--/result--> (repeated per result) {{rank}} {{score}} (with -p)
+               {{score_pct}} (0-100, also without -p) {{file}} (with several files) {{lines}}; each is filled
+               in escaped. --summarize writes the part before and after once, with {{answer}} (TOOL's answer).
+               --template=list prints the names, (user) marking your own
+  --install-templates  copy the bundled templates to ~/.config/sys1grep/templates to edit; an existing
+               file is kept. It and --template=list must stand alone, and are refused in SYS1GREP_OPTS
   --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
                the API settings, overriding SYS1GREP_MODEL, SYS1GREP_URL, SYS1GREP_API_KEY below.
                A key on the command line shows up in ps and shell history; prefer ~/.config/sys1grep/.env
@@ -384,6 +398,7 @@ Environment (read from the environment, else from ~/.config/sys1grep/.env; ./.en
                      ollama, lmstudio and a URL
   SYS1GREP_SUMMARIZER_API_KEY  sent as Authorization: Bearer to a --summarize=URL server only (never
                      SYS1GREP_API_KEY, which is Jev's)
+  SYS1GREP_TEMPLATE   --template's default, for --rank or --summarize --format=html
   SYS1GREP_OPTS       default options, split on spaces and put before the command line, which wins;
                      --no-X turns a boolean flag off (--color takes --color=never). Options only: no
                      meanings, files or --. e.g. SYS1GREP_OPTS='--level strict -n'. Scripts: SYS1GREP_OPTS= sys1grep
@@ -584,10 +599,21 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
   --summarize-prompt=TEXT  --summarize のシステムプロンプトに、固定の指示に続けて足すユーザー自身の指示
                (長さ・観点など)。--summarize が要る。空の TEXT は指定しないのと同じ
   --format=FORMAT  plain (既定) / markdown / html。--rank では sys1grep 自身が結果を書く。markdown は結果ごとに
-               ## 見出しとコードブロック、html は結果ごとに <section> (<h2>, <pre>) を並べた 1 つの文書で、文字は
-               エスケープし色は付けない。--summarize では代わりに TOOL に頼み (plain は Markdown なし)、答えは
-               確かめずにそのまま表示する。--summarize-prompt の TEXT より前に置くので TEXT で上書きできる。
+               ## 見出しとコードブロック、html は --template の 1 つの文書で、文字はエスケープし色は付けない。
+               --summarize では代わりに TOOL に頼み (plain は Markdown なし)、答えは確かめずにそのまま表示する。
+               html は TOOL に平文を書かせ、エスケープして --template の {{answer}} に入れ、TOOL が終わってから表示する。
+               --summarize-prompt の TEXT より前に置くので TEXT で上書きできる。
                --rank (-l とは併用不可) か --summarize が要る (SYS1GREP_OPTS では要らない)。--summarize-format の後継
+  --template=NAME  --rank か --summarize の --format=html が書く文書 (既定は SYS1GREP_TEMPLATE、無ければ default)。
+               ~/.config/sys1grep/templates/NAME.html、無ければ同梱のもの (default, print, search, terminal)。/ を含むか
+               .html で終わる値はファイル。置き換える文字列は {{title}} {{query}} {{count}} と、<!--result--> と
+               <!--/result--> の間 (結果ごとに繰り返す) の {{rank}} {{score}} (-p のとき) {{score_pct}} (0〜100、
+               -p が無くても入る) {{file}} (複数ファイルのとき) {{lines}}。どれもエスケープして入れる。
+               --summarize は前と後を 1 回ずつ書き、{{answer}} (TOOL の答え) を入れる。結果の部分は繰り返さない
+               --template=list は名前を出し、自分のものに (user) を付ける
+  --install-templates  同梱のテンプレートを編集用に ~/.config/sys1grep/templates へコピーする。
+               既にあるファイルはそのまま残す。これと --template=list は単独で使い、
+               SYS1GREP_OPTS には書けない
   --sys1-model=ID, --sys1-url=URL, --sys1-api-key=KEY
                API の設定。下の SYS1GREP_MODEL / SYS1GREP_URL / SYS1GREP_API_KEY より優先。
                コマンドラインのキーは ps やシェル履歴に残るので、なるべく ~/.config/sys1grep/.env に書く
@@ -606,6 +632,7 @@ git sys1grep として呼ぶと git grep と同じく FILE は pathspec にな�
                      ollama・lmstudio・URL では必須
   SYS1GREP_SUMMARIZER_API_KEY  --summarize=URL のサーバへ Authorization: Bearer で送る
                      (Jev 用の SYS1GREP_API_KEY とは別)
+  SYS1GREP_TEMPLATE   --rank か --summarize の --format=html の --template の既定
   SYS1GREP_OPTS       既定のオプション。空白で区切ってコマンドラインの前に置くので、コマンドラインが
                      優先する。--no-X で真偽のフラグを消せる (--color は --color=never)。書けるのは
                      オプションだけで、意味・ファイル・-- は書けない。例 SYS1GREP_OPTS='--level strict -n'。
@@ -621,6 +648,39 @@ if (opt.help) {
   console.log(locale.startsWith('ja') ? HELP_JA : HELP_EN);
   process.exit(0);
 }
+// --rank --format=html's document. A template is an HTML file split by <!--result--> and <!--/result--> into the
+// head, the part repeated per result, and the tail. A user's copy under ~/.config wins over the bundled one.
+const USER_TEMPLATES = `${homedir()}/.config/sys1grep/templates`, BUNDLED_TEMPLATES = fileURLToPath(new URL('templates', import.meta.url));
+const templateNames = dir => (existsSync(dir) ? readdirSync(dir).filter(f => /^[A-Za-z0-9_-]+\.html$/.test(f)).map(f => f.slice(0, -5)) : []);
+if (opt.template === 'list' || opt['install-templates']) {
+  const own = opt['install-templates'] ? '--install-templates' : '--template=list';
+  if (tokens.filter(k => k.index >= defaults.length).length > 1) die(`${own} takes no other arguments`);
+}
+if (opt.template === 'list') {
+  const user = new Set(templateNames(USER_TEMPLATES));
+  for (const name of [...new Set([...user, ...templateNames(BUNDLED_TEMPLATES)])].sort()) console.log(user.has(name) ? `${name} (user)` : name);
+  process.exit(0);
+}
+if (opt['install-templates']) {
+  mkdirSync(USER_TEMPLATES, { recursive: true });
+  for (const name of templateNames(BUNDLED_TEMPLATES)) {
+    const to = `${USER_TEMPLATES}/${name}.html`;
+    // COPYFILE_EXCL: the file there may be the user's edited copy
+    try { copyFileSync(`${BUNDLED_TEMPLATES}/${name}.html`, to, constants.COPYFILE_EXCL); console.log(`copied ${to}`); }
+    catch (e) { if (e.code !== 'EEXIST') throw e; console.log(`kept ${to}`); }
+  }
+  process.exit(0);
+}
+const parseTemplate = (text, where) => {
+  const open = '<!--result-->', close = '<!--/result-->', times = m => text.split(m).length - 1;
+  for (const m of [open, close]) if (times(m) !== 1) throw new Error(`template ${where}: ${times(m) ? `${m} appears ${times(m)} times` : `no ${m}`}; it needs one ${open} ... ${close} around the part repeated per result`);
+  const [head, rest] = text.split(open);
+  if (!rest.includes(close)) throw new Error(`template ${where}: ${close} comes before ${open}`);
+  const [item, tail] = rest.split(close);
+  return { head, item, tail };
+};
+const esc = t => t.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const fillPart = (part, vars) => part.replace(/\{\{(\w+)\}\}/g, (m, k) => (Object.hasOwn(vars, k) ? esc(String(vars[k])) : m));
 
 const customUrl = opt['sys1-url'] || SYS1GREP_URL;
 const apiUrl = customUrl || 'https://api.typesafe.ai/v1/systemone';
@@ -854,7 +914,7 @@ const SUMMARIZERS = {
 const FORMATS = {
   plain: 'Answer in plain text: no Markdown or other markup (no **, __, # headings, backticks or tables); lists as plain lines.',
   markdown: 'Answer in Markdown.',
-  html: 'Answer with one complete HTML document and nothing outside it.',
+  html: 'Answer in plain text: no Markdown or other markup (no **, __, # headings, backticks or tables); lists as plain lines. It goes into an HTML page as text.',
 };
 if (!Object.hasOwn(FORMATS, opt.format)) die(`--format must be one of ${Object.keys(FORMATS).join(', ')}`);
 // #143 review: the exact sentence explaining "(×N like it)", so it can be stripped back out below once willFold
@@ -920,6 +980,20 @@ const globRe = o => g => {
   try { return new RegExp(`^${g.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.').replace(/\[!/g, '[^')}$`); }
   catch { die(`--${o}: '${g}' is not a valid glob (an unclosed [ ?)`); }
 };
+const templateName = opt.template ?? (process.env.SYS1GREP_TEMPLATE || 'default');
+let template = null;
+if ((summarizer || (opt.rank && !opt.l)) && opt.format === 'html') {
+  const tried = /^[A-Za-z0-9_-]+$/.test(templateName) ? [USER_TEMPLATES, BUNDLED_TEMPLATES].map(d => `${d}/${templateName}.html`)
+    : templateName.includes('/') || templateName.endsWith('.html') ? [templateName]
+    : die(`--template: '${templateName}' is neither a NAME (letters, digits, _ and -) nor a file (containing / or ending in .html)`);
+  const where = tried.find(f => existsSync(f));
+  if (!where) die(`--template=${templateName}: no such template (tried ${tried.join(', ')})`, false);
+  let text;
+  try { if (!statSync(where).isFile()) throw new Error('not a regular file'); text = readFileSync(where, 'utf8'); }
+  catch (e) { die(`template ${where}: ${e.message}`, false); }
+  try { template = parseTemplate(text, where); } catch (e) { die(e.message, false); }
+  if (summarizer && !(template.head + template.tail).includes('{{answer}}')) die(`template ${where}: --summarize needs {{answer}} outside <!--result--> ... <!--/result-->`, false);
+} else if (optSrc('template') === '') die('--template needs --format=html with --rank or --summarize (not -l)');
 const includes = (opt.include ?? []).map(globRe('include')), excludes = (opt.exclude ?? []).map(globRe('exclude'));
 for (const [o, gs] of [['include', opt.include], ['exclude', opt.exclude]]) for (const g of gs ?? [])
   if (g.includes('/')) console.error(`sys1grep: warning: --${o}='${g}' has a /, but globs match the file name only, not the path, so it matches no file`);
@@ -2263,20 +2337,27 @@ if (opt.rank) {
   results.sort((a, b) => b.score - a.score); // stable: ties keep file order
   if (opt.l) for (const f of new Set(results.map(r => r.file))) console.log(paint(35, f));
   else {
-    const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-    if (outFormat === 'html' && results.length) write(`<!doctype html>\n<meta charset="utf-8">\n<title>sys1grep: ${esc(termsSaid(false))}</title>\n`);
-    results.forEach((r, i) => {
+    if (outFormat === 'html' && results.length) {
+      const doc = { title: `sys1grep: ${termsSaid(false)}`, query: termsSaid(false), count: results.length, answer: '' };
+      write(fillPart(template.head, doc));
+      results.forEach((r, i) => write(fillPart(template.item, { rank: i + 1, score: opt.p ? r.score.toFixed(2) : '',
+        score_pct: Math.round(Math.min(1, Math.max(0, r.score)) * 100), file: multi ? r.file : '', lines: r.rows.join('') })));
+      write(fillPart(template.tail, doc));
+    } else results.forEach((r, i) => {
       const head = `${i + 1}.${opt.p ? ` [${paintProb(r.score)}]` : ''}${multi ? ` ${paint(35, outFormat === 'markdown' ? r.file.replace(/[\\`*_[\]#<>|]/g, '\\$&') : r.file)}` : ''}`, body = r.rows.join('');
       // Markdown: a fence longer than any run of backticks in the lines, so none of them closes it
       const fence = '`'.repeat(Math.max(3, ...(body.match(/`+/g) ?? []).map(b => b.length + 1)));
-      write(outFormat === 'html' ? `<section><h2>${esc(head)}</h2><pre>${esc(body)}</pre></section>\n`
-        : outFormat === 'markdown' ? `${i ? '\n' : ''}## ${head}\n\n${fence}\n${body}${fence}\n`
+      write(outFormat === 'markdown' ? `${i ? '\n' : ''}## ${head}\n\n${fence}\n${body}${fence}\n`
         : `${i ? '\n' : ''}${head}\n${body}`);
     });
   }
 }
 // No match sends nothing to the summarizer. It writes its answer straight to stdout; failing, it has said why on stderr.
 let summaryFailed = false;
+const writeAnswer = answer => {
+  const doc = { title: `sys1grep: ${termsSaid(false)}`, query: termsSaid(false), count: matched, answer: answer.replace(/\n+$/, '') };
+  process.stdout.write(fillPart(template.head, doc) + fillPart(template.tail, doc));
+};
 const pipedBytes = Buffer.byteLength(piped.join(''));
 if (summarizer && !dry && matched && pipedBytes > SUMMARY_MAX) {
   // Not cut short: a summary of the first part would read as a summary of all of it.
@@ -2289,12 +2370,16 @@ if (summarizer && !dry && matched && pipedBytes > SUMMARY_MAX) {
   spin.set(`summarizing with ${opt.summarize}`);
   const child = spawn(summarizer[0], summarizer.slice(1), { stdio: ['pipe', 'pipe', 'pipe'] });
   // pipe() keeps backpressure; the once() listener, registered first, erases the spinner before the first chunk lands.
-  for (const [from, to] of [[child.stdout, process.stdout], [child.stderr, process.stderr]]) { from.once('data', spin.stop); from.pipe(to, { end: false }); }
+  // --format=html: the answer is collected, not streamed, since it goes into the template's {{answer}}.
+  let answer = '';
+  if (template) { child.stdout.setEncoding('utf8'); child.stdout.on('data', d => { answer += d; }); }
+  for (const [from, to] of [[child.stdout, template ? null : process.stdout], [child.stderr, process.stderr]]) { from.once('data', spin.stop); if (to) from.pipe(to, { end: false }); }
   child.stdin.on('error', () => {}); // EPIPE: the TOOL exited without reading it all; its exit status says what happened
   child.stdin.end(piped.join(''));
   const [status, signal] = await new Promise(r => child.on('error', e => die(`--summarize=${opt.summarize}: ${e.message}`, false)).on('close', (c, sg) => r([c, sg])));
   spin.stop();
   if (status !== 0) { console.error(`sys1grep: --summarize=${opt.summarize}: ${summarizer[0]} exited with ${status ?? signal}`); summaryFailed = true; }
+  else if (template) writeAnswer(answer);
 } else if (summarizer && !dry && matched) {
   // An OpenAI-compatible server (#76): one request, no CLI. A cold local model can take a while, well past Jev's
   // 60s timeout.
@@ -2321,6 +2406,7 @@ if (summarizer && !dry && matched && pipedBytes > SUMMARY_MAX) {
     const body = await res.json();
     const content = body?.choices?.[0]?.message?.content;
     if (typeof content !== 'string') { console.error(`sys1grep: --summarize=${opt.summarize}: no answer in the response`); summaryFailed = true; }
+    else if (template) writeAnswer(content);
     else process.stdout.write(content.endsWith('\n') ? content : `${content}\n`);
   }
 }

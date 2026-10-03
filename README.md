@@ -800,10 +800,67 @@ tickets/a.txt-13-We will check it.
   question on one line, so clear matches sit close together, and the context is not read.
 - `-p` puts the score on the header (`1. [0.96] tickets/b.txt`). `-l` lists the files by their best result.
 - `--format=markdown` writes a `## 1. tickets/b.txt` heading and a fenced block per result; `--format=html` one
-  HTML document, a `<section>` with `<h2>` and `<pre>` per result, escaped. The lines are as they print, uncolored.
+  self-contained HTML document from a template (below), light and dark, with a relevance bar per result. The lines
+  are as they print, escaped and uncolored.
 - `--summarize` gets the results in ranked order; with `--dedup` a representative is one result.
 - It needs a meaning (a regex, `!` or `-v` alone ranks nothing), and cannot be combined with `-c`, `-o` or `-q`.
   `--no-rank` turns off an earlier one, from `SYS1GREP_OPTS` say.
+
+### HTML templates (`--template`)
+
+`--rank --format=html` and `--summarize --format=html` fill in a template. Four come with sys1grep: `default`, `print` (black on white, serif,
+for paper and PDF), `search` (a results page like a web search engine's) and `terminal` (dark monospace).
+`--template=NAME` picks one; `SYS1GREP_TEMPLATE`, in the
+environment or `~/.config/sys1grep/.env`, sets the default.
+
+```sh
+$ sys1grep -r -n -C1 --rank -p --format=html --template=print -e "the refund was refused" tickets/ > refunds.html
+```
+
+A template is one HTML file. The part between `<!--result-->` and `<!--/result-->` is repeated for each result;
+what is before and after it is written once. sys1grep replaces these, escaped, and leaves any other `{{…}}` as
+written:
+
+| placeholder | where | value |
+|---|---|---|
+| `{{title}}` | anywhere | `sys1grep: ` and the meanings |
+| `{{query}}` | anywhere | the meanings, as in `"refund" and not "policy"` |
+| `{{count}}` | anywhere | the number of results (with `--summarize`, of matching lines) |
+| `{{answer}}` | anywhere | `--summarize`'s answer; empty with `--rank` |
+| `{{rank}}` | per result | 1, 2, … |
+| `{{score}}` | per result | the score as `-p` prints it (`0.96`); empty without `-p` |
+| `{{score_pct}}` | per result | the score as a whole number 0 to 100, set even without `-p` (for a bar: `style="--s:{{score_pct}}"`) |
+| `{{file}}` | per result | the file name; empty when one file is searched |
+| `{{lines}}` | per result | the result's lines as they print |
+
+`--template=NAME` reads `~/.config/sys1grep/templates/NAME.html` if it is there, else the bundled one, so your
+copy of `default` replaces it. A value containing `/` or ending in `.html` is a file path. To make your own, copy
+the bundled ones and edit:
+
+```sh
+$ sys1grep --install-templates            # "copied PATH" for each file
+$ cp ~/.config/sys1grep/templates/default.html ~/.config/sys1grep/templates/team.html
+$ sys1grep -r --rank --format=html --template=team -e "..." src/ > out.html
+$ sys1grep --template=list                # one name a line, "(user)" after those under ~/.config
+```
+
+`{{score_pct}}` is set even without `-p`, so a bar can show the relevance without printing the number.
+
+With `--summarize --format=html` the TOOL is asked for plain text, and that answer, escaped, goes into `{{answer}}`
+once it has finished; the part between `<!--result-->` and `<!--/result-->` is not written. A template for
+`--summarize` therefore needs `{{answer}}` outside that part (the bundled ones have it; with `--rank` it is empty).
+
+```sh
+$ sys1grep -r --summarize --format=html --template=print -e "why the refunds were refused" tickets/ > why.html
+```
+
+A template is trusted local input: a path you give, or a symlink in the templates directory, is read as it is;
+only the results put into it are escaped.
+
+`--install-templates` never overwrites a file that is already there (it prints `kept` for it). A missing
+template, or one without exactly one `<!--result-->` before one `<!--/result-->`, is exit 2 naming the file.
+`--template` on the command line needs `--format=html` with `--rank` or `--summarize` (not `-l`); `SYS1GREP_TEMPLATE` is simply unused elsewhere.
+`--template=list` and `--install-templates` take no other arguments and are refused in `SYS1GREP_OPTS`.
 
 ## Use it from Claude Code
 
@@ -909,6 +966,10 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
                for now; see "One line per template" above)
   --rank[=jev|match]  print the results (a match with its context) best first, under numbered headers; jev
                (bare --rank) asks Jev of each result, match sorts by its best match probability (see "Best first"); --no-rank: file order
+  --template=NAME  the document --rank or --summarize --format=html writes: ~/.config/sys1grep/templates/NAME.html, else the
+               bundled one (default, print, terminal), or a file; default SYS1GREP_TEMPLATE, else default.
+               --template=list prints the names (see "HTML templates")
+  --install-templates  copy the bundled templates to ~/.config/sys1grep/templates, keeping existing files
   --color[=WHEN] auto (default: color when stdout is a terminal) / always / never; bare --color means auto
                file and line number use grep's colors; with -p, probabilities are
                green at or above the positive threshold, red below the negative one,

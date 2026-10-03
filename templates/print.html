@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{title}}</title>
+<style>
+@page { margin: 18mm 16mm; }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: #fff;
+  color: #000;
+  font: 11pt/1.45 Georgia, "Times New Roman", "Hiragino Mincho ProN", "Noto Serif CJK JP", "Noto Serif", serif;
+}
+.page { max-width: 90ch; margin: 0 auto; padding: 32px 16px; }
+h1 { margin: 0 0 4pt; font-size: 16pt; font-weight: normal; overflow-wrap: anywhere; }
+.count { margin: 0 0 18pt; font-style: italic; }
+.result { margin: 0 0 14pt; }
+h2 { margin: 0 0 4pt; font-size: 11pt; font-weight: bold; break-after: avoid; overflow-wrap: anywhere; }
+.file { font: 10pt ui-monospace, Menlo, Consolas, "Liberation Mono", monospace; font-weight: normal; }
+.score:empty { display: none; }
+.score::before { content: "p = "; font-weight: normal; }
+.score { font-weight: normal; }
+pre {
+  margin: 0;
+  padding: 0 0 0 10pt;
+  border-left: 1pt solid #000;
+  font: 9.5pt/1.4 ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 4;
+}
+.answer { margin: 0 0 1em; white-space: pre-wrap; overflow-wrap: anywhere; }
+.answer:empty { display: none; }
+</style>
+</head>
+<body>
+<div class="page">
+<h1 lang="">{{query}}</h1>
+<p class="count">sys1grep, results best first: {{count}}</p>
+<section class="answer" lang="">{{answer}}</section>
+<!--result-->
+<section class="result">
+<h2>{{rank}}. <span class="file">{{file}}</span> <span class="score">{{score}}</span></h2>
+<pre lang="">{{lines}}</pre>
+</section>
+<!--/result-->
+</div>
+</body>
+</html>
