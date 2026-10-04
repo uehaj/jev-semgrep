@@ -826,7 +826,7 @@ tickets/a.txt-13-We will check it.
 ```
 
 - `--rank` is `--rank=jev`: after the search, Jev is asked of each result, lines and context together, whether it
-  is relevant to the meanings that are not negated. One more question per result, `--chunk` results to a request;
+  is relevant to the meanings that are not negated. One more question per result, `--chunk` results (at most 64) to a request;
   `--dry-run` / `-i` show an upper bound, since which results there are is known only after the search.
 - `--rank=match` sorts by each result's highest match probability, with no request. It is the answer to a yes/no
   question on one line, so clear matches sit close together, and the context is not read.
@@ -965,7 +965,8 @@ usage: sys1grep [OPTION]... -e MEANING|-Q QUESTION [-a MEANING] [-v MEANING]... 
   -C NUM       print NUM lines of context before and after (-A NUM -B NUM)
   -c           print only a count of matching lines per file (like grep -c)
   -q, --quiet  print nothing, stop at the first match; exit 0 on a match, even after an error (like grep -q)
-  --chunk=LINES lines per request (default 30)
+  --chunk=LINES lines per request (default 30; a request also carries at most 64 questions, so fewer lines
+               with 3 or more meanings)
                Lines in one request are each other's context, so a small chunk changes verdicts
                on ambiguous lines, not just speed
   -j N         concurrent requests (default 8)
@@ -1036,7 +1037,7 @@ A leading `!` on a meaning negates just that meaning (quote it, `!` is history e
 
 ## How it works
 
-1. Non-blank lines are cut into chunks of 30 lines (with a character cap).
+1. Non-blank lines are cut into chunks of 30 lines (with a character cap, and at most 64 questions a request).
 2. Each chunk goes into `state` as an object `{"L000": "line 1", "L001": "line 2", ...}`,
    and one `noul` (yes/no probability) question per line × meaning goes into the same request.
 3. Up to 8 requests run concurrently. Output is printed in file order.
@@ -1075,7 +1076,7 @@ The result is written to `tests/report.md`. Latest: precision 0.94, recall 0.98.
 - Every searched line is sent to api.typesafe.ai. Do not run it over files you would not upload there.
 - Blank lines are not sent; they count as probability 0 for every meaning, so `-v X` prints them and `-e X` never does.
 - Lines are truncated to 2,000 characters before sending.
-- The maximum number of questions per request is undocumented; 420 worked.
+- The maximum number of questions per request is undocumented; 420 worked. sys1grep itself sends at most 64 a request (Clef's cap); only a single unit asked more than 64 meanings goes out whole.
 - 429 / 529 are retried up to 6 times with exponential backoff.
 - Accuracy is best in English. Japanese works but is noisier.
 
