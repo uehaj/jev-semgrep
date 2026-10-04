@@ -4,6 +4,11 @@
 # so these checks are about sys1grep itself: the expression, output shapes, options, requests and exit codes.
 set -e
 unset FORCE_COLOR # node would color the numbers it prints (the fake's port, the counts read back)
+# The cost guard asks on /dev/tty, which </dev/null does not close, so a check run from a terminal waits for a person (#177).
+# Run the whole suite in a new session, which has no controlling terminal; the parent waits and passes on the exit code and ^C.
+if [ -z "$OFFLINE_DETACHED" ] && (: </dev/tty) 2>/dev/null; then
+  OFFLINE_DETACHED=1 exec perl -MPOSIX -e '$p = fork; if ($p) { $SIG{INT} = $SIG{TERM} = sub { kill "TERM", $p }; while (waitpid($p, 0) < 0) { last unless $!{EINTR} } exit($? ? ($? >> 8 || 1) : 0) } POSIX::setsid() or die "setsid: $!"; exec @ARGV' sh "$0" "$@"
+fi
 cd "$(dirname "$0")"
 tmp=$(mktemp -d)
 node fake-jev.mjs >"$tmp/port" &
