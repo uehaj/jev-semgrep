@@ -285,6 +285,17 @@ SYS1GREP_URL=http://localhost:8000/v1/systemone sys1grep -e ...
 The summary line shows the cost the endpoint reports (`usage.cost`), or for TypeSafe itself an estimate at list
 price marked `~`.
 
+**Local decision models.** A model that serves the same `POST /v1/systemone` can stand in for Jev, with no key and no network.
+Tried by hand with [Jeff](https://github.com/firelex/jeff) (`jeff-serve`, 0.8B): it works with
+`--sys1-url=http://127.0.0.1:8765/v1/systemone --sys1-model=jeff-latest`. It answers one request at a time and
+returns `529 "The model is busy"` to a second one, so use `-j 1` (the default `-j 8` runs out of retries). On a 397-line
+source file, for "reads environment variables", it found all 10 right lines but matched 34 (precision about 29%,
+zero-shot, at Jev's default thresholds): raise `-t`, and check with `npm run judge`. Not tried with sys1grep yet:
+[strands-decider](https://github.com/strands-labs/strands-decider) (`strands-decider serve`, the same path and shapes
+in its schema, also one worker) and Cloudflare's Clef. A request carries at most 64 questions for every backend.
+`--max-cost` prices at Jev's list price whatever the URL, so with a local model it is an upper bound on what a
+paid backend would cost, not what you pay.
+
 From source: `git clone https://github.com/uehaj/sys1grep.git && cd sys1grep && npm install -g .`,
 or run it in place with `node sys1grep.mjs ...`.
 

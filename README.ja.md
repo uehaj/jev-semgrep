@@ -272,6 +272,18 @@ SYS1GREP_URL=http://localhost:8000/v1/systemone sys1grep -e ...
 
 集計行には、エンドポイントが返した費用（`usage.cost`）を出します。TypeSafe 本体の場合は定価での推定を `~` 付きで出します。
 
+**ローカルの判定モデル。** 同じ `POST /v1/systemone` を話すモデルは、キーもネットワークも無しで Jev の代わりに使えます。
+[Jeff](https://github.com/firelex/jeff)（`jeff-serve`、0.8B）では手で試しました。
+`--sys1-url=http://127.0.0.1:8765/v1/systemone --sys1-model=jeff-latest` で動きます。1 度に 1 リクエストしか
+受けず、2 つ目には `529 "The model is busy"` を返すので、`-j 1` にしてください（既定の `-j 8` は再試行が尽きます）。
+397 行のソースで「環境変数を読んでいる」を探すと、正解 10 行はすべて拾いましたが 34 行が当たりました
+（ゼロショット、Jev の既定しきい値で適合率は約 29%）。`-t` を上げ、`npm run judge` で確かめてください。
+sys1grep ではまだ試していないもの:
+[strands-decider](https://github.com/strands-labs/strands-decider)（`strands-decider serve`。スキーマ上は同じパスと形、ワーカーも 1 つ）、
+Cloudflare の Clef。1 リクエストの質問数は、どのバックエンドでも 64 までです。
+`--max-cost` は URL によらず Jev の定価で見積もるので、ローカルのモデルでは、有料のバックエンドなら
+いくらかかるかの上限であって、実際に払う額ではありません。
+
 ソースから使うなら `git clone https://github.com/uehaj/sys1grep.git && cd sys1grep && npm install -g .`、
 またはそのまま `node sys1grep.mjs ...` で動きます。
 
